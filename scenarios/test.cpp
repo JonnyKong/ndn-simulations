@@ -1,69 +1,117 @@
-// ndn-simple.cpp
-
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
-#include "ns3/point-to-point-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/internet-module.h"
+
 #include "ns3/ndnSIM-module.h"
 
-namespace ns3 {
+using namespace std;
+using namespace ns3;
+
+using ns3::ndn::StackHelper;
+using ns3::ndn::AppHelper;
+
+NS_LOG_COMPONENT_DEFINE ("ndn.WifiExample");
+
+//
+// DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
+//              directly over AdHoc channel.
+//
+
+// Ptr<ndn::NetDeviceFace>
+// MyNetDeviceFaceCallback (Ptr<Node> node, Ptr<ndn::L3Protocol> ndn, Ptr<NetDevice> device)
+// {
+//   // NS_LOG_DEBUG ("Create custom network device " << node->GetId ());
+//   Ptr<ndn::NetDeviceFace> face = CreateObject<ndn::MyNetDeviceFace> (node, device);
+//   ndn->AddFace (face);
+//   return face;
+// }
 
 int
-main(int argc, char* argv[])
+main (int argc, char *argv[])
 {
-  // setting default parameters for PointToPoint links and channels
-  Config::SetDefault("ns3::PointToPointNetDevice::DataRate", StringValue("1Mbps"));
-  Config::SetDefault("ns3::PointToPointChannel::Delay", StringValue("10ms"));
-  Config::SetDefault("ns3::DropTailQueue::MaxPackets", StringValue("20"));
+  // disable fragmentation
+  Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
 
-  // Read optional command-line parameters (e.g., enable visualizer with ./waf --run=<> --visualize
   CommandLine cmd;
-  cmd.Parse(argc, argv);
+  cmd.Parse (argc,argv);
 
-  // Creating nodes
+  //////////////////////
+  //////////////////////
+  //////////////////////
+  WifiHelper wifi = WifiHelper::Default ();
+  // wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211a);
+  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode", StringValue ("OfdmRate24Mbps"));
+
+  YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
+  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+  wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
+  wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+
+  //YansWifiPhy wifiPhy = YansWifiPhy::Default();
+  YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
+  wifiPhyHelper.SetChannel (wifiChannel.Create ());
+  wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
+  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
+
+
+  NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
+  wifiMacHelper.SetType("ns3::AdhocWifiMac");
+
+  Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
+  randomizer->SetAttribute ("Min", DoubleValue (10));
+  randomizer->SetAttribute ("Max", DoubleValue (100));
+
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
+                                 "X", PointerValue (randomizer),
+                                 "Y", PointerValue (randomizer),
+                                 "Z", PointerValue (randomizer));
+
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+
   NodeContainer nodes;
-  nodes.Create(3);
+  nodes.Create (2);
 
-  // Connecting nodes using two links
-  PointToPointHelper p2p;
-  p2p.Install(nodes.Get(0), nodes.Get(1));
-  p2p.Install(nodes.Get(1), nodes.Get(2));
+  ////////////////
+  // 1. Install Wifi
+  NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
 
-  // Install NDN stack on all nodes
-  ndn::StackHelper ndnHelper;
-  ndnHelper.SetDefaultRoutes(true);
-  ndnHelper.InstallAll();
+  // 2. Install Mobility model
+  mobility.Install (nodes);
 
-  // Choosing forwarding strategy
-  ndn::StrategyChoiceHelper::InstallAll("/prefix", "/localhost/nfd/strategy/multicast");
+  // 3. Install NDN stack
+  NS_LOG_INFO ("Installing NDN stack");
+  StackHelper ndnHelper;
+  // ndnHelper.AddNetDeviceFaceCreateCallback (WifiNetDevice::GetTypeId (), MakeCallback (MyNetDeviceFaceCallback));
+  ndnHelper.SetDefaultRoutes (true);
+  ndnHelper.Install (nodes);
 
-  // Installing applications
+  // 4. Set up applications
+  NS_LOG_INFO ("Installing Applications");
 
-  // Consumer
-  ndn::AppHelper consumerHelper("ns3::ndn::ConsumerCbr");
-  // Consumer will request /prefix/0, /prefix/1, ...
-  consumerHelper.SetPrefix("/prefix");
-  consumerHelper.SetAttribute("Frequency", StringValue("10")); // 10 interests a second
-  consumerHelper.Install(nodes.Get(0));                        // first node
+  AppHelper consumerHelper ("ns3::ndn::ConsumerCbr");
+  consumerHelper.SetPrefix ("/test/prefix");
+  consumerHelper.SetAttribute ("Frequency", DoubleValue (10.0));
+  consumerHelper.Install (nodes.Get (0));
 
-  // Producer
-  ndn::AppHelper producerHelper("ns3::ndn::Producer");
-  // Producer will reply to all requests starting with /prefix
-  producerHelper.SetPrefix("/prefix");
-  producerHelper.SetAttribute("PayloadSize", StringValue("1024"));
-  producerHelper.Install(nodes.Get(2)); // last node
+  AppHelper producerHelper ("ns3::ndn::Producer");
+  producerHelper.SetPrefix ("/");
+  producerHelper.SetAttribute ("PayloadSize", StringValue("1200"));
+  producerHelper.Install (nodes.Get (1));
 
-  Simulator::Stop(Seconds(20.0));
+  ////////////////
 
-  Simulator::Run();
-  Simulator::Destroy();
+  Simulator::Stop (Seconds (30.0));
+
+  Simulator::Run ();
+  Simulator::Destroy ();
 
   return 0;
-}
-
-} // namespace ns3
-
-int
-main(int argc, char* argv[])
-{
-  return ns3::main(argc, argv);
 }
