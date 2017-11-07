@@ -10,7 +10,7 @@ import os
 def options(opt):
     opt.load(['compiler_c', 'compiler_cxx'])
     opt.load(['default-compiler-flags',
-              'boost', 'ns3'],
+              'boost', 'ns3', 'protoc'],
              tooldir=['.waf-tools'])
 
     opt.add_option('--logging',action='store_true',default=True,dest='logging',help='''enable logging in simulation scripts''')
@@ -34,7 +34,7 @@ OTHER_NS3_MODULES = ['antenna', 'aodv', 'bridge', 'brite', 'buildings', 'click',
 def configure(conf):
     conf.load(['compiler_c', 'compiler_cxx',
                'default-compiler-flags',
-               'boost', 'ns3'])
+               'boost', 'ns3', 'protoc'])
 
     if not os.environ.has_key('PKG_CONFIG_PATH'):
         os.environ['PKG_CONFIG_PATH'] = ':'.join([
@@ -68,11 +68,20 @@ def configure(conf):
 def build (bld):
     deps =  ' '.join (['ns3_'+dep for dep in MANDATORY_NS3_MODULES + OTHER_NS3_MODULES]).upper ()
 
+    VectorSync = bld.objects (
+          target = 'vsync',
+          name = 'vsync',
+          source = bld.path.ant_glob(['vsync/lib/*.cpp', 'vsync/lib/*.proto']),
+          includes = 'vsync/lib',
+          export_includes = 'vsync/lib',
+          use = deps
+          )
+
     common = bld.objects (
         target = "extensions",
         features = ["cxx"],
         source = bld.path.ant_glob(['extensions/**/*.cc', 'extensions/**/*.cpp']),
-        use = deps,
+        use = deps + " vsync",
         )
 
     for scenario in bld.path.ant_glob (['scenarios/*.cc']):
@@ -82,7 +91,8 @@ def build (bld):
             features = ['cxx'],
             source = [scenario],
             use = deps + " extensions",
-            includes = "extensions"
+            includes = "extensions",
+            export_includes = "extensions"
             )
 
     for scenario in bld.path.ant_glob (['scenarios/*.cpp']):
@@ -91,8 +101,9 @@ def build (bld):
             target = name,
             features = ['cxx'],
             source = [scenario],
-            use = deps + " extensions",
-            includes = "extensions"
+            use = deps + " extensions vsync",
+            includes = "extensions",
+            export_includes = "extensions"
             )
 
 def shutdown (ctx):
