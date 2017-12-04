@@ -1,2 +1,1 @@
-# VectorSync
-VectorSync library
+
