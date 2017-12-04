@@ -37,10 +37,6 @@ class TestConsumerNode {
   void SendInterest() {
     Interest interest(kTestPrefix);
     const std::string& content = "hello!";
-    std::cout << 1 << std::endl;
-    //interest.setContent(reinterpret_cast<const uint8_t*>(content.data()),
-    //                    content.size());
-    std::cout << 2 << std::endl;
     face_.expressInterest(interest, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});

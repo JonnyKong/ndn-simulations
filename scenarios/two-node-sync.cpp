@@ -104,14 +104,6 @@ main (int argc, char *argv[])
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
   StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
 
-  // 5. print node's posistion
-  Ptr<MobilityModel> position1 = nodes.Get(0)->GetObject<MobilityModel>();
-  Ptr<MobilityModel> position2 = nodes.Get(1)->GetObject<MobilityModel>();
-  Vector pos1 = position1->GetPosition();
-  Vector pos2 = position2->GetPosition();
-  std::cout << "node 0 position: " << pos1.x << " " << pos1.y << std::endl;
-  std::cout << "node 1 position: " << pos2.x << " " << pos2.y << std::endl;
-
   // install SyncApp
   uint64_t idx = 0;
   for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
@@ -125,9 +117,9 @@ main (int argc, char *argv[])
     syncAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncAppHelper.SetAttribute("Prefix", StringValue("/"));
     syncAppHelper.SetAttribute("GroupSize", UintegerValue(2));
-    syncAppHelper.Install(object).Start(Seconds(1));
-    
-    FibHelper::AddRoute(object, "/ndn/vsync", std::numeric_limits<int32_t>::max());
+    syncAppHelper.Install(object).Start(Seconds(2));
+
+    FibHelper::AddRoute(object, "/", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncDataList", std::numeric_limits<int32_t>::max());
     idx++;
@@ -135,7 +127,7 @@ main (int argc, char *argv[])
 
   ////////////////
 
-  Simulator::Stop (Seconds (20.0));
+  Simulator::Stop (Seconds (100.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

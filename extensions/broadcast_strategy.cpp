@@ -55,9 +55,10 @@ BroadcastStrategy::afterReceiveInterest(const Face& inFace, const Interest& inte
   // if inFace is appFace, don't forward to self
   // TBD: how to distinguish from application and others!
   if (inFace.getScope() == ndn::nfd::FACE_SCOPE_LOCAL) {
-    NFD_LOG_DEBUG("local scope!");
+    NFD_LOG_DEBUG("local scope! inFace = " << inFace.getId());
     for (fib::NextHopList::const_iterator it = nexthops.begin(); it != nexthops.end(); ++it) {
       Face& outFace = it->getFace();
+      NFD_LOG_DEBUG("next face = " << outFace.getId());
       if (!wouldViolateScope(inFace, interest, outFace) &&
           inFace.getId() != outFace.getId()) {
         NFD_LOG_DEBUG("send interest from inFace=" << inFace.getId() << " to outFace=" << outFace.getId());

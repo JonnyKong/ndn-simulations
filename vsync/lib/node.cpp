@@ -63,8 +63,8 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 }
 
 void Node::SyncData() {
-  SendSyncInterest();
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Start to Sync Data");
+  SendSyncInterest();
 }
 
 void Node::SendSyncInterest() {
@@ -83,7 +83,7 @@ void Node::SendSyncInterest() {
 
 void Node::OnSyncInterest(const Interest& interest) {
   const auto& n = interest.getName();
-
+  std::cout << "************OnSyncInterest" << std::endl;
   // Check sync interest name size
   if (n.size() != kSyncPrefix.size() + 3) {
     VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Invalid sync interest name: " << n.toUri());
@@ -92,13 +92,15 @@ void Node::OnSyncInterest(const Interest& interest) {
 
   auto group_id = ExtractGroupID(n);
   auto node_id = ExtractNodeID(n);
-  auto other_vv = ExtractEncodedVV(n);
+  auto other_vv_str = ExtractEncodedVV(n);
+
+  VersionVector other_vv = DecodeVV(other_vv_str.data(), other_vv_str.size());
+  VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv Sync Interest: i.version_vector=" << VersionVectorToString(other_vv));
   if (other_vv.size() != version_vector_.size()) {
     VSYNC_LOG_TRACE("Different Version Vector Size in Group: " << gid_);
     return;
   }
 
-  VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv Sync Interest: i.name=" << n.toUri());
   SendSyncReply(n);
   // Process version vector
   VersionVector old_vv = version_vector_;
@@ -131,6 +133,8 @@ void Node::SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t 
 
 void Node::OnDataInterest(const Interest& interest) {
   const auto& n = interest.getName();
+  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv Data Interest: i.name=" << n.toUri());
+
   if (n.size() < 6) {
     VSYNC_LOG_TRACE("Invalid data name: " << n.toUri());
     return;
@@ -145,7 +149,6 @@ void Node::OnDataInterest(const Interest& interest) {
     return;
   }
 
-  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv Data Interest: i.name=" << n.toUri());
   if (end_seq > version_vector_[nid_]) {
     VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << "doesn't contain the requesting data range based on Version Vector");
     return;

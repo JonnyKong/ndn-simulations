@@ -25,7 +25,7 @@ class SimpleNode {
         }
 
   void Start() {
-    face_.processEvents();
+    // face_.processEvents();
     int time = (nid_ + 1) * 10000;
     std::cout << "will publish data after " << time << std::endl;
     scheduler_.scheduleEvent(time::milliseconds(time), [this] { PublishData(); });
@@ -39,7 +39,7 @@ class SimpleNode {
   void PublishData() {
     generation--;
     if (generation == 0) {
-      node_.SyncData();
+      if (nid_ == 0) node_.SyncData();
       return;
     }
     std::cout << "node(" << gid_ << "," << nid_ << ") PublishData" << std::endl; 
@@ -54,7 +54,7 @@ private:
   NodeID nid_;
   GroupID gid_;
   Node node_;
-  int generation = 2;
+  int generation = 3;
 
   std::random_device rdevice_;
   std::mt19937 rengine_;
