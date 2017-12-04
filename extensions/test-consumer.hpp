@@ -7,7 +7,6 @@
 #include "test-consumer-node.hpp"
 
 namespace ns3 {
-namespace ndn{
 
 class testConsumer : public Application 
 {
@@ -41,7 +40,6 @@ private:
   std::unique_ptr<::ndn::TestConsumerNode> m_instance;
 };
 
-}
 }
 
 #endif

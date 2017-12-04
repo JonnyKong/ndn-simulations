@@ -20,7 +20,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.vsyncAPP");
+NS_LOG_COMPONENT_DEFINE ("ndn.wifiTest");
 
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
@@ -84,7 +84,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (8);
+  nodes.Create (2);
 
   ////////////////
   // 1. Install Wifi
@@ -104,52 +104,26 @@ main (int argc, char *argv[])
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
   StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
 
-  // 5. Set Geo_tag on nfd
-  //    and record the consumer&producer's position
-  std::string consumer_position, producer_position;
-  auto now = ns3::ndn::time::steady_clock::now();
-  ns3::ndn::time::steady_clock::TimePoint timelineStart = now + ns3::ndn::time::seconds(40);
+  // 5. print node's posistion
+  Ptr<MobilityModel> position1 = nodes.Get(0)->GetObject<MobilityModel>();
+  Ptr<MobilityModel> position2 = nodes.Get(1)->GetObject<MobilityModel>();
+  Vector pos1 = position1->GetPosition();
+  Vector pos2 = position2->GetPosition();
+  std::cout << "node 0 position: " << pos1.x << " " << pos1.y << std::endl;
+  std::cout << "node 1 position: " << pos2.x << " " << pos2.y << std::endl;
 
-  int index = 0;
-
-  for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
-    Ptr<Node> object = *i;
-    Ptr<MobilityModel> position = object->GetObject<MobilityModel>();
-    NS_ASSERT (position != 0);
-    Vector pos = position->GetPosition();
-
-    index++;
-
-    // installing geo-consumer app
-
-    AppHelper vsyncHelper ("VectorSyncApp");
-    vsyncHelper.SetAttribute("ViewID", StringValue("0"));
-    vsyncHelper.SetAttribute("NodeID", StringValue(std::to_string(index)));
-    vsyncHelper.SetAttribute("Prefix", StringValue("/"));
-    vsyncHelper.Install(object).Start(Seconds(2));
-    FibHelper::AddRoute(object, "/ndn/vsync/0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData/0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/geoForwarding", std::numeric_limits<int32_t>::max());
-    StackHelper::setGeoTag(0, object);
-    /*
-    if (index == 3) {
-      AppHelper testHelper ("testRange");
-      testHelper.Install (object).Start(Seconds(1));
-      FibHelper::AddRoute(object, "/ndn/testRange", std::numeric_limits<int32_t>::max());
-    }
-    StackHelper::setGeoTag(index, object);
-    */
-    //}
-
-    //StackHelper::setGeoTag(node_vid, object);
-    //StackHelper::setTimelineStart(timelineStart, object);
-  }
+  // install Consumer
+  AppHelper consumerHelper("testConsumer");
+  consumerHelper.Install(nodes.Get(0)).Start(Seconds(1));
+  // install Producer
+  AppHelper producerHelper("testProducer");
+  producerHelper.Install(nodes.Get(1)).Start(Seconds(1));
+  FibHelper::AddRoute(nodes.Get(0), "/ndn/test", std::numeric_limits<int32_t>::max());
+  FibHelper::AddRoute(nodes.Get(1), "/ndn/test", std::numeric_limits<int32_t>::max());
 
   ////////////////
 
-  Simulator::Stop (Seconds (100.0));
-
-  L3RateTracer::InstallAll("rate-trace.txt", Seconds(0.5));
+  Simulator::Stop (Seconds (20.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

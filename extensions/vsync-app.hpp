@@ -1,6 +1,7 @@
 #include "ns3/ndnSIM-module.h"
 #include "ns3/integer.h"
 #include "ns3/string.h"
+#include "ns3/uinteger.h"
 
 #include "vsync-node.hpp"
 
@@ -9,21 +10,24 @@ namespace ndn {
 
 namespace vsync = ::ndn::vsync;
 
-class VectorSyncApp : public Application
+class SyncApp : public Application
 {
 public:
   static TypeId
   GetTypeId()
   {
-    static TypeId tid = TypeId("VectorSyncApp")
+    static TypeId tid = TypeId("SyncApp")
       .SetParent<Application>()
-      .AddConstructor<VectorSyncApp>()
-      .AddAttribute("Prefix", "Prefix for vsync node", StringValue("/"),
-                    MakeNameAccessor(&VectorSyncApp::m_prefix), MakeNameChecker())
-      .AddAttribute("NodeID", "NodeID for sync node", StringValue("0"),
-                    MakeStringAccessor(&VectorSyncApp::m_nodeID), MakeStringChecker())
-      .AddAttribute("ViewID", "ViewID for sync node", StringValue("0"),
-                    MakeStringAccessor(&VectorSyncApp::m_viewID), MakeStringChecker());
+      .AddConstructor<SyncApp>()
+      .AddAttribute("GroupID", "GroupID for sync node", StringValue("0"),
+                    MakeStringAccessor(&SyncApp::gid_), MakeStringChecker())
+      .AddAttribute("NodeID", "NodeID for sync node", UintegerValue(0),
+                    MakeUintegerAccessor(&SyncApp::nid_), MakeUintegerChecker<uint64_t>())
+      .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
+                    MakeNameAccessor(&SyncApp::prefix_), MakeNameChecker())
+      .AddAttribute("GroupSize", "Size of sync node's group", UintegerValue(0),
+                    MakeUintegerAccessor(&SyncApp::group_size_), MakeUintegerChecker<uint64_t>());
+      
 
     return tid;
   }
@@ -33,7 +37,7 @@ protected:
   virtual void
   StartApplication()
   {
-    m_instance.reset(new vsync::SimpleNode(m_nodeID, m_prefix, m_viewID));
+    m_instance.reset(new vsync::SimpleNode(gid_, nid_, prefix_, group_size_));
     m_instance->Start();
   }
 
@@ -45,9 +49,10 @@ protected:
 
 private:
   std::unique_ptr<vsync::SimpleNode> m_instance;
-  std::string m_nodeID;
-  std::string m_viewID;
-  Name m_prefix;
+  vsync::GroupID gid_;
+  vsync::NodeID nid_;
+  Name prefix_;
+  uint64_t group_size_;
 };
 
 } // namespace ndn

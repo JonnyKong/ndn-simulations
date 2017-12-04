@@ -90,7 +90,7 @@ def build (bld):
             target = name,
             features = ['cxx'],
             source = [scenario],
-            use = deps + " extensions",
+            use = deps + " extensions vsync",
             includes = "extensions",
             export_includes = "extensions"
             )

@@ -44,11 +44,12 @@ class TestConsumerNode {
     face_.expressInterest(interest, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
-    std::cout << "Send interest name=" << kTestPrefix.toUri() << std::endl; 
+    std::cout << "Consumer Send interest name=" << kTestPrefix.toUri() << std::endl; 
   }
 
 
   void OnRemoteData(const Data& data) {
+    std::cout << "Consumer Recv data name=" << data.getName().toUri() << std::endl;
   }
 
  private:

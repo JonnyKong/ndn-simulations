@@ -7,7 +7,6 @@
 #include "test-producer-node.hpp"
 
 namespace ns3 {
-namespace ndn{
 
 class testProducer : public Application
 {
@@ -41,7 +40,6 @@ private:
   std::unique_ptr<::ndn::testProducerNode> m_instance;
 };
 
-}
 }
 
 #endif
