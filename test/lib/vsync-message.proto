@@ -1,0 +1,19 @@
+/* -*- Mode:protobuf; indent-tabs-mode:nil; -*- */
+
+syntax = "proto3";
+
+package ndn.vsync.proto;
+
+// Version Vector
+message VV {
+  repeated uint64 entry = 1;
+}
+
+// Data List
+message DL {
+  message Entry {
+    uint32 type = 1;
+    string content = 2;
+  }
+  repeated Entry entry = 1;
+}
