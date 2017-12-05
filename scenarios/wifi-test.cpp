@@ -114,10 +114,10 @@ main (int argc, char *argv[])
 
   // install Consumer
   AppHelper consumerHelper("testConsumer");
-  consumerHelper.Install(nodes.Get(0)).Start(Seconds(1));
+  consumerHelper.Install(nodes.Get(0)).Start(Seconds(3));
   // install Producer
   AppHelper producerHelper("testProducer");
-  producerHelper.Install(nodes.Get(1)).Start(Seconds(1));
+  producerHelper.Install(nodes.Get(1)).Start(Seconds(3));
   FibHelper::AddRoute(nodes.Get(0), "/ndn/test", std::numeric_limits<int32_t>::max());
   FibHelper::AddRoute(nodes.Get(1), "/ndn/test", std::numeric_limits<int32_t>::max());
 

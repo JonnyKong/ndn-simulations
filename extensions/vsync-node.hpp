@@ -25,14 +25,13 @@ class SimpleNode {
         }
 
   void Start() {
-    // face_.processEvents();
     int time = (nid_ + 1) * 10000;
     std::cout << "will publish data after " << time << std::endl;
     scheduler_.scheduleEvent(time::milliseconds(time), [this] { PublishData(); });
   }
 
   void OnData(const VersionVector& vv) {
-    std::cout << "node( " << gid_  << " " << nid_ << "), version vector=" << VersionVectorToString(vv)
+    std::cout << "node(" << gid_  << " " << nid_ << "), version vector=" << VersionVectorToString(vv)
               << std::endl;
   }
 

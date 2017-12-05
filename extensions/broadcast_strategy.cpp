@@ -50,12 +50,13 @@ BroadcastStrategy::afterReceiveInterest(const Face& inFace, const Interest& inte
                                         const shared_ptr<pit::Entry>& pitEntry)
 {
   const fib::Entry& fibEntry = this->lookupFib(*pitEntry);
+  
   const fib::NextHopList& nexthops = fibEntry.getNextHops();
-
+  NFD_LOG_DEBUG("the nexthop size for " << fibEntry.getPrefix().toUri() << " = " << nexthops.size());
+  NFD_LOG_DEBUG("inFace = " << inFace.getId());
   // if inFace is appFace, don't forward to self
   // TBD: how to distinguish from application and others!
   if (inFace.getScope() == ndn::nfd::FACE_SCOPE_LOCAL) {
-    NFD_LOG_DEBUG("local scope! inFace = " << inFace.getId());
     for (fib::NextHopList::const_iterator it = nexthops.begin(); it != nexthops.end(); ++it) {
       Face& outFace = it->getFace();
       NFD_LOG_DEBUG("next face = " << outFace.getId());

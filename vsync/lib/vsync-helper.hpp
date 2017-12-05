@@ -28,6 +28,27 @@ inline std::string VersionVectorToString(const VersionVector& v) {
   return s;
 }
 
+inline std::string EncodeVV(const VersionVector& v) {
+  std::string vv_encode = "";
+  for (auto seq: v) {
+    vv_encode += to_string(seq) + "-";
+  }
+  return vv_encode;
+}
+
+inline VersionVector DecodeVV(const std::string& vv_encode) {
+  int start = 0;
+  VersionVector vv;
+  for (size_t i = 0; i < vv_encode.size(); ++i) {
+    if (vv_encode[i] == '-') {
+      vv.push_back(std::stoull(vv_encode.substr(start, i - start)));
+      start = i + 1;
+    }
+  }
+  return vv;
+}
+
+/*
 inline void EncodeVV(const VersionVector& v, proto::VV* vv_proto) {
   for (const auto& seq: v) {
     vv_proto->add_entry(seq);
@@ -37,6 +58,7 @@ inline void EncodeVV(const VersionVector& v, proto::VV* vv_proto) {
 inline void EncodeVV(const VersionVector& v, std::string& out) {
   proto::VV vv_proto;
   EncodeVV(v, &vv_proto);
+  // vv_proto.SerializeAsString();
   vv_proto.AppendToString(&out);
 }
 
@@ -50,9 +72,13 @@ inline VersionVector DecodeVV(const proto::VV& vv_proto) {
 
 inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
   proto::VV vv_proto;
-  if (!vv_proto.ParseFromArray(buf, buf_size)) return VersionVector(0);
+  if (!vv_proto.ParseFromArray(buf, buf_size)) {
+    std::cout << "VersionVector ParseFromArray fail!" << std::endl;
+    return VersionVector(0);
+  }
   return DecodeVV(vv_proto);
 }
+*/
 
 inline void EncodeDL(const std::vector<std::pair<uint32_t, std::string>>& data_list, proto::DL* dl_proto) {
   for (const auto& data: data_list) {
@@ -158,6 +184,10 @@ inline uint64_t ExtractEndSequenceNumber(const Name& n) {
 
 inline uint64_t ExtractNodeIDFromData(const Name& n) {
   return n.get(-3).toNumber();
+}
+
+inline GroupID ExtractGroupIDFromData(const Name& n) {
+  return n.get(-4).toUri();
 }
 
 }  // namespace vsync

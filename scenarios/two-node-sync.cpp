@@ -113,15 +113,15 @@ main (int argc, char *argv[])
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
 
     AppHelper syncAppHelper("SyncApp");
-    syncAppHelper.SetAttribute("GroupID", StringValue("sync"));
+    syncAppHelper.SetAttribute("GroupID", StringValue("group0"));
     syncAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncAppHelper.SetAttribute("Prefix", StringValue("/"));
     syncAppHelper.SetAttribute("GroupSize", UintegerValue(2));
     syncAppHelper.Install(object).Start(Seconds(2));
 
-    FibHelper::AddRoute(object, "/", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDataList", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
     idx++;
   }
 

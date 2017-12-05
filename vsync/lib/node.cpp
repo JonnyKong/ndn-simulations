@@ -24,7 +24,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
              prefix_(prefix),
              gid_(name::Component(gid).toUri()),
              data_cb_(std::move(on_data)) {
-  version_vector_ = VersionVector(group_size, -1);
+  version_vector_ = VersionVector(group_size, 0);
   data_store_ = std::vector<std::vector<std::shared_ptr<Data>>>(group_size, std::vector<std::shared_ptr<Data>>(0));
 
   face_.setInterestFilter(
@@ -36,7 +36,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
 
 
   face_.setInterestFilter(
-      Name(kSyncDataPrefix).append(gid_), std::bind(&Node::OnDataInterest, this, _2),
+      Name(kSyncDataListPrefix).append(gid_), std::bind(&Node::OnDataInterest, this, _2),
       [this](const Name&, const std::string& reason) {
         VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Failed to register data prefix: " << reason); 
         throw Error("Failed to register data prefix: " + reason);
@@ -69,8 +69,15 @@ void Node::SyncData() {
 
 void Node::SendSyncInterest() {
   // make the sync interest name
-  std::string vv_encode;
-  EncodeVV(version_vector_, vv_encode);
+  std::string vv_encode = EncodeVV(version_vector_);
+/*
+  std::cout << "``````````testing decode/encode VV```````````" << std::endl;
+  std::cout << "version vector: " << VersionVectorToString(version_vector_) << std::endl;
+  std::cout << "encodeVV size = " << vv_encode.size() << std::endl;
+  VersionVector vv = DecodeVV(vv_encode);
+  std::cout << "decoded version vector " << VersionVectorToString(vv) << std::endl;
+  std::cout << "``````````````````````````````````````````````" << std::endl;
+*/
   auto n = MakeSyncInterestName(gid_, nid_, vv_encode);
 
   VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Send Sync Interest: i.name=" << n.toUri());
@@ -83,7 +90,6 @@ void Node::SendSyncInterest() {
 
 void Node::OnSyncInterest(const Interest& interest) {
   const auto& n = interest.getName();
-  std::cout << "************OnSyncInterest" << std::endl;
   // Check sync interest name size
   if (n.size() != kSyncPrefix.size() + 3) {
     VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Invalid sync interest name: " << n.toUri());
@@ -93,8 +99,7 @@ void Node::OnSyncInterest(const Interest& interest) {
   auto group_id = ExtractGroupID(n);
   auto node_id = ExtractNodeID(n);
   auto other_vv_str = ExtractEncodedVV(n);
-
-  VersionVector other_vv = DecodeVV(other_vv_str.data(), other_vv_str.size());
+  VersionVector other_vv = DecodeVV(other_vv_str);
   VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv Sync Interest: i.version_vector=" << VersionVectorToString(other_vv));
   if (other_vv.size() != version_vector_.size()) {
     VSYNC_LOG_TRACE("Different Version Vector Size in Group: " << gid_);
@@ -124,7 +129,7 @@ void Node::SendSyncReply(const Name& n) {
 void Node::SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t end_seq) {
   auto n = MakeDataListName(gid_, node_id, start_seq, end_seq);
   Interest i(n, time::milliseconds(1000));
-  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send: i.name=" << i.toUri());
+  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send: i.name=" << n.toUri());
 
   face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
                         [](const Interest&, const lp::Nack&) {},
@@ -140,7 +145,7 @@ void Node::OnDataInterest(const Interest& interest) {
     return;
   }
 
-  auto group_id = ExtractGroupID(n);
+  auto group_id = ExtractGroupIDFromData(n);
   auto start_seq = ExtractStartSequenceNumber(n);
   auto end_seq = ExtractEndSequenceNumber(n);
 
@@ -162,7 +167,8 @@ void Node::OnDataInterest(const Interest& interest) {
     std::vector<std::pair<uint32_t, std::string>> data_list;
     std::vector<std::shared_ptr<Data>> node_data = data_store_[nid_];
     for (int i = start_seq; i <= end_seq; ++i) {
-      std::shared_ptr<Data> data = node_data[i];
+      // data_store_ starts from 0, while version_vector_ starts from 1
+      std::shared_ptr<Data> data = node_data[i - 1];
       uint32_t type = data->getContentType();
       // get the data content
       std::string content = readString(data->getContent());
@@ -189,7 +195,7 @@ void Node::OnRemoteData(const Data& data) {
     return;
   }
 
-  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << "Recv data: name=" << n.toUri());
+  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv data: name=" << n.toUri());
 
   auto node_id = ExtractNodeIDFromData(n);
   auto start_seq = ExtractStartSequenceNumber(n);
@@ -198,7 +204,7 @@ void Node::OnRemoteData(const Data& data) {
   // Store a local copy of received data
   if (version_vector_[node_id] < start_seq - 1) {
     // should not happen!!;
-    VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << "has data gap! Should not happen!");
+    VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") has data gap! Should not happen!");
     return;
   }
   else if (version_vector_[node_id] >= end_seq) {
@@ -208,17 +214,20 @@ void Node::OnRemoteData(const Data& data) {
     auto content_type = data.getContentType();
     const auto& content = data.getContent();
     proto::DL dl_proto;
-    if (dl_proto.ParseFromArray(content.value(), content.value_size())) {
+    if (dl_proto.ParseFromArray(reinterpret_cast<const uint8_t*>(content.value()),
+                                content.value_size())) {
       auto data_list = DecodeDL(dl_proto);
       if (data_list.size() != end_seq - start_seq + 1) {
         VSYNC_LOG_TRACE("Data List size doesn't match endSeq - startSeq! Should not happen!");
         return;
       }
       if (version_vector_[node_id] + 1 >= start_seq) start_seq = version_vector_[node_id] + 1;
+      
+      std::string recv_data_list= "";
       for (int i = start_seq; i <= end_seq; ++i) {
         auto cur_name = MakeDataName(gid_, node_id, i);
-        auto cur_type = data_list[i].first;
-        auto cur_content = data_list[i].second;
+        auto cur_type = data_list[i - 1].first;
+        auto cur_content = data_list[i - 1].second;
 
         std::shared_ptr<Data> cur_data = std::make_shared<Data>(cur_name);
         cur_data->setFreshnessPeriod(time::seconds(3600));
@@ -226,13 +235,18 @@ void Node::OnRemoteData(const Data& data) {
         cur_data->setContent(reinterpret_cast<const uint8_t*>(cur_content.data()),
                              cur_content.size());
         cur_data->setContentType(cur_type);
+        recv_data_list += cur_content + "; ";
+
         data_store_[node_id].push_back(cur_data);
       }
+      VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv the data: " << recv_data_list);
+
+      assert(data_store_[node_id].size() == end_seq);
       version_vector_[node_id] = end_seq;
       data_cb_(version_vector_);
     }
     else {
-      VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << "Decode Data List Fail!");
+      VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Decode Data List Fail!");
       return;
     }
   }
