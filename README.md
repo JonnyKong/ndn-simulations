@@ -45,33 +45,16 @@ To debug, configure in debug mode with all logging enabled
 
 To print the log
 
-    NS_LOG="VectorSync" ./waf --run two-node-sync
+    NS_LOG="SyncForSleep" ./waf --run two-node-sync
+    NS_LOG="SyncForSleep" ./waf --run multi-node-sync
+    NS_LOG="SyncForSleep" ./waf --run sync-for-sleep
 
 Note
 =======
 
-To run the simulations in wifi, you need to change two files in ns-3/src/ndnSIM/helper:
-1. ndn-fib-helper.hpp
-   add one public function statement:
-   ```
-    static void AddRoute(Ptr<Node> node, const Name& prefix, int32_t metric);
-   ```
-2. ndn-fib-helper.cpp
-   add one function definition:
-   ```
-    // Add all of the net-devices to specific prefix
-    void 
-    FibHelper::AddRoute(Ptr<Node> node, const Name& prefix, int32_t metric)
-    {
-      for (uint32_t deviceId = 0; deviceId < node->GetNDevices(); deviceId++) {
-        Ptr<NetDevice> device = node->GetDevice(deviceId);
-        Ptr<L3Protocol> ndn = node->GetObject<L3Protocol>();
-        NS_ASSERT_MSG(ndn != 0, "Ndn stack should be installed on the node");
+To run the simulations in wifi, you need to change four files in ns-3/src/ndnSIM. Do the following steps:
+1. replace your local 'ns-3/src/ndnSIM/helper/ndn-fib-helper.hpp' with 'changed_ndnSIM_files/ndn-fib-helper.hpp' in github.
+2. replace your local 'ns-3/src/ndnSIM/helper/ndn-fib-helper.cpp' with 'changed_ndnSIM_files/ndn-fib-helper.cpp' in github.
+3. replace your local 'ns-3/src/ndnSIM/NFD/daemon/fw/forwarder.hpp' with 'changed_ndnSIM_files/forwarder.hpp' in github.
+4. replace your local 'ns-3/src/ndnSIM/NFD/daemon/fw/forwarder.cpp' with 'changed_ndnSIM_files/forwarder.cpp' in github.
 
-        shared_ptr<Face> face = ndn->getFaceByNetDevice(device);
-        NS_ASSERT_MSG(face != 0, "There is no face associated with the net-device");
-
-        AddRoute(node, prefix, face, metric);
-      }
-    }
-   ```
