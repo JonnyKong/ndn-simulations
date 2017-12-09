@@ -9,6 +9,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "ndn-common.hpp"
 #include "recv-window.hpp"
@@ -29,6 +30,12 @@ class Node {
     kSyncReply = 9668,
     kConfigureInfo = 9669,
     kVectorClock = 9670,
+  };
+
+  enum NodeState : uint32_t {
+    kActive = 0,
+    kIntermediate = 1,
+    kSleeping = 2,
   };
 
   class Error : public std::exception {
@@ -81,27 +88,26 @@ class Node {
   const NodeID nid_;
   Name prefix_;
   const GroupID gid_;
+
   VersionVector version_vector_;
-
-  //std::unordered_map<std::string, VersionVector> digest_log_;
-  //VVQueue vector_data_queue_;
-
-  //ViewInfo view_info_;
-
-  // Hash table mapping node ID to its receive window
-  std::unordered_map<NodeID, ReceiveWindow> recv_window_;
-
-  // Ordered map mapping view id to a hash table that maps node id to its
-  // version vector queue
-  //std::map<ViewID, std::unordered_map<NodeID, VVQueue>> causality_graph_;
-
-  //std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
   DataCb data_cb_;
 
-  //std::random_device rdevice_;
-  //std::mt19937 rengine_;
-  //std::uniform_int_distribution<> rdist_;
+  std::unordered_set<NodeID> received_reply;
+  Scheduler& scheduler_;
+  uint32_t node_state;
+
+  // functions for sleeping mechanisms
+  inline void SendProbeInterest();
+  inline void SendReplyInterest();
+  inline void SendWakeupInterest();
+  inline void OnProbeInterest(const Interest& interest);
+  inline void OnReplyInterest(const Interest& interest);
+  inline void CalculateReply();
+
+  std::random_device rdevice_;
+  std::mt19937 rengine_;
+  std::uniform_int_distribution<> rdist_;
 
 };
 

@@ -10,6 +10,7 @@
 
 namespace ndn {
 namespace vsync {
+namespace multi_node_sync {
 
 class SimpleNode {
  public:
@@ -25,9 +26,8 @@ class SimpleNode {
         }
 
   void Start() {
-    int time = (nid_ + 1) * 10000;
-    std::cout << "will publish data after " << time << std::endl;
-    scheduler_.scheduleEvent(time::milliseconds(time), [this] { PublishData(); });
+    scheduler_.scheduleEvent(time::milliseconds(rdist_(rengine_)),
+                             [this] { PublishData(); });
   }
 
   void OnData(const VersionVector& vv) {
@@ -60,6 +60,7 @@ private:
   std::uniform_int_distribution<> rdist_;
 };
 
+}  // two_node_sync
 }  // namespace vsync
 }  // namespace ndn
 

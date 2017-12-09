@@ -137,10 +137,25 @@ inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const st
   return n;
 }
 
+inline Name MakeProbeInterestName(const GroupID& gid) {
+  // name = /[probe_prefix]/[group_id]/[node_id]/%00
+  // ?????question : [node_id] is not needed here? 
+  Name n(kProbePrefix);
+  n.append(gid).appendNumber(0).appendNumber(0);
+  return n;
+}
+
+inline Name MakeReplyInterestName(const GroupID& gid, const NodeID& nid) {
+  // name = /[reply_prefix]/[group_id]/[node_id]/%00
+  Name n(kReplyPrefix);
+  n.append(gid).appendNumber(nid).appendNumber(0);
+  return n;
+}
+
 inline Name MakeWakeupInterestName(const GroupID& gid, const NodeID& nid) {
   // name = /[wakeup_prefix]/[group_id]/[node_id]/%00
   Name n(kWakeupPrefix);
-  n.append("wakeup").append(gid).appendNumber(nid).appendNumber(0);
+  n.append(gid).appendNumber(nid).appendNumber(0);
   return n;
 }
 

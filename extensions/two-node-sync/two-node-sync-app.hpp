@@ -3,30 +3,30 @@
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
 
-#include "vsync-node.hpp"
+#include "vsync-node-two.hpp"
 
 namespace ns3 {
 namespace ndn {
 
 namespace vsync = ::ndn::vsync;
 
-class SyncApp : public Application
+class TwoNodeSyncApp : public Application
 {
 public:
   static TypeId
   GetTypeId()
   {
-    static TypeId tid = TypeId("SyncApp")
+    static TypeId tid = TypeId("TwoNodeSyncApp")
       .SetParent<Application>()
-      .AddConstructor<SyncApp>()
+      .AddConstructor<TwoNodeSyncApp>()
       .AddAttribute("GroupID", "GroupID for sync node", StringValue("0"),
-                    MakeStringAccessor(&SyncApp::gid_), MakeStringChecker())
+                    MakeStringAccessor(&TwoNodeSyncApp::gid_), MakeStringChecker())
       .AddAttribute("NodeID", "NodeID for sync node", UintegerValue(0),
-                    MakeUintegerAccessor(&SyncApp::nid_), MakeUintegerChecker<uint64_t>())
+                    MakeUintegerAccessor(&TwoNodeSyncApp::nid_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
-                    MakeNameAccessor(&SyncApp::prefix_), MakeNameChecker())
+                    MakeNameAccessor(&TwoNodeSyncApp::prefix_), MakeNameChecker())
       .AddAttribute("GroupSize", "Size of sync node's group", UintegerValue(0),
-                    MakeUintegerAccessor(&SyncApp::group_size_), MakeUintegerChecker<uint64_t>());
+                    MakeUintegerAccessor(&TwoNodeSyncApp::group_size_), MakeUintegerChecker<uint64_t>());
       
 
     return tid;
@@ -37,7 +37,7 @@ protected:
   virtual void
   StartApplication()
   {
-    m_instance.reset(new vsync::SimpleNode(gid_, nid_, prefix_, group_size_));
+    m_instance.reset(new vsync::two_node_sync::SimpleNode(gid_, nid_, prefix_, group_size_));
     m_instance->Start();
   }
 
@@ -48,7 +48,7 @@ protected:
   }
 
 private:
-  std::unique_ptr<vsync::SimpleNode> m_instance;
+  std::unique_ptr<vsync::two_node_sync::SimpleNode> m_instance;
   vsync::GroupID gid_;
   vsync::NodeID nid_;
   Name prefix_;

@@ -20,7 +20,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.twoNodeSync");
+NS_LOG_COMPONENT_DEFINE ("ndn.sleeping");
 
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
@@ -84,7 +84,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (2);
+  nodes.Create (5);
 
   ////////////////
   // 1. Install Wifi
@@ -112,16 +112,15 @@ main (int argc, char *argv[])
     Vector pos = position->GetPosition();
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
 
-    AppHelper syncAppHelper("TwoNodeSyncApp");
-    syncAppHelper.SetAttribute("GroupID", StringValue("group0"));
-    syncAppHelper.SetAttribute("NodeID", UintegerValue(idx));
-    syncAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncAppHelper.SetAttribute("GroupSize", UintegerValue(2));
-    syncAppHelper.Install(object).Start(Seconds(2));
+    AppHelper sleepingAppHelper("SleepingApp");
+    sleepingAppHelper.SetAttribute("GroupID", StringValue("group0"));
+    sleepingAppHelper.SetAttribute("NodeID", UintegerValue(idx));
+    sleepingAppHelper.SetAttribute("Prefix", StringValue("/"));
+    sleepingAppHelper.SetAttribute("GroupSize", UintegerValue(2));
+    sleepingAppHelper.Install(object).Start(Seconds(2));
 
-    FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
