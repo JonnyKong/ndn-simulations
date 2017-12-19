@@ -20,7 +20,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
+NS_LOG_COMPONENT_DEFINE ("ndn.TestRange");
 
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (7);
+  nodes.Create (6);
 
   ////////////////
   // 1. Install Wifi
@@ -117,30 +117,20 @@ main (int argc, char *argv[])
     Ptr<Node> object = *i;
     Ptr<MobilityModel> position = object->GetObject<MobilityModel>();
     Vector pos = position->GetPosition();
-    std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
+    std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << " " << pos.z << std::endl;
 
-    AppHelper syncForSleepAppHelper("SyncForSleepApp");
-    syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
-    syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
-    syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(7));
-    auto app = syncForSleepAppHelper.Install(object);
+    AppHelper testRangeAppHelper("testRange");
+    testRangeAppHelper.SetAttribute("NodeID", UintegerValue(idx));
+    auto app = testRangeAppHelper.Install(object);
     app.Start(Seconds(2));
-    app.Stop(Seconds (200.0 + idx));
 
-
-    FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/testRange", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
   ////////////////
 
-  Simulator::Stop (Seconds (300.0));
+  Simulator::Stop (Seconds (100.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

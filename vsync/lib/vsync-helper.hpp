@@ -138,23 +138,30 @@ inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const st
 }
 
 inline Name MakeProbeInterestName(const GroupID& gid) {
-  // name = /[probe_prefix]/[group_id]/[node_id]/%00
+  // name = /[probe_prefix]/[group_id]/%00/%00
   // ?????question : [node_id] is not needed here? 
   Name n(kProbePrefix);
   n.append(gid).appendNumber(0).appendNumber(0);
   return n;
 }
 
-inline Name MakeReplyInterestName(const GroupID& gid, const NodeID& nid) {
-  // name = /[reply_prefix]/[group_id]/[node_id]/%00
+inline Name MakeReplyInterestName(const GroupID& gid, const NodeID& nid, uint64_t sleeping_time) {
+  // name = /[reply_prefix]/[group_id]/[node_id]/[sleeping_time]
   Name n(kReplyPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(0);
+  n.append(gid).appendNumber(nid).appendNumber(sleeping_time);
   return n;
 }
 
 inline Name MakeWakeupInterestName(const GroupID& gid, const NodeID& nid) {
   // name = /[wakeup_prefix]/[group_id]/[node_id]/%00
   Name n(kWakeupPrefix);
+  n.append(gid).appendNumber(nid).appendNumber(0);
+  return n;
+}
+
+inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& nid) {
+  // name = /[sleep_command_prefix]/[group_id]/[node_id]/%00
+  Name n(kSleepCommandPrefix);
   n.append(gid).appendNumber(nid).appendNumber(0);
   return n;
 }
@@ -203,6 +210,10 @@ inline uint64_t ExtractNodeIDFromData(const Name& n) {
 
 inline GroupID ExtractGroupIDFromData(const Name& n) {
   return n.get(-4).toUri();
+}
+
+inline uint64_t ExtractSleepingTime(const Name& n) {
+  return n.get(-1).toNumber();
 }
 
 }  // namespace vsync

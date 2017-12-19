@@ -68,6 +68,7 @@ BroadcastStrategy::afterReceiveInterest(const Face& inFace, const Interest& inte
     }
   }
   else {
+    // this means the interest is sent from wifi interface. The interest should be forwarded to app face, 
     for (fib::NextHopList::const_iterator it = nexthops.begin(); it != nexthops.end(); ++it) {
       Face& outFace = it->getFace();
       NFD_LOG_DEBUG("candidate outFace=" << outFace.getId());

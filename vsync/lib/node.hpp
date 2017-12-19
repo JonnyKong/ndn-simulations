@@ -69,6 +69,22 @@ class Node {
 
   void SyncData();
 
+  double GetEnergyConsumption() {
+    return energy_consumption;
+  }
+
+  double GetSleepingTime() {
+    return sleeping_time;
+  }
+
+  std::vector<uint64_t> GetDataSnapshots() {
+    return data_snapshots;
+  }
+
+  std::vector<VersionVector> GetVVSnapshots() {
+    return vv_snapshots;
+  }
+
  private:
 
   Node(const Node&) = delete;
@@ -93,17 +109,27 @@ class Node {
   std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
   DataCb data_cb_;
 
-  std::unordered_set<NodeID> received_reply;
+  //std::unordered_set<NodeID> received_reply;
+  std::unordered_map<NodeID, uint64_t> received_reply;
   Scheduler& scheduler_;
   uint32_t node_state;
+  double energy_consumption;
+  double sleeping_time;
+  std::vector<uint64_t> data_snapshots;
+  std::vector<VersionVector> vv_snapshots;
+  // std::chrono::high_resolution_clock::time_point sleep_start;
+  time::system_clock::time_point sleep_start;
 
   // functions for sleeping mechanisms
   inline void SendProbeInterest();
   inline void SendReplyInterest();
-  inline void SendWakeupInterest();
   inline void OnProbeInterest(const Interest& interest);
   inline void OnReplyInterest(const Interest& interest);
+  inline void OnSleepCommandInterest(const Interest& interest);
   inline void CalculateReply();
+
+  // helper functions
+  inline void PrintVectorClock();
 
   std::random_device rdevice_;
   std::mt19937 rengine_;

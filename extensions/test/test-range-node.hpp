@@ -26,20 +26,35 @@ static const Name kTestRangePrefix = Name("/ndn/testRange");
 
 class TestRangeNode {
  public:
-  TestRangeNode()
+  TestRangeNode(uint64_t nid) : 
+    scheduler_(face_.getIoService()),
+    nid_(nid)
   {
+    face_.setInterestFilter(
+      kTestRangePrefix, std::bind(&TestRangeNode::OnTestRangeInterest, this, _2),
+      [this](const Name&, const std::string& reason) {
+        std::cout << "Failed to register testRange prefix: " << reason << std::endl;
+      });
   }
 
   void Start() {
-    SendInterest();
+    scheduler_.scheduleEvent(time::milliseconds(nid_ * 100),
+                             [this] { SendInterest(); });
   }
 
   void SendInterest() {
-    Interest interest(kTestRangePrefix);
+    std::cout << std::endl;
+    Name n = kTestRangePrefix;
+    n.appendNumber(nid_);
+    Interest interest(n);
     face_.expressInterest(interest, std::bind(&TestRangeNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
-    std::cout << "Send interest name=" << kTestRangePrefix.toUri() << std::endl; 
+    std::cout << "Send interest name=" << n.toUri() << std::endl; 
+  }
+
+  void OnTestRangeInterest(const Interest& interest) {
+    std::cout << "node(" << nid_ << ") receives the interest" << std::endl;
   }
 
 
@@ -48,6 +63,8 @@ class TestRangeNode {
 
 private:
   Face face_;
+  Scheduler scheduler_;
+  uint64_t nid_;
 };
 
 }  // namespace geo_forwarding

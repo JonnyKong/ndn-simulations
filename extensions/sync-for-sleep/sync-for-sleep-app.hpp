@@ -37,6 +37,7 @@ protected:
   virtual void
   StartApplication()
   {
+    std::cout << "calling StartApplication" << std::endl;
     m_instance.reset(new vsync::sync_for_sleep::SimpleNode(gid_, nid_, prefix_, group_size_));
     m_instance->Start();
   }
@@ -44,6 +45,8 @@ protected:
   virtual void
   StopApplication()
   {
+    std::cout << "calling StopApplication" << std::endl;
+    m_instance->Stop();
     m_instance.reset();
   }
 
