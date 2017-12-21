@@ -18,12 +18,12 @@ namespace ndn {
 namespace vsync {
 
 static time::milliseconds kReplyWaitingTime = time::milliseconds(1000);
-static time::milliseconds kInterval = time::milliseconds(28000);
+static time::milliseconds kInterval = time::milliseconds(60000);
 static time::milliseconds kSyncTime = time::milliseconds(1000);
-static time::milliseconds kSnapshotInterval = time::milliseconds(7000);
+static time::milliseconds kSnapshotInterval = time::milliseconds(3000);
 static const std::string availabilityFileName = "availability.txt";
 static const int kActiveInGroup = 2;
-static const int kSnapshotNum = 15;
+static const int kSnapshotNum = 65;
 
 Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
            const NodeID& nid, const Name& prefix, const GroupID& gid,
@@ -42,6 +42,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   node_state = kActive;
   energy_consumption = 0.0;
   sleeping_time = 0.0;
+  current_sync_sender = 0;
 
   face_.setInterestFilter(
       Name(kSyncPrefix).append(gid_), std::bind(&Node::OnSyncInterest, this, _2),
@@ -78,6 +79,13 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
         VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Failed to register sleep command interest prefix: " << reason); 
         throw Error("Failed to register sleep command interest prefix: " + reason);
       });  
+
+  face_.setInterestFilter(
+      Name(kSyncACKPrefix).append(gid_), std::bind(&Node::OnSyncACKInterest, this, _2),
+      [this](const Name&, const std::string& reason) {
+        VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Failed to register sync ack interest prefix: " << reason); 
+        throw Error("Failed to register sync ack interest prefix: " + reason);
+      });
 
   scheduler_.scheduleEvent(time::milliseconds(4 * nid_ * 1000),
                            [this] { SendProbeInterest(); });
@@ -133,7 +141,7 @@ void Node::OnSyncInterest(const Interest& interest) {
   }
 
   auto group_id = ExtractGroupID(n);
-  auto node_id = ExtractNodeID(n);
+  auto sync_sender = ExtractNodeID(n);
   auto other_vv_str = ExtractEncodedVV(n);
   VersionVector other_vv = DecodeVV(other_vv_str);
   VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv Sync Interest: i.version_vector=" << VersionVectorToString(other_vv));
@@ -144,6 +152,7 @@ void Node::OnSyncInterest(const Interest& interest) {
 
   SendSyncReply(n);
   // Process version vector
+  current_sync_sender = sync_sender;
   VersionVector old_vv = version_vector_;
   for (NodeID i = 0; i < version_vector_.size(); ++i) {
     uint64_t other_seq = other_vv[i];
@@ -154,8 +163,17 @@ void Node::OnSyncInterest(const Interest& interest) {
       we should update the version_vector_[i] here or after we receive the data?? (in OnRemoteData())
       */
       SendDataInterest(i, my_seq + 1, other_seq);
+      syncing_nid.insert(i);
     }
   }
+  /*
+  if (syncing_nid.empty()) {
+    // send ack to tell the sync-interest-initiated node to go to sleep
+    std::uniform_int_distribution<> rdist_ack(0, 500);
+    sync_ack_scheduler = scheduler_.scheduleEvent(time::milliseconds(rdist_ack(rengine_)),
+                                                  [this] { SendSyncACKInterest(); });
+  }
+  */
 }
 
 void Node::SendSyncReply(const Name& n) {
@@ -287,11 +305,48 @@ void Node::OnRemoteData(const Data& data) {
       assert(data_store_[node_id].size() == end_seq);
       version_vector_[node_id] = end_seq;
       data_cb_(version_vector_);
+      /*
+      syncing_nid.erase(node_id);
+      if (syncing_nid.empty()) {
+        std::uniform_int_distribution<> rdist_ack(0, 500);
+        sync_ack_scheduler = scheduler_.scheduleEvent(time::milliseconds(rdist_ack(rengine_)),
+                                 [this] { SendSyncACKInterest(); });
+      }
+      */
     }
     else {
       VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Decode Data List Fail!");
       return;
     }
+  }
+}
+
+void Node::SendSyncACKInterest() {
+  Name n = MakeSyncACKInterestName(gid_, current_sync_sender);
+  Interest i(n, time::milliseconds(1000));
+  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send SyncACKInterest: i.name=" << n.toUri());
+
+  face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+}
+
+void Node::OnSyncACKInterest(const Interest& interest) {
+
+  if (node_state == kIntermediate) {
+    const auto& n = interest.getName();
+    NodeID received_node = ExtractNodeID(n);
+    if (received_node != nid_) return;
+
+    VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Receive SyncACKInterest: i.name=" << n.toUri());
+    std::cout << "node(" << gid_ << " " << nid_ << ") will go to sleep" << std::endl;
+    Interest i(kLocalhostSleepingCommand);
+    face_.expressInterest(i, [](const Interest&, const Data&) {},
+                          [](const Interest&, const lp::Nack&) {},
+                          [](const Interest&) {});
+    scheduler_.cancelEvent(current_sync_scheduler);
+    node_state = kSleeping;
+    sleep_start = time::system_clock::now();
   }
 }
 
@@ -328,6 +383,14 @@ void Node::SendProbeInterest() {
   scheduler_.scheduleEvent(kReplyWaitingTime, [this] { CalculateReply(); });
 }
 
+void Node::SyncDataTimeOut(uint32_t sync_time) {
+  if (sync_time == 4) return;
+  SyncData();
+  current_sync_scheduler = scheduler_.scheduleEvent(kSyncTime, [this] {
+    this->SyncDataTimeOut(2);
+  });
+}
+
 void Node::CalculateReply() {
   /* we should guarantee that there should be at least two active nodes in the group. if so, the current 
   node can continue to go to sleep. Otherwise it should start to work.
@@ -351,6 +414,11 @@ void Node::CalculateReply() {
     if (sleep_node == nid_) {
       SyncData();
       // we need to wait for some time to make the data synced before going to sleep
+      /*
+      current_sync_scheduler = scheduler_.scheduleEvent(kSyncTime, [this] {
+        this->SyncDataTimeOut(2);
+      });
+      */
       scheduler_.scheduleEvent(kSyncTime, [this] { 
         std::cout << "node(" << gid_ << " " << nid_ << ") will go to sleep" << std::endl;
         Interest i(kLocalhostSleepingCommand);
@@ -440,6 +508,12 @@ void Node::OnSleepCommandInterest(const Interest& interest) {
     node_state = kSleeping;
     sleep_start = time::system_clock::now();
   });
+  // we need to wait for some time to make the data synced before going to sleep
+  /*
+  current_sync_scheduler = scheduler_.scheduleEvent(kSyncTime, [this] {
+    this->SyncDataTimeOut(2);
+  });
+  */
   // sleeping_time += kSleepInterval; // currently sleeping time is fixed, = 10 seconds
 }
 

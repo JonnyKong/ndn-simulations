@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (7);
+  nodes.Create (15);
 
   ////////////////
   // 1. Install Wifi
@@ -106,8 +106,8 @@ main (int argc, char *argv[])
 
   // 4. Set Forwarding Strategy
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
-  //StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
-  StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
+  StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
+  // StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
 
   // initialize the total vector clock
 
@@ -123,7 +123,7 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(7));
+    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(15));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
     app.Stop(Seconds (200.0 + idx));
@@ -135,6 +135,7 @@ main (int argc, char *argv[])
     FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/syncACK/group0", std::numeric_limits<int32_t>::max());
     idx++;
   }
 

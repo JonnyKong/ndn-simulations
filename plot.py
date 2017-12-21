@@ -5,23 +5,28 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import math
 
-five_node = np.array([95, 94, 104, 108, 109])
-six_node = np.array([114, 115, 103, 107, 108, 112])
-seven_node = np.array([127, 112, 119, 112, 120, 120, 127])
-eight_node = np.array([132, 143, 109, 117, 113, 113, 132, 117])
-ten_node = np.array([107, 107, 107, 107, 114, 114, 152, 152, 145, 145])
-twelve_node = np.array([127, 135, 92, 92, 138, 138, 138, 138, 138, 138, 131, 131])
-fifteen_node = np.array([116, 113, 116, 116, 174, 174, 116, 73, 116, 116, 116, 116, 116, 105, 113])
-node_num_to_data = {5: five_node, 6: six_node, 7: seven_node, 8: eight_node, 10: ten_node, 12: twelve_node, 15: fifteen_node}
+five_node = np.array([90, 92, 88, 94, 98])
+six_node = np.array([114, 118, 108, 108, 102, 108])
+seven_node = np.array([124, 106, 118, 118, 118, 120, 120])
+eight_node = np.array([138, 126, 108, 116, 112, 112, 130, 126])
+nine_node = np.array([128, 128, 128, 128, 124, 132, 136, 128, 128])
+ten_node = np.array([102, 110, 106, 106, 114, 114, 152, 152, 140, 148])
+eleven_node = np.array([114, 122, 114, 122, 126, 126, 168, 168, 126, 118, 118])
+twelve_node = np.array([130, 130, 92, 92, 138, 138, 138, 138, 138, 138, 126, 134])
+thirteen_node = np.array([88, 96, 100, 100, 150, 150, 150, 150, 150, 150, 150, 138, 146])
+fourteen_node = np.array([96, 104, 108, 108, 162, 162, 162, 162, 162, 162, 108, 108, 96, 104])
+fifteen_node = np.array([108, 108, 116, 116, 174, 174, 116, 116, 116, 116, 116, 116, 116, 104, 112])
+node_num_to_data = {5: five_node, 6: six_node, 7: seven_node, 8: eight_node, 9: nine_node, 10: ten_node, 11: eleven_node, 12: twelve_node, 13: thirteen_node, 14: fourteen_node, 15: fifteen_node}
 
-data_availability = np.array([0.84, 0.87, 0.83, 0.81, 0.8, 0.85, 0.77])
-node_num = np.array([5, 6, 7, 8, 10, 12, 15])
+data_availability = np.array([0.963076923077, 0.994871794872, 0.962637362637, 0.998076923077, 0.986324786325, 0.970769230769, 1.0, 1.0, 1.0, 0.984615384615, 0.982564102564])
+node_num = np.array([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
 
 def plot_availability():
   plt.plot(node_num, data_availability)
   plt.title('Data Availability - #(Node in Group)')
   plt.xlabel("The number of nodes in group")
   plt.ylabel("Data Availability")
+  plt.ylim((0.9, 1.1))
   plt.show()
 
 def plot_sleeping_time_distribution(node_num):
@@ -37,8 +42,8 @@ def plot_sleeping_time_distribution(node_num):
   print mean, std
 
 def plot_sleeping_node_num():
-  ave = np.array([102.0, 109.833333333, 119.571428571, 122.0, 125.0, 128.0, 119.733333333])
-  std = np.array([6.35609943283, 4.21966296706, 5.67845911839, 11.3026545555, 19.4833262047, 16.4823137534, 23.8144680581])
+  ave = np.array([92.4, 109.666666667, 117.714285714, 121.0, 128.888888889, 124.4, 129.272727273, 127.666666667, 132.153846154, 128.857142857, 121.6])
+  std = np.array([3.44093010682, 5.08811250749, 5.17450579322, 9.8488578018, 3.14269680527, 19.8151457224, 18.728155319, 16.4282953738, 24.4629897973, 28.9404737419, 20.8895508169])
 
   plt.errorbar(node_num, ave, std, linestyle='None', marker='^')
   plt.title("Average Sleeping Time - #(Node in Group)")
@@ -48,10 +53,10 @@ def plot_sleeping_node_num():
 
 
 if __name__ == "__main__":
-  plot_availability()
+  #plot_availability()
   '''
   for node_num in node_num_to_data.keys():
     plot_sleeping_time_distribution(node_num)
   '''
-  #plot_sleeping_node_num()
+  plot_sleeping_node_num()
   

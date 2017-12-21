@@ -166,6 +166,13 @@ inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& nid) {
   return n;
 }
 
+inline Name MakeSyncACKInterestName(const GroupID& gid, const NodeID& sync_sender) {
+  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/%00
+  Name n(kSyncACKPrefix);
+  n.append(gid).appendNumber(sync_sender).appendNumber(0);
+  return n;
+}
+
 inline GroupID ExtractGroupID(const Name& n) {
   GroupID group_id = n.get(-3).toUri();
   return group_id;

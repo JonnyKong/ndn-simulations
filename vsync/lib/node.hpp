@@ -119,6 +119,10 @@ class Node {
   std::vector<VersionVector> vv_snapshots;
   // std::chrono::high_resolution_clock::time_point sleep_start;
   time::system_clock::time_point sleep_start;
+  std::unordered_set<uint64_t> syncing_nid;
+  NodeID current_sync_sender;
+  EventId current_sync_scheduler;
+  EventId sync_ack_scheduler;
 
   // functions for sleeping mechanisms
   inline void SendProbeInterest();
@@ -127,6 +131,9 @@ class Node {
   inline void OnReplyInterest(const Interest& interest);
   inline void OnSleepCommandInterest(const Interest& interest);
   inline void CalculateReply();
+  inline void SendSyncACKInterest();
+  inline void OnSyncACKInterest(const Interest& interest);
+  inline void SyncDataTimeOut(uint32_t sync_time);
 
   // helper functions
   inline void PrintVectorClock();
