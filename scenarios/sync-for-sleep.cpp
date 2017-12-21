@@ -106,8 +106,8 @@ main (int argc, char *argv[])
 
   // 4. Set Forwarding Strategy
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
-  StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
-  // StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
+  // StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
+  StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
 
   // initialize the total vector clock
 
