@@ -1,7 +1,7 @@
 import numpy as np
 
 file = open("snapshot.txt")
-node_num = 15
+node_num = 10
 snapshot_num = 65
 sleeping_time = []
 data_snapshots_array = []
