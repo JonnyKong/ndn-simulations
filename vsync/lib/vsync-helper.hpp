@@ -137,6 +137,12 @@ inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const st
   return n;
 }
 
+inline Name MakeProbeIntermediateInterestName(const GroupID& gid) {
+  Name n(kProbeIntermediatePrefix);
+  n.append(gid).appendNumber(0).appendNumber(0);
+  return n;
+}
+
 inline Name MakeProbeInterestName(const GroupID& gid) {
   // name = /[probe_prefix]/[group_id]/%00/%00
   // ?????question : [node_id] is not needed here? 
@@ -167,9 +173,11 @@ inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& nid) {
 }
 
 inline Name MakeSyncACKInterestName(const GroupID& gid, const NodeID& sync_sender) {
-  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/%00
+  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/[timestamp]
+  time::system_clock::time_point cur = time::system_clock::now();
+  std::string timestamp = to_string(time::system_clock::to_time_t(cur));
   Name n(kSyncACKPrefix);
-  n.append(gid).appendNumber(sync_sender).appendNumber(0);
+  n.append(gid).appendNumber(sync_sender).append(timestamp);
   return n;
 }
 

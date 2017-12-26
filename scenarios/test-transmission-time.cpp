@@ -20,7 +20,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
+NS_LOG_COMPONENT_DEFINE ("ndn.TestTransmissionTime");
 
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
@@ -71,31 +71,40 @@ main (int argc, char *argv[])
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
-  Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
-  randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (50));
+  Ptr<UniformRandomVariable> randomizer0 = CreateObject<UniformRandomVariable> ();
+  randomizer0->SetAttribute ("Min", DoubleValue (0));
+  randomizer0->SetAttribute ("Max", DoubleValue (0));
 
-  Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
-  randomizerZ->SetAttribute ("Min", DoubleValue (0));
-  randomizerZ->SetAttribute ("Max", DoubleValue (0));
+  Ptr<UniformRandomVariable> randomizer50 = CreateObject<UniformRandomVariable> ();
+  randomizer50->SetAttribute ("Min", DoubleValue (50));
+  randomizer50->SetAttribute ("Max", DoubleValue (50));  
 
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
-                                 "X", PointerValue (randomizer),
-                                 "Y", PointerValue (randomizer),
-                                 "Z", PointerValue (randomizerZ));
+  MobilityHelper mobility1;
+  mobility1.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
+                                 "X", PointerValue (randomizer0),
+                                 "Y", PointerValue (randomizer0),
+                                 "Z", PointerValue (randomizer0));
 
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility1.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+
+  MobilityHelper mobility2;
+  mobility2.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
+                                 "X", PointerValue (randomizer50),
+                                 "Y", PointerValue (randomizer50),
+                                 "Z", PointerValue (randomizer0));
+
+  mobility2.SetMobilityModel ("ns3::ConstantPositionMobilityModel");  
 
   NodeContainer nodes;
-  nodes.Create (13);
+  nodes.Create (2);
 
   ////////////////
   // 1. Install Wifi
   NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
 
   // 2. Install Mobility model
-  mobility.Install (nodes);
+  mobility1.Install (nodes.Get(0));
+  mobility2.Install (nodes.Get(1));
 
   // 3. Install NDN stack
   NS_LOG_INFO ("Installing NDN stack");
@@ -106,42 +115,34 @@ main (int argc, char *argv[])
 
   // 4. Set Forwarding Strategy
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
-  // StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
+  //StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
   StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
 
   // initialize the total vector clock
 
   // install SyncApp
-  uint64_t idx = 0;
-  for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
-    Ptr<Node> object = *i;
-    Ptr<MobilityModel> position = object->GetObject<MobilityModel>();
-    Vector pos = position->GetPosition();
-    std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
+  Ptr<MobilityModel> position1 = nodes.Get(0)->GetObject<MobilityModel>();
+  Ptr<MobilityModel> position2 = nodes.Get(1)->GetObject<MobilityModel>();
+  Vector pos1 = position1->GetPosition();
+  Vector pos2 = position2->GetPosition();
+  std::cout << "node 0 position: " << pos1.x << " " << pos1.y << std::endl;
+  std::cout << "node 1 position: " << pos2.x << " " << pos2.y << std::endl;
 
-    AppHelper syncForSleepAppHelper("SyncForSleepApp");
-    syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
-    syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
-    syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(13));
-    auto app = syncForSleepAppHelper.Install(object);
-    app.Start(Seconds(2));
-    app.Stop(Seconds (2100.0 + idx));
+  // install Consumer
+  AppHelper testTransmissionTimeHelper0("testTransmissionTime");
+  testTransmissionTimeHelper0.SetAttribute("NodeID", UintegerValue(0));
+  testTransmissionTimeHelper0.Install(nodes.Get(0)).Start(Seconds(2));
 
+  AppHelper testTransmissionTimeHelper1("testTransmissionTime");
+  testTransmissionTimeHelper1.SetAttribute("NodeID", UintegerValue(1));
+  testTransmissionTimeHelper1.Install(nodes.Get(1)).Start(Seconds(2));
 
-    FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/syncACK/group0", std::numeric_limits<int32_t>::max());
-    idx++;
-  }
+  FibHelper::AddRoute(nodes.Get(0), "/ndn/testTransmissionTime", std::numeric_limits<int32_t>::max());
+  FibHelper::AddRoute(nodes.Get(1), "/ndn/testTransmissionTime", std::numeric_limits<int32_t>::max());
 
   ////////////////
 
-  Simulator::Stop (Seconds (2120.0));
+  Simulator::Stop (Seconds (100.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

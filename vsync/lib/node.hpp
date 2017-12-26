@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <queue>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -90,9 +91,19 @@ class Node {
   Node(const Node&) = delete;
   Node& operator=(const Node&) = delete;
 
+  struct MissingData {
+    NodeID node_id;
+    uint64_t start_seq;
+    uint64_t end_seq;
+    MissingData(NodeID node_id_, uint64_t start_seq_, uint64_t end_seq_) {
+      node_id = node_id_;
+      start_seq = start_seq_;
+      end_seq = end_seq_;
+    }
+  };
+
   inline void SendSyncInterest();
   inline void SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t end_seq);
-  inline void SendSyncReply(const Name& n);
 
   void OnSyncInterest(const Interest& interest);
   void OnDataInterest(const Interest& interest);
@@ -104,6 +115,7 @@ class Node {
   const NodeID nid_;
   Name prefix_;
   const GroupID gid_;
+  uint32_t group_size;
 
   VersionVector version_vector_;
   std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
@@ -112,19 +124,34 @@ class Node {
   //std::unordered_set<NodeID> received_reply;
   std::unordered_map<NodeID, uint64_t> received_reply;
   Scheduler& scheduler_;
-  uint32_t node_state;
+  NodeState node_state;
   double energy_consumption;
   double sleeping_time;
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
-  // std::chrono::high_resolution_clock::time_point sleep_start;
   time::system_clock::time_point sleep_start;
-  std::unordered_set<uint64_t> syncing_nid;
+  // std::unordered_set<uint64_t> syncing_nid;
+  //std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> missing_data;
+  std::queue<MissingData> missing_data;
   NodeID current_sync_sender;
-  EventId current_sync_scheduler;
-  EventId sync_ack_scheduler;
+
+  EventId sync_interest_scheduler;
+  EventId syncACK_delay_scheduler;
+  EventId syncACK_scheduler;
+  EventId data_interest_scheduler;
+
+  //EventId current_sync_scheduler;
+  // EventId sync_ack_scheduler;
+  // EventId receive_data_scheduler;
+  bool receive_first_data_interest;
+  bool no_need_send_data_interest;
+  NodeState lastState;
+
+  uint32_t index;
 
   // functions for sleeping mechanisms
+  inline void MakeDecision(uint32_t make_decision_time);
+  inline void OnProbeIntermediateInterest(const Interest& interest);
   inline void SendProbeInterest();
   inline void SendReplyInterest();
   inline void OnProbeInterest(const Interest& interest);
@@ -133,7 +160,10 @@ class Node {
   inline void CalculateReply();
   inline void SendSyncACKInterest();
   inline void OnSyncACKInterest(const Interest& interest);
-  inline void SyncDataTimeOut(uint32_t sync_time);
+  inline void SyncInterestTimeout();
+  inline void RequestMissingData();
+  inline void OnDataInterestTimeout();
+  inline void CheckOneWakeupNode();
 
   // helper functions
   inline void PrintVectorClock();
