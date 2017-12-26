@@ -46,12 +46,17 @@ class testProducerNode {
     //size_t content_size = interest.getContent().value_size();
     //std::cout << "producer receives interest.Content size = " << content_size << std::endl;
 
+    time::system_clock::time_point cur = time::system_clock::now();
+    std::cout << to_string(time::system_clock::to_time_t(cur)) << std::endl;
+    std::cout << "producer Recv interest " << interest.getName() << std::endl;
+    /*
     std::shared_ptr<Data> data = std::make_shared<Data>(data_name);
     data->setFreshnessPeriod(time::seconds(3600));
     data->setContent(make_shared< ::ndn::Buffer>(5));
     key_chain_.sign(*data, signingWithSha256());
     face_.put(*data);
     std::cout << "producer Send Data" << std::endl;
+    */
     
   }
 

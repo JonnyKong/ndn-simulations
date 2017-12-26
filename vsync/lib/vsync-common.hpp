@@ -32,6 +32,7 @@ static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 
 static const Name kWakeupPrefix = Name("/ndn/sleepingWakeup");
 static const Name kProbePrefix = Name("/ndn/sleepingProbe");
+static const Name kProbeIntermediatePrefix = Name("/ndn/sleepingProbeIntermediate");
 static const Name kReplyPrefix = Name("/ndn/sleepingReply");
 static const Name kSleepCommandPrefix = Name("/ndn/sleepingCommand");
 

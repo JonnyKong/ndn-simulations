@@ -23,7 +23,7 @@ class SimpleNode {
         node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix, gid, group_size,
               std::bind(&SimpleNode::OnData, this, _1)),
         rengine_(rdevice_()),
-        rdist_(5000, 10000)
+        rdist_(1000, 35000)
         {
         }
 

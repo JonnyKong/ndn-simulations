@@ -25,9 +25,10 @@ static const Name kTestPrefix = Name("/ndn/test");
 
 class TestConsumerNode {
  public:
-  TestConsumerNode()
+  TestConsumerNode(): scheduler_(face_.getIoService())
   {
     std::cout << 0 << std::endl;
+    index = 0;
   }
 
   void Start() {
@@ -35,12 +36,15 @@ class TestConsumerNode {
   }
 
   void SendInterest() {
+    index++;
+    if (index == 3) return;
     Interest interest(kTestPrefix);
     const std::string& content = "hello!";
     face_.expressInterest(interest, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
     std::cout << "Consumer Send interest name=" << kTestPrefix.toUri() << std::endl; 
+    scheduler_.scheduleEvent(time::milliseconds(100), [this] { SendInterest(); });
   }
 
 
@@ -49,7 +53,9 @@ class TestConsumerNode {
   }
 
  private:
+  uint32_t index;
   Face face_;
+  Scheduler scheduler_;
 };
 
 }
