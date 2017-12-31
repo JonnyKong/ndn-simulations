@@ -17,13 +17,12 @@ namespace ndn {
 namespace vsync {
 
 static time::milliseconds kReplyWaitingTime = time::milliseconds(1000);
-static time::milliseconds kInterval = time::milliseconds(13 * 4 * 1000);
+static time::milliseconds kInterval = time::milliseconds(9 * 4 * 1000);
 
-static time::milliseconds kWaitACKforSyncInterestInterval = time::milliseconds(50);
-static time::milliseconds kWaitRemoteDataInterval = time::milliseconds(50);
+static time::milliseconds kWaitACKforSyncInterestInterval = time::milliseconds(55);
+static time::milliseconds kWaitRemoteDataInterval = time::milliseconds(55);
 static time::milliseconds kSnapshotInterval = time::milliseconds(3000);
 
-static int kSyncACKDelay = 50;
 static int kProbeIntermediate = 5;
 static const std::string availabilityFileName = "availability.txt";
 static const int kActiveInGroup = 2;
@@ -47,9 +46,10 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   node_state = kActive;
   energy_consumption = 0.0;
   sleeping_time = 0.0;
-  current_sync_sender = 0;
+  current_sync_sender = -1;
   receive_first_data_interest = false;
   index = -1;
+  is_syncing = false;
 
   face_.setInterestFilter(
       Name(kSyncPrefix).append(gid_), std::bind(&Node::OnSyncInterest, this, _2),
@@ -133,9 +133,9 @@ void Node::CheckOneWakeupNode() {
     else if (node_state == kActive) {
       std::cout << "active node(" << gid_ << " " << nid_ << ") stop syncing the data!" << std::endl;
       // cancel all of the scheduling events
-      while (!missing_data.empty()) missing_data.pop();
-      no_need_send_data_interest = true;
-      scheduler_.cancelEvent(syncACK_delay_scheduler);
+      missing_data.clear();
+      is_syncing = false;
+      is_syncup_node = false;
       scheduler_.cancelEvent(syncACK_scheduler);
       scheduler_.cancelEvent(data_interest_scheduler);
     }
@@ -162,52 +162,59 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Publish Data: d.name=" << n.toUri() << " d.type=" << type << " d.content=" << content);
 }
 
-void Node::SyncData() {
+void Node::SyncData(const NodeID& syncup_node) {
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Start to Sync Data");
   receive_first_data_interest = false;
-  SendSyncInterest();
-  sync_interest_scheduler = scheduler_.scheduleEvent(kWaitACKforSyncInterestInterval, [this] {
-    this->SyncInterestTimeout();
+
+  std::string vv_encode = EncodeVV(version_vector_);
+  auto sync_interest_name = MakeSyncInterestName(gid_, nid_, vv_encode, syncup_node);
+  SendSyncInterest(sync_interest_name, 0);
+
+  sync_interest_scheduler = scheduler_.scheduleEvent(kWaitACKforSyncInterestInterval, [this, sync_interest_name] {
+    this->SyncInterestTimeout(sync_interest_name, 1);
   });
 }
 
-void Node::SendSyncInterest() {
+void Node::SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time) {
   // make the sync interest name
-  std::string vv_encode = EncodeVV(version_vector_);
-  auto n = MakeSyncInterestName(gid_, nid_, vv_encode);
+  if (sync_interest_time == 3) {
+    // at most will only send the sync interest for three times!
+    receive_first_data_interest = true;
+    return;
+  }
 
-  VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Send Sync Interest: i.name=" << n.toUri());
+  VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Send Sync Interest: i.name=" << sync_interest_name.toUri());
 
-  Interest i(n, time::milliseconds(1));
+  Interest i(sync_interest_name, time::milliseconds(5));
   face_.expressInterest(i, [](const Interest&, const Data&) {},
                         [](const Interest&, const lp::Nack&) {},
                         [](const Interest&) {});
 }
 
-void Node::SyncInterestTimeout() {
+void Node::SyncInterestTimeout(const Name& sync_interest_name, const uint32_t& sync_interest_time) {
   if (receive_first_data_interest == false) {
-    SyncData();
+    SendSyncInterest(sync_interest_name, sync_interest_time);
+    sync_interest_scheduler = scheduler_.scheduleEvent(kWaitACKforSyncInterestInterval, [this, sync_interest_name, sync_interest_time] {
+      this->SyncInterestTimeout(sync_interest_name, sync_interest_time + 1);
+    });
   }
   else {
     scheduler_.cancelEvent(sync_interest_scheduler);
-    sync_interest_scheduler = scheduler_.scheduleEvent(kWaitACKforSyncInterestInterval, [this] {
-      this->SyncInterestTimeout();
+    sync_interest_scheduler = scheduler_.scheduleEvent(kWaitACKforSyncInterestInterval, [this, sync_interest_name] {
+      this->SyncInterestTimeout(sync_interest_name, 0);
     });
   }
 }
 
 void Node::OnSyncInterest(const Interest& interest) {
   if (node_state != kActive) return;
-  if (!missing_data.empty()) return;
+  if (is_syncing == true) return;
+
   const auto& n = interest.getName();
-  // Check sync interest name size
-  if (n.size() != kSyncPrefix.size() + 3) {
-    VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Invalid sync interest name: " << n.toUri());
-    return;
-  }
 
   auto group_id = ExtractGroupID(n);
   auto sync_sender = ExtractNodeID(n);
+  auto syncup_node = ExtractSyncupNode(n);
   auto other_vv_str = ExtractEncodedVV(n);
   VersionVector other_vv = DecodeVV(other_vv_str);
   VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Recv Sync Interest: i.version_vector=" << VersionVectorToString(other_vv));
@@ -218,6 +225,7 @@ void Node::OnSyncInterest(const Interest& interest) {
 
   // Process version vector
   current_sync_sender = sync_sender;
+  is_syncing = true;
   VersionVector old_vv = version_vector_;
   for (NodeID i = 0; i < version_vector_.size(); ++i) {
     uint64_t other_seq = other_vv[i];
@@ -227,29 +235,31 @@ void Node::OnSyncInterest(const Interest& interest) {
       Question:
       we should update the version_vector_[i] here or after we receive the data?? (in OnRemoteData())
       */
-      missing_data.push(MissingData(i, my_seq + 1, other_seq));
+      missing_data.push_back(MissingData(i, my_seq + 1, other_seq));
       // missing_data[i] = std::pair<uint64_t, uint64_t>(my_seq + 1, other_seq);
     }
   }
-
-  no_need_send_data_interest = false;
-  RequestMissingData();
+  if (syncup_node == nid_) {
+    // the current nodes needs to sync up the data
+    is_syncup_node = true;
+    RequestMissingData();
+  }
+  else is_syncup_node = false;
 }
+
 
 void Node::RequestMissingData() {
   if (missing_data.empty()) {
+    is_syncing = false;
     scheduler_.cancelEvent(data_interest_scheduler);
-    SendSyncACKInterest();
+    Name n = MakeSyncACKInterestName(gid_, current_sync_sender);
+    SendSyncACKInterest(0, n);
     return;
   }
-  if (no_need_send_data_interest == true) {
-    while (!missing_data.empty()) missing_data.pop();
-    return;
-  }
-  MissingData request_data = missing_data.front();
+  MissingData request_data = missing_data[0];
   // check if the request_data has been received and stored
   if (version_vector_[request_data.node_id] >= request_data.end_seq) {
-    missing_data.pop();
+    missing_data.erase(missing_data.begin());
     RequestMissingData();
     return;
   }
@@ -258,15 +268,15 @@ void Node::RequestMissingData() {
 }
 
 void Node::OnDataInterestTimeout() {
-  MissingData request_data = missing_data.front();
-  missing_data.pop();
-  missing_data.push(request_data);
+  MissingData request_data = missing_data[0];
+  missing_data.erase(missing_data.begin());
+  missing_data.push_back(request_data);
   RequestMissingData();
 }
 
 void Node::SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t end_seq) {
   auto n = MakeDataListName(gid_, node_id, start_seq, end_seq);
-  Interest i(n, time::milliseconds(1000));
+  Interest i(n, time::milliseconds(55));
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send: i.name=" << n.toUri());
 
   face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
@@ -277,19 +287,12 @@ void Node::SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t 
 void Node::OnDataInterest(const Interest& interest) {
   // if node_state == kIntermediate, you should also process the interest!
   if (node_state == kSleeping) return;
-  if (node_state == kIntermediate) {
-    receive_first_data_interest = true;
-  }
+
   const auto& n = interest.getName();
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv Data Interest: i.name=" << n.toUri());
 
-  if (n.size() < 6) {
-    VSYNC_LOG_TRACE("Invalid data name: " << n.toUri());
-    return;
-  }
-
-  auto group_id = ExtractGroupIDFromData(n);
-  auto node_id = ExtractNodeIDFromData(n);
+  auto group_id = ExtractGroupID(n);
+  auto node_id = ExtractNodeID(n);
   auto start_seq = ExtractStartSequenceNumber(n);
   auto end_seq = ExtractEndSequenceNumber(n);
 
@@ -298,53 +301,66 @@ void Node::OnDataInterest(const Interest& interest) {
     return;
   }
 
-  if (end_seq > version_vector_[node_id]) {
-    VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data range based on Version Vector");
-    return;
-  }
-  else if (end_seq > data_store_[node_id].size()) {
-    VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data range based on Data Store");
-    return;
-  }
-  else {
-    // encode data(start_seq-end_seq) into one data packet
-    std::vector<std::pair<uint32_t, std::string>> data_list;
-    std::vector<std::shared_ptr<Data>> node_data = data_store_[node_id];
-
-    for (int i = start_seq; i <= end_seq; ++i) {
-      // data_store_ starts from 0, while version_vector_ starts from 1
-      std::shared_ptr<Data> data = node_data[i - 1];
-      uint32_t type = data->getContentType();
-      // get the data content
-      std::string content = readString(data->getContent());
-      data_list.push_back(std::pair<uint32_t, std::string>(type, content));
+  if (node_state == kIntermediate) {
+    receive_first_data_interest = true;
+    if (end_seq > version_vector_[node_id]) {
+      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data range based on Version Vector");
+      return;
     }
-    // encode the data list
-    std::string dl_encode;
-    EncodeDL(data_list, dl_encode);
-    VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") sends the data: " << dl_encode);
-    // make the data packet
-    std::shared_ptr<Data> data = std::make_shared<Data>(n);
-    data->setFreshnessPeriod(time::seconds(3600));
-    data->setContent(reinterpret_cast<const uint8_t*>(dl_encode.data()),
-                     dl_encode.size());
-    data->setContentType(kUserData);
-    key_chain_.sign(*data, signingWithSha256());
-    face_.put(*data);
+    else if (end_seq > data_store_[node_id].size()) {
+      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data range based on Data Store");
+      return;
+    }
+    else {
+      // encode data(start_seq-end_seq) into one data packet
+      std::vector<std::pair<uint32_t, std::string>> data_list;
+      std::vector<std::shared_ptr<Data>> node_data = data_store_[node_id];
+
+      for (int i = start_seq; i <= end_seq; ++i) {
+        // data_store_ starts from 0, while version_vector_ starts from 1
+        std::shared_ptr<Data> data = node_data[i - 1];
+        uint32_t type = data->getContentType();
+        // get the data content
+        std::string content = readString(data->getContent());
+        data_list.push_back(std::pair<uint32_t, std::string>(type, content));
+      }
+      // encode the data list
+      std::string dl_encode;
+      EncodeDL(data_list, dl_encode);
+      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") sends the data: " << dl_encode);
+      // make the data packet
+      std::shared_ptr<Data> data = std::make_shared<Data>(n);
+      data->setFreshnessPeriod(time::seconds(3600));
+      data->setContent(reinterpret_cast<const uint8_t*>(dl_encode.data()),
+                       dl_encode.size());
+      data->setContentType(kUserData);
+      key_chain_.sign(*data, signingWithSha256());
+      face_.put(*data);
+    }
+  }
+  else if (node_state == kActive) {
+    assert(is_syncup_node == false);
+    // iterate the missing_data, to see if
+    for (auto data: missing_data) {
+      if (data.node_id == node_id && data.start_seq == start_seq && data.end_seq == end_seq) {
+        Interest i(interest.getName(), time::milliseconds(55));
+        VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send: i.name=" << n.toUri());
+
+        face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
+                              [](const Interest&, const lp::Nack&) {},
+                              [](const Interest&) {});
+      }
+    }
   }
 }
 
 void Node::OnRemoteData(const Data& data) {
   if (node_state == kSleeping) return;
   const auto& n = data.getName();
-  if (n.size() < 6) {
-    VSYNC_LOG_TRACE("Invalid data name: " << n.toUri());
-    return;
-  }
 
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv data: name=" << n.toUri());
 
-  auto node_id = ExtractNodeIDFromData(n);
+  auto node_id = ExtractNodeID(n);
   auto start_seq = ExtractStartSequenceNumber(n);
   auto end_seq = ExtractEndSequenceNumber(n);
 
@@ -393,13 +409,18 @@ void Node::OnRemoteData(const Data& data) {
       version_vector_[node_id] = end_seq;
       data_cb_(version_vector_);
       
-      if (no_need_send_data_interest) {
-        VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") doesn't need to send data interests any more");
-        return;
+      std::vector<MissingData>::iterator it = missing_data.begin();
+      while (it != missing_data.end()) {
+        if (it->node_id == node_id && it->start_seq == start_seq && it->end_seq == end_seq) {
+          missing_data.erase(it);
+          break;
+        }
+        it++;
       }
-      if (!missing_data.empty()) missing_data.pop();
-      scheduler_.cancelEvent(data_interest_scheduler);
-      RequestMissingData();
+      if (is_syncup_node) {
+        scheduler_.cancelEvent(data_interest_scheduler);
+        RequestMissingData();
+      }
     }
     else {
       VSYNC_LOG_TRACE("node(" << gid_ << " " << nid_ << ") Decode Data List Fail!");
@@ -408,21 +429,20 @@ void Node::OnRemoteData(const Data& data) {
   }
 }
 
-void Node::SendSyncACKInterest() {
-  std::uniform_int_distribution<> rdist_ack(0, kSyncACKDelay);
-  syncACK_delay_scheduler = scheduler_.scheduleEvent(time::milliseconds(rdist_ack(rengine_)), [this] {
-    Name n = MakeSyncACKInterestName(gid_, current_sync_sender);
-    Interest i(n, time::milliseconds(2));
-    VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send SyncACKInterest: i.name=" << n.toUri());
+// at most will send syncACK for three times
+void Node::SendSyncACKInterest(uint32_t syncACK_time, const Name& syncACK_name) {
+  if (syncACK_time == 3) return;
 
-    face_.expressInterest(i, [this](const Interest&, const Data&) {
-      scheduler_.cancelEvent(syncACK_scheduler);
-    }, 
-                          [](const Interest&, const lp::Nack&) {},
-                          [](const Interest&) {});
-    syncACK_scheduler = scheduler_.scheduleEvent(time::milliseconds(2), [this] {
-      SendSyncACKInterest();
-    });
+  Interest i(syncACK_name, time::milliseconds(5));
+  VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send SyncACKInterest: i.name=" << syncACK_name.toUri());
+
+  face_.expressInterest(i, [this](const Interest&, const Data&) {
+    scheduler_.cancelEvent(syncACK_scheduler);
+  }, 
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  syncACK_scheduler = scheduler_.scheduleEvent(time::milliseconds(2), [this, syncACK_time, syncACK_name] {
+    SendSyncACKInterest(syncACK_time + 1, syncACK_name);
   });
 }
 
@@ -432,14 +452,13 @@ void Node::OnSyncACKInterest(const Interest& interest) {
 
   if (node_state == kSleeping) return;
   else if (node_state == kActive) {
-    if (syncACK_receiver != current_sync_sender) return;
+    if (is_syncing == false) return;
+    assert(syncACK_receiver == current_sync_sender);
+    assert(is_syncup_node == false);
     VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Receive SyncACKInterest from other member: i.name=" << n.toUri());  
-    scheduler_.cancelEvent(syncACK_delay_scheduler);
-    scheduler_.cancelEvent(syncACK_scheduler);
-
-    scheduler_.cancelEvent(data_interest_scheduler);
-    no_need_send_data_interest = true;
-    while (!missing_data.empty()) missing_data.pop();
+    missing_data.clear();
+    is_syncing = false;
+    current_sync_sender = -1;
     return;
   }
   else if (node_state == kIntermediate) {
@@ -480,12 +499,29 @@ void Node::OnProbeIntermediateInterest(const Interest& interest) {
 
 void Node::SendProbeInterest() {
   lastState = node_state;
-  if (node_state == kSleeping) {
+  if (node_state == kIntermediate) {
+    // could not happen
+    std::cout << "node(" << gid_ << " " << nid_ << ") continue to go to intermediate twice, could not happen!" << std::endl;
+    return;
+  }
+  else if (node_state == kActive) {
+    // cancel the current timers
+    std::cout << "active node(" << gid_ << " " << nid_ << ") stop syncing the data!" << std::endl;
+    // cancel all of the scheduling events
+    scheduler_.cancelEvent(syncACK_scheduler);
+    scheduler_.cancelEvent(data_interest_scheduler);
+  }
+  else if (node_state == kSleeping) {
     time::system_clock::time_point sleep_end = time::system_clock::now();
     std::time_t time_span = time::system_clock::to_time_t(sleep_end) - time::system_clock::to_time_t(sleep_start);
     std::cout << "node(" << gid_ << " " << nid_ << ") slept for " << time_span << " seconds." << std::endl;
     sleeping_time += time_span;
   }
+
+  // initialize missing_data and is_syncup_node
+  missing_data.clear();
+  is_syncup_node = false;
+  is_syncing = false;
 
   scheduler_.scheduleEvent(kInterval, [this] { SendProbeInterest(); });
   node_state = kIntermediate;
@@ -521,12 +557,19 @@ void Node::CalculateReply() {
     // we should choose the node with smallest sleeping time to go to sleep
     NodeID sleep_node = nid_;
     uint64_t smallest_sleeping_time = sleeping_time;
+    NodeID syncup_node = nid_;
+    uint64_t longest_sleeping_time = sleeping_time;
     for (auto entry: received_reply) {
       if (entry.second < smallest_sleeping_time) {
         sleep_node = entry.first;
         smallest_sleeping_time = entry.second;
       }
+      if (entry.second >= longest_sleeping_time) {
+        syncup_node = entry.first;
+        longest_sleeping_time = entry.second;
+      }
     }
+    assert(sleep_node != syncup_node);
     if (sleep_node == nid_) {
       if (lastState == kSleeping) {
         // continue to go to sleep, no need to sync up data because no new data
@@ -538,11 +581,11 @@ void Node::CalculateReply() {
         node_state = kSleeping;
         sleep_start = time::system_clock::now();
       }
-      else SyncData();
+      else SyncData(syncup_node);
     }
     else {
       std::cout << "node(" << gid_ << " " << nid_ << ") will send sleep command to " << "node(" << gid_ << " " << sleep_node << ")" << std::endl;
-      auto sleepCommandName = MakeSleepCommandName(gid_, sleep_node);
+      auto sleepCommandName = MakeSleepCommandName(gid_, sleep_node, syncup_node);
       Interest i(sleepCommandName);
       face_.expressInterest(i, [](const Interest&, const Data&) {},
                           [](const Interest&, const lp::Nack&) {},
@@ -578,7 +621,7 @@ void Node::OnProbeInterest(const Interest& interest) {
 void Node::SendReplyInterest() {
   if (node_state == kActive) {
     auto n = MakeReplyInterestName(gid_, nid_, sleeping_time);
-    Interest i(n, time::milliseconds(1000));
+    Interest i(n, time::milliseconds(5));
     VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Send ReplyInterest: i.name=" << n.toUri());
 
     face_.expressInterest(i, [](const Interest&, const Data&) {},
@@ -599,15 +642,16 @@ void Node::OnReplyInterest(const Interest& interest) {
 
 void Node::OnSleepCommandInterest(const Interest& interest) {
   const auto& n = interest.getName();
-  NodeID received_node = ExtractNodeID(n);
-  if (received_node != nid_) return;
+  NodeID sleep_node = ExtractNodeID(n);
+  NodeID syncup_node = ExtractSyncupNode(n);
+  if (sleep_node != nid_) return;
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Recv sleep command interest: name=" << n.toUri());
   if (node_state != kActive) {
     std::cout << "problem 0 here!" << std::endl;
   }
   node_state = kIntermediate;
   // go to sleep
-  SyncData();
+  SyncData(syncup_node);
   // sleeping_time += kSleepInterval; // currently sleeping time is fixed, = 10 seconds
 }
 

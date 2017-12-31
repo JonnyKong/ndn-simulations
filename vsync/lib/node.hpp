@@ -68,7 +68,7 @@ class Node {
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
-  void SyncData();
+  void SyncData(const NodeID& syncup_node);
 
   double GetEnergyConsumption() {
     return energy_consumption;
@@ -102,7 +102,7 @@ class Node {
     }
   };
 
-  inline void SendSyncInterest();
+  inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
   inline void SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t end_seq);
 
   void OnSyncInterest(const Interest& interest);
@@ -130,21 +130,16 @@ class Node {
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
   time::system_clock::time_point sleep_start;
-  // std::unordered_set<uint64_t> syncing_nid;
-  //std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> missing_data;
-  std::queue<MissingData> missing_data;
+  std::vector<MissingData> missing_data;
   NodeID current_sync_sender;
 
   EventId sync_interest_scheduler;
-  EventId syncACK_delay_scheduler;
   EventId syncACK_scheduler;
   EventId data_interest_scheduler;
 
-  //EventId current_sync_scheduler;
-  // EventId sync_ack_scheduler;
-  // EventId receive_data_scheduler;
   bool receive_first_data_interest;
-  bool no_need_send_data_interest;
+  bool is_syncup_node;
+  bool is_syncing;
   NodeState lastState;
 
   uint32_t index;
@@ -158,9 +153,9 @@ class Node {
   inline void OnReplyInterest(const Interest& interest);
   inline void OnSleepCommandInterest(const Interest& interest);
   inline void CalculateReply();
-  inline void SendSyncACKInterest();
+  inline void SendSyncACKInterest(uint32_t syncACK_time, const Name& syncACK_name);
   inline void OnSyncACKInterest(const Interest& interest);
-  inline void SyncInterestTimeout();
+  inline void SyncInterestTimeout(const Name& sync_interest_name, const uint32_t& sync_interest_time);
   inline void RequestMissingData();
   inline void OnDataInterestTimeout();
   inline void CheckOneWakeupNode();

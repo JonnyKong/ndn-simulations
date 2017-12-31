@@ -1,7 +1,7 @@
 import numpy as np
 
 file = open("snapshot.txt")
-node_num = 13
+node_num = 9
 snapshot_num = 600
 sleeping_time = []
 data_snapshots_array = []
@@ -56,7 +56,7 @@ for i in range(snapshot_num):
         if merged_vv_snapshots[i, index] < cur_vv[index]:
             merged_vv_snapshots[i, index] = cur_vv[index]
 
-
+'''
 for item in merged_data_snapshots:
   print(item)
 print("\n")
@@ -64,6 +64,7 @@ print("\n")
 for item in merged_vv_snapshots:
   print(item)
 print("\n")
+'''
 
 
 total = 0.0
@@ -74,6 +75,11 @@ for i in range(snapshot_num):
     total += 1
     if merged_vv_snapshots[i, j] == merged_data_snapshots[i, j]:
       success_num += 1
+    else:
+      print "don't match: ", i
+      print merged_vv_snapshots[i, :]
+      print merged_data_snapshots[i, :]
+
 print "data availability = ", (success_num / total)
 
 print(sleeping_time)

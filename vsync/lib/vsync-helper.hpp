@@ -130,63 +130,75 @@ struct VVCompare {
 
 // Helpers for interest processing
 
-inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const std::string& encoded_vv) {
-  // name = /[vsync_prefix]/[group_id]/[node_id]/[encoded_version_vector]
+// sync interest
+inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const std::string& encoded_vv, const NodeID& syncup_node) {
+  // name = /[vsync_prefix]/[group_id]/[node_id]/[syncup_node]/[encoded_version_vector]
   Name n(kSyncPrefix);
-  n.append(gid).appendNumber(nid).append(encoded_vv);
+  n.append(gid).appendNumber(nid).appendNumber(syncup_node).append(encoded_vv);
   return n;
 }
 
-inline Name MakeProbeIntermediateInterestName(const GroupID& gid) {
-  Name n(kProbeIntermediatePrefix);
-  n.append(gid).appendNumber(0).appendNumber(0);
-  return n;
-}
-
+// probe interest
 inline Name MakeProbeInterestName(const GroupID& gid) {
-  // name = /[probe_prefix]/[group_id]/%00/%00
+  // name = /[probe_prefix]/[group_id]/%00/%00/%00
   // ?????question : [node_id] is not needed here? 
   Name n(kProbePrefix);
-  n.append(gid).appendNumber(0).appendNumber(0);
+  n.append(gid).appendNumber(0).appendNumber(0).appendNumber(0);
   return n;
 }
 
+// reply interest
 inline Name MakeReplyInterestName(const GroupID& gid, const NodeID& nid, uint64_t sleeping_time) {
-  // name = /[reply_prefix]/[group_id]/[node_id]/[sleeping_time]
+  // name = /[reply_prefix]/[group_id]/[node_id]/[sleeping_time]/%00
   Name n(kReplyPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(sleeping_time);
+  n.append(gid).appendNumber(nid).appendNumber(sleeping_time).appendNumber(0);
   return n;
 }
 
-inline Name MakeWakeupInterestName(const GroupID& gid, const NodeID& nid) {
-  // name = /[wakeup_prefix]/[group_id]/[node_id]/%00
-  Name n(kWakeupPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(0);
-  return n;
-}
-
-inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& nid) {
-  // name = /[sleep_command_prefix]/[group_id]/[node_id]/%00
+// sleepCommand interest
+inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& sleep_node, const NodeID& syncup_node) {
+  // name = /[sleep_command_prefix]/[group_id]/[sleep_node]/[syncup_node]/%00
   Name n(kSleepCommandPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(0);
+  n.append(gid).appendNumber(sleep_node).appendNumber(syncup_node).appendNumber(0);
   return n;
 }
 
+// syncACK interest
 inline Name MakeSyncACKInterestName(const GroupID& gid, const NodeID& sync_sender) {
-  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/[timestamp]
+  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/[timestamp]/%00
   time::system_clock::time_point cur = time::system_clock::now();
   std::string timestamp = to_string(time::system_clock::to_time_t(cur));
   Name n(kSyncACKPrefix);
-  n.append(gid).appendNumber(sync_sender).append(timestamp);
+  n.append(gid).appendNumber(sync_sender).append(timestamp).appendNumber(0);
+  return n;
+}
+
+// data interest
+inline Name MakeDataListName(const GroupID& gid, const NodeID& nid,
+                             uint64_t start_seq, uint64_t end_seq) {
+  // name = /[vsyncDatalist_prefix]/[group_id]/[node_id]/[start_seq]/[end_seq]
+  Name n(kSyncDataListPrefix);
+  n.append(gid).appendNumber(nid).appendNumber(start_seq).appendNumber(end_seq);
+  return n;
+}
+
+inline Name MakeDataName(const GroupID& gid, const NodeID& nid, uint64_t seq) {
+  // name = [vsyncData_prefix]/[group_id]/[node_id]/[seq]
+  Name n(kSyncDataPrefix);
+  n.append(gid).appendNumber(nid).appendNumber(seq);
   return n;
 }
 
 inline GroupID ExtractGroupID(const Name& n) {
-  GroupID group_id = n.get(-3).toUri();
+  GroupID group_id = n.get(-4).toUri();
   return group_id;
 }
 
 inline uint64_t ExtractNodeID(const Name& n) {
+  return n.get(-3).toNumber();
+}
+
+inline uint64_t ExtractSyncupNode(const Name& n) {
   return n.get(-2).toNumber();
 }
 
@@ -194,22 +206,6 @@ inline std::string ExtractEncodedVV(const Name& n) {
   return n.get(-1).toUri();
 }
 
-
-// Helpers for data processing
-
-inline Name MakeDataListName(const GroupID& gid, const NodeID& nid,
-                             uint64_t start_seq, uint64_t end_seq) {
-  // name = /[vsyncData_prefix]/[group_id]/[node_id]/[start_seq]/[end_seq]
-  Name n(kSyncDataListPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(start_seq).appendNumber(end_seq);
-  return n;
-}
-
-inline Name MakeDataName(const GroupID& gid, const NodeID& nid, uint64_t seq) {
-  Name n(kSyncDataPrefix);
-  n.append(gid).appendNumber(nid).appendNumber(seq);
-  return n;
-}
 
 inline uint64_t ExtractStartSequenceNumber(const Name& n) {
   return n.get(-2).toNumber();
@@ -219,16 +215,8 @@ inline uint64_t ExtractEndSequenceNumber(const Name& n) {
   return n.get(-1).toNumber();
 }
 
-inline uint64_t ExtractNodeIDFromData(const Name& n) {
-  return n.get(-3).toNumber();
-}
-
-inline GroupID ExtractGroupIDFromData(const Name& n) {
-  return n.get(-4).toUri();
-}
-
 inline uint64_t ExtractSleepingTime(const Name& n) {
-  return n.get(-1).toNumber();
+  return n.get(-2).toNumber();
 }
 
 }  // namespace vsync

@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (13);
+  nodes.Create (9);
 
   ////////////////
   // 1. Install Wifi
@@ -123,7 +123,7 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(13));
+    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(9));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
     app.Stop(Seconds (2100.0 + idx));
@@ -133,7 +133,7 @@ main (int argc, char *argv[])
     FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDataList/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsyncDatalist/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/syncACK/group0", std::numeric_limits<int32_t>::max());
     idx++;
