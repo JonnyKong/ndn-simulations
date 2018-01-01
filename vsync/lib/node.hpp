@@ -13,7 +13,6 @@
 #include <unordered_set>
 
 #include "ndn-common.hpp"
-#include "recv-window.hpp"
 #include "vsync-common.hpp"
 #include "vsync-helper.hpp"
 
@@ -68,7 +67,7 @@ class Node {
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
-  void SyncData(const NodeID& syncup_node);
+  void SyncData();
 
   double GetEnergyConsumption() {
     return energy_consumption;
@@ -93,17 +92,15 @@ class Node {
 
   struct MissingData {
     NodeID node_id;
-    uint64_t start_seq;
-    uint64_t end_seq;
-    MissingData(NodeID node_id_, uint64_t start_seq_, uint64_t end_seq_) {
+    uint64_t seq;
+    MissingData(NodeID node_id_, uint64_t seq_) {
       node_id = node_id_;
-      start_seq = start_seq_;
-      end_seq = end_seq_;
+      seq = seq_;
     }
   };
 
   inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void SendDataInterest(const NodeID& node_id, uint64_t start_seq, uint64_t end_seq);
+  inline void SendDataInterest(const NodeID& node_id, uint64_t seq);
 
   void OnSyncInterest(const Interest& interest);
   void OnDataInterest(const Interest& interest);
@@ -135,10 +132,11 @@ class Node {
 
   EventId sync_interest_scheduler;
   EventId syncACK_scheduler;
+  EventId syncACK_delay_scheduler;
   EventId data_interest_scheduler;
+  EventId data_interest_delay_scheduler;
 
-  bool receive_first_data_interest;
-  bool is_syncup_node;
+  bool receive_ack_for_sync_interest;
   bool is_syncing;
   NodeState lastState;
 
@@ -159,6 +157,7 @@ class Node {
   inline void RequestMissingData();
   inline void OnDataInterestTimeout();
   inline void CheckOneWakeupNode();
+  inline void OnStartRequestDataInterest(const Interest& interest);
 
   // helper functions
   inline void PrintVectorClock();

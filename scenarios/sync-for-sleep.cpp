@@ -126,14 +126,13 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(9));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
-    app.Stop(Seconds (2100.0 + idx));
+    app.Stop(Seconds (200.0 + idx));
 
 
     FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncDatalist/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/syncACK/group0", std::numeric_limits<int32_t>::max());
     idx++;
@@ -141,7 +140,7 @@ main (int argc, char *argv[])
 
   ////////////////
 
-  Simulator::Stop (Seconds (2120.0));
+  Simulator::Stop (Seconds (250.0));
 
   Simulator::Run ();
   Simulator::Destroy ();

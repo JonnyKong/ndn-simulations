@@ -34,6 +34,7 @@ static const Name kProbePrefix = Name("/ndn/sleepingProbe");
 static const Name kProbeIntermediatePrefix = Name("/ndn/sleepingProbeIntermediate");
 static const Name kReplyPrefix = Name("/ndn/sleepingReply");
 static const Name kSleepCommandPrefix = Name("/ndn/sleepingCommand");
+static const Name kStartRequestDataPrefix = Name("/ndn/startRequestData");
 
 static const Name kSyncACKPrefix = Name("/ndn/syncACK");
 
