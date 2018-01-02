@@ -115,7 +115,8 @@ class Node {
   uint32_t group_size;
 
   VersionVector version_vector_;
-  std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
+  // std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
+  std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   DataCb data_cb_;
 
   //std::unordered_set<NodeID> received_reply;

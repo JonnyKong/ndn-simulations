@@ -47,7 +47,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
              rengine_(rdevice_()),
              rdist_(3000, 10000) {
   version_vector_ = VersionVector(group_size, 0);
-  data_store_ = std::vector<std::vector<std::shared_ptr<Data>>>(group_size, std::vector<std::shared_ptr<Data>>(0));
+  // data_store_ = std::vector<std::vector<std::shared_ptr<Data>>>(group_size, std::vector<std::shared_ptr<Data>>(0));
   node_state = kActive;
   energy_consumption = 0.0;
   sleeping_time = 0.0;
@@ -171,7 +171,8 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   data->setContentType(type);
   key_chain_.sign(*data, signingWithSha256());
 
-  data_store_[nid_].push_back(data);
+  // data_store_[nid_].push_back(data);
+  data_store_[n] = data;
 
   VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") Publish Data: d.name=" << n.toUri() << " d.type=" << type << " d.content=" << content);
 }
@@ -367,24 +368,23 @@ void Node::OnDataInterest(const Interest& interest) {
 
   if (node_state == kIntermediate) {
     receive_ack_for_sync_interest = true;
-    if (seq > version_vector_[node_id]) {
-      VSYNC_LOG_TRACE( "should not happen! node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data based on Version Vector");
-      return;
-    }
-    else if (seq > data_store_[node_id].size()) {
-      VSYNC_LOG_TRACE( "should not happen! node(" << gid_ << " " << nid_ << ") doesn't contain the requesting data based on Data Store");
+    auto iter = data_store_.find(n);
+    if (iter == data_store_.end()) {
+      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") doesn't contain data: d.name=" << n.toUri());
       return;
     }
     else {
       // make the data packet
+      /*
       std::shared_ptr<Data> data = data_store_[node_id][seq - 1];
       std::shared_ptr<Data> outdata = std::make_shared<Data>(data->getName());
       outdata->setFreshnessPeriod(time::seconds(3600));
       outdata->setContent(data->getContent());
       outdata->setContentType(data->getContentType());
       key_chain_.sign(*outdata, signingWithSha256());
-      face_.put(*outdata);
-      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") sends the data name = " << outdata->getName());
+      */
+      face_.put(*iter->second);
+      VSYNC_LOG_TRACE( "node(" << gid_ << " " << nid_ << ") sends the data name = " << iter->second->getName());
     }
   }
   else if (node_state == kActive) {
@@ -416,7 +416,8 @@ void Node::OnRemoteData(const Data& data) {
   auto seq = ExtractSequence(n);
 
   // Store a local copy of received data
-  assert(version_vector_[node_id] >= seq - 1);
+  // assert(version_vector_[node_id] >= seq - 1);
+  /*
   if (version_vector_[node_id] == seq - 1) {
     std::shared_ptr<Data> new_data = std::make_shared<Data>(n);
     new_data->setFreshnessPeriod(time::seconds(3600));
@@ -439,6 +440,19 @@ void Node::OnRemoteData(const Data& data) {
       it++;
     }
     scheduler_.cancelEvent(data_interest_scheduler);
+  }
+  */
+  if (data_store_.find(n) == data_store_.end()) {
+    data_store_[n] = data.shared_from_this();
+    if (seq > version_vector_[node_id]) version_vector_[node_id] = seq;
+    std::vector<MissingData>::iterator it = missing_data.begin();
+    while (it != missing_data.end()) {
+      if (it->node_id == node_id && it->seq == seq) {
+        missing_data.erase(it);
+        break;
+      }
+      it++;
+    }
   }
   RequestMissingData();
 }
