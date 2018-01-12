@@ -34,12 +34,16 @@ static const Name kProbePrefix = Name("/ndn/sleepingProbe");
 static const Name kProbeIntermediatePrefix = Name("/ndn/sleepingProbeIntermediate");
 static const Name kReplyPrefix = Name("/ndn/sleepingReply");
 static const Name kSleepCommandPrefix = Name("/ndn/sleepingCommand");
+
 static const Name kStartRequestDataPrefix = Name("/ndn/startRequestData");
+static const Name kCancelDataInterestTimerPrefix = Name("/ndn/cancelDataInterestTimer");
 
 static const Name kSyncACKPrefix = Name("/ndn/syncACK");
+static const Name kIncomignSyncACKPrefix = Name("/ndn/incomingSyncACK");
 
 static const Name kLocalhostSleepingCommand = Name("/localhost/nfd/sleeping/go-to-sleep");
 static const Name kLocalhostWakeupCommand = Name("/localhost/nfd/sleeping/wake-up");
+static const Name kGetOutVsyncInfoCommand = Name("/localhost/nfd/getOutVsyncInfo");
 
 }  // namespace vsync
 }  // namespace ndn

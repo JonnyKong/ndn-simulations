@@ -2,7 +2,7 @@ import numpy as np
 
 file = open("snapshot.txt")
 node_num = 9
-snapshot_num = 600
+snapshot_num = 150
 sleeping_time = []
 data_snapshots_array = []
 vv_snapshots_array = []

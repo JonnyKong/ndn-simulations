@@ -130,10 +130,10 @@ struct VVCompare {
 
 // Naming conventions for interests and data
 
-inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const std::string& encoded_vv) {
+inline Name MakeSyncInterestName(const GroupID& gid, const NodeID& nid, const std::string& encoded_vv, const uint64_t sync_index) {
   // name = /[vsync_prefix]/[group_id]/[node_id]/[encoded_version_vector]
   Name n(kSyncPrefix);
-  n.append(gid).appendNumber(nid).append(encoded_vv);
+  n.append(gid).appendNumber(sync_index).appendNumber(nid).append(encoded_vv);
   return n;
 }
 
@@ -165,12 +165,13 @@ inline Name MakeSleepCommandName(const GroupID& gid, const NodeID& nid) {
   return n;
 }
 
-inline Name MakeSyncACKInterestName(const GroupID& gid, const NodeID& sync_sender) {
-  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/[timestamp]
+inline Name MakeSyncACKInterestName(const GroupID& gid, const NodeID& sync_sender, const uint64_t sync_index) {
+  // name = /[sync_ack_interest_prefix]/[group_id]/[sync_sender]/[sign = node + timestamp]
   time::system_clock::time_point cur = time::system_clock::now();
-  std::string timestamp = to_string(time::system_clock::to_time_t(cur));
+  // std::string timestamp = to_string(time::system_clock::to_time_t(cur));
+  // std::string timestamp = to_string(time::toUnixTimestamp(cur).count());
   Name n(kSyncACKPrefix);
-  n.append(gid).appendNumber(sync_sender).append(timestamp);
+  n.append(gid).appendNumber(sync_sender).appendNumber(sync_index);
   return n;
 }
 
@@ -190,6 +191,9 @@ inline Name MakeDataName(const GroupID& gid, const NodeID& nid, uint64_t seq) {
 }
 
 // helper functions for extracting name components
+inline uint64_t ExtractSyncIndex(const Name& n) {
+  return n.get(-3).toNumber();
+}
 
 inline GroupID ExtractGroupID(const Name& n) {
   GroupID group_id = n.get(-3).toUri();
@@ -203,6 +207,12 @@ inline uint64_t ExtractNodeID(const Name& n) {
 inline std::string ExtractEncodedVV(const Name& n) {
   return n.get(-1).toUri();
 }
+
+/*
+inline std::string ExtractSyncACKSign(const Name& n) {
+  return n.get(-1).toUri();
+}
+*/
 
 inline uint64_t ExtractSleepingTime(const Name& n) {
   return n.get(-1).toNumber();

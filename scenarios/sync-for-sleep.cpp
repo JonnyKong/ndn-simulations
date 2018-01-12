@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (9);
+  nodes.Create (10);
 
   ////////////////
   // 1. Install Wifi
@@ -123,12 +123,12 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(9));
+    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(10));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
-    app.Stop(Seconds (200.0 + idx));
+    app.Stop(Seconds (2100.0 + idx));
 
-
+    StackHelper::setNodeID(idx, object);
     FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
@@ -140,8 +140,10 @@ main (int argc, char *argv[])
 
   ////////////////
 
-  Simulator::Stop (Seconds (250.0));
+  Simulator::Stop (Seconds (2120.0));
 
+  // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
+  // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));
   Simulator::Run ();
   Simulator::Destroy ();
 

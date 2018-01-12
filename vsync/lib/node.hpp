@@ -15,6 +15,7 @@
 #include "ndn-common.hpp"
 #include "vsync-common.hpp"
 #include "vsync-helper.hpp"
+#include "recv-window.hpp"
 
 namespace ndn {
 namespace vsync {
@@ -73,7 +74,7 @@ class Node {
     return energy_consumption;
   }
 
-  double GetSleepingTime() {
+  uint64_t GetSleepingTime() {
     return sleeping_time;
   }
 
@@ -83,6 +84,54 @@ class Node {
 
   std::vector<VersionVector> GetVVSnapshots() {
     return vv_snapshots;
+  }
+
+  std::vector<std::vector<ReceiveWindow>> GetRWSnapshots() {
+    return rw_snapshots;
+  }
+
+  double ReceiveFirstSyncACKDelay() {
+    double total = 0.0;
+    for (auto delay: receive_first_syncACK_delay) {
+      total += delay;
+    }
+    return total / sync_num;
+  }
+
+  double ReceiveLastSyncACKDelay() {
+    double total = 0.0;
+    for (auto delay: receive_last_syncACK_delay) {
+      total += delay;
+    }
+    return total / sync_num;
+  }
+
+  std::string GetOutVsyncInfo() {
+    return outVsyncInfo;
+  }
+
+  uint64_t GetCollisionNum() {
+    return collision_num;
+  }
+
+  uint64_t GetSuppressionNum() {
+    return suppression_num;
+  }
+
+  uint64_t GetOutDataInterestNum() {
+    return out_data_interest_num;
+  }
+
+  double GetInterestSize() {
+    return (sync_interest_size + syncACK_interest_size + data_interest_size) / 3;
+  }
+
+  uint64_t GetDataSize() {
+    return data_size;
+  }
+
+  std::vector<uint64_t> GetActiveRecord() {
+    return active_record;
   }
 
  private:
@@ -117,6 +166,7 @@ class Node {
   VersionVector version_vector_;
   // std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
+  std::vector<ReceiveWindow> recv_window;
   DataCb data_cb_;
 
   //std::unordered_set<NodeID> received_reply;
@@ -124,24 +174,48 @@ class Node {
   Scheduler& scheduler_;
   NodeState node_state;
   double energy_consumption;
-  double sleeping_time;
+  uint64_t sleeping_time;
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
+  std::vector<std::vector<ReceiveWindow>> rw_snapshots;
+
   time::system_clock::time_point sleep_start;
   std::vector<MissingData> missing_data;
   NodeID current_sync_sender;
+  uint64_t current_sync_index;
+  bool is_syncing;
 
   EventId sync_interest_scheduler;
+  EventId sync_duration_scheduler;
   EventId syncACK_scheduler;
   EventId syncACK_delay_scheduler;
   EventId data_interest_scheduler;
   EventId data_interest_delay_scheduler;
 
   bool receive_ack_for_sync_interest;
-  bool is_syncing;
+  std::unordered_set<uint64_t> receive_syncACK_sender;
   NodeState lastState;
 
+  bool sync_initializer;
+  time::system_clock::time_point send_sync_interest_time;
+  bool receive_syncACK;
+  std::vector<double> receive_first_syncACK_delay;
+  std::vector<double> receive_last_syncACK_delay;
+  double sync_num;
+
   uint32_t index;
+
+  std::string outVsyncInfo;
+
+  uint64_t collision_num;
+  uint64_t suppression_num;
+  uint64_t out_data_interest_num;
+
+  double data_interest_size;
+  double sync_interest_size;
+  double syncACK_interest_size;
+  uint64_t data_size;
+  std::vector<uint64_t> active_record;
 
   // functions for sleeping mechanisms
   inline void MakeDecision(uint32_t make_decision_time);
@@ -159,6 +233,11 @@ class Node {
   inline void OnDataInterestTimeout();
   inline void CheckOneWakeupNode();
   inline void OnStartRequestDataInterest(const Interest& interest);
+  inline void OnCancelDataInterestTimer(const Interest& interest);
+  inline void OnIncomingSyncACKInterest(const Interest& interest);
+  inline void SendGetOutVsyncInfoInterest();
+  inline void OnOutVsyncInfo(const Data& data);
+  inline void OnSyncDurationTimeOut();
 
   // helper functions
   inline void PrintVectorClock();
