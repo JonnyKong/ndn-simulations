@@ -194,26 +194,160 @@ def calculate_suppression(filename):
       result += suppression / (float(line))
   print(result / 10.0)
 
-def plot_timer_collision():
-  timer = range(20, 71, 5)
-  collision_num = [101.7, 81.6, 69.4, 52.4, 48.4, 40.9, 40.6, 37.7, 36.6, 32.3, 27.7]
-  plt.plot(timer, collision_num, alpha=0.5, color='r')
-  plt.xlabel("Timer Threshold (milliseconds)")
-  plt.ylabel("Collision Occurance")
+def plot_da_drto(filename, factorname):
+  file = open(filename)
+  line_idx = -1
+  factor = []
+  data_availability = []
+  overhead_mean = []
+  overhead_std = []
+  for line in file:
+    line_idx += 1
+    if line_idx == 0:
+      continue
+    data = map(float, line.split(","))
+    factor.append(data[0])
+    data_availability.append(data[1])
+    overhead_mean.append(data[2])
+    overhead_std.append(data[3])
+
+  plt.plot(factor, data_availability, alpha=0.5, color='r')
+  plt.xlabel(factorname)
+  plt.ylabel("Data Availability")
+  plt.ylim(0.88, 1.02)
   plt.show()
-    
+
+  # plt.errorbar(factor, overhead_mean, overhead_std, linestyle='None', marker='^')
+  plt.plot(factor, overhead_mean, alpha=0.5, color='b')
+  plt.xlabel(factorname)
+  plt.ylabel("Data Replication Time Overhead")
+  plt.show() 
+  '''
+  plt.plot(timer, first_syncack_delay, alpha=0.5, color='r', label='First SyncACK Interest Delay')
+  plt.plot(timer, last_syncack_delay, alpha=0.5, color='g', label='Last SyncACK Interest Delay')
+  plt.xlabel("DT Threshold Threshold (milliseconds)")
+  plt.ylabel("SyncACK Delay (milliseconds)")
+  plt.legend(bbox_to_anchor=(0.4, 0.35), loc=2, borderaxespad=0.)
+  plt.show() 
+  '''
+
+def plot(filename):
+  file = open(filename)
+  sample_num = 0
+
+  data_availability = 0.0
+  collision = 0.0
+  suppression = 0.0
+  collision_ratio = 0.0
+  suppression_ratio = 0.0
+  working_mean = []
+  working_std = []
+  sync_working_mean = []
+  sync_working_std = []
+
+  first_syncack_delay = []
+  first_syncack_listsize = []
+  last_syncack_delay = []
+  last_syncack_listsize = []
+  line_idx = -1
+  for line in file:
+    line_idx += 1
+    if line_idx % 10 == 0:
+      data_availability += float(line)
+      sample_num += 1
+    elif line_idx % 10 == 1:
+      working = np.array(map(float, line[1:-2].split(",")))
+      working_mean.append(np.mean(working))
+      working_std.append(np.std(working))
+    elif line_idx % 10 == 2:
+      sync_working = np.array(map(float, line[1:-2].split(",")))
+      sync_working_mean.append(np.mean(sync_working))
+      sync_working_std.append(np.std(sync_working))
+    elif line_idx % 10 == 3:
+      collision = float(line)
+    elif line_idx % 10 == 4:
+      suppression = float(line)
+    elif line_idx % 10 == 5:
+      outInterest = float(line)
+      collision_ratio += collision / outInterest
+      suppression_ratio += suppression / outInterest
+    elif line_idx % 10 == 6:
+      first_syncack_delay.extend(map(float, line[1:-2].split(",")))
+    elif line_idx % 10 == 7:
+      first_syncack_listsize.extend(map(int, line[1:-2].split(",")))
+    elif line_idx % 10 == 8:
+      last_syncack_delay.extend(map(float, line[1:-2].split(",")))
+    elif line_idx % 10 == 9:
+      last_syncack_listsize.extend(map(int, line[1:-2].split(",")))
+  # print("%f, %f, %f, %f, %f, %f, %f, %d" %(data_availability / sample_num, np.mean(sync_working_mean), np.mean(sync_working_std), np.mean(np.array(first_syncack_delay)), np.mean(np.array(first_syncack_listsize)), np.mean(np.array(last_syncack_delay)), np.mean(np.array(last_syncack_listsize)), len(first_syncack_delay)))
+
+  '''
+  print("data availability: %f" %(data_availability / sample_num))
+  print("average working percentage: %f" %(np.mean(working_mean) / sample_num))
+  print("working percentage std: %f" %(np.mean(working_std) / sample_num))
+  print("average DRTO: %f" %(np.mean(sync_working_mean) / sample_num))
+  print("retransmission ratio: %f" %(collision_ratio / sample_num))
+  print("suppression ratio: %f" %(suppression_ratio / sample_num))
+  print("average first-syncACK-delay = %f, average first-syncACK-listsize = %f" %(np.mean(np.array(first_syncack_delay)), np.mean(np.array(first_syncack_listsize))))
+  print("average last-syncACK-delay = %f, average last-syncACK-listsize = %f" %(np.mean(np.array(last_syncack_delay)), np.mean(np.array(last_syncack_listsize))))
+  '''
+  cdf_plot(first_syncack_delay, "Sleep After Receiving First SYNCACK", 100, 'r')
+  cdf_plot(last_syncack_delay, "Sleep After Receiving Last SYNCACK", 100, 'g')
+  plt.xlabel("DRT (milliseconds)")
+  plt.ylabel("CDF")
+  plt.legend(bbox_to_anchor=(0.29, 0.15), loc=2, borderaxespad=0.)
+  plt.ylim((0.0, 1.0))
+  plt.xlim(0, 2500)
+  plt.show()
+  
+  #print(np.mean(first_syncack_delay))
+
+def plot_sleeping(filename):
+  file = open(filename)
+  line_idx = -1
+  node_num = []
+  sleeping_mean = []
+  sleeping_std = []
+  for line in file:
+    line_idx += 1
+    if line_idx == 0:
+      continue
+    data = map(float, line.split(","))
+    node_num.append(data[0])
+    sleeping_mean.append(data[2])
+    sleeping_std.append(data[3])
+  plt.errorbar(node_num, sleeping_mean, sleeping_std, linestyle='None', marker='^')
+  plt.xlabel("Group Size")
+  plt.ylabel("Average Per-Node Sleeping Time")
+  plt.show()
 
 if __name__ == "__main__":
-  #plot_availability()
+  # plot_availability()
   # plot_sync_delay()
   # calculate_average()
   # plot_timer_sync_delay()
   # get_average_sleeping_time()
   #get_average_data_availability("sleep-duration-50.txt")
   # get_average_sleeping_time("sleep-duration-50.txt")
-  plot_syncduration_dataavailability("result/syncDuration-dataAvailability.txt")
+  # plot_syncduration_dataavailability("result/syncDuration-dataAvailability.txt")
   #calculate_suppression("result/suppression/suppression2.txt")
   #plot_timer_collision()
   #calculate_collision("result/suppression/suppression.txt")
+  
+  '''
+  for root, dirs, files in os.walk("result2/groupsize2"):   
+    for file in files:
+      if file == "result.txt":
+        continue
+      elif file == ".DS_Store":
+        continue
+      print(file)
+      plot("result2/groupsize2/" + file)
+  '''
+
+  #plot("result2/delaytimer/dt5-node10.txt")
+  #plot_da_drto("result2/groupsize2/result.txt", "Group Size")
+  plot("result2/packetloss/packetloss10-timer50-node10.txt")
+  #plot_sleeping("result2/groupsize/result.txt")
 
   	

@@ -28,8 +28,8 @@ class SimpleNode {
         }
 
   void Start() {
-    scheduler_.scheduleEvent(time::milliseconds(rdist_(rengine_)),
-                             [this] { PublishData(); });
+    //scheduler_.scheduleEvent(time::milliseconds(rdist_(rengine_)),
+    //                         [this] { PublishData(); });
   }
 
   void OnData(const VersionVector& vv) {
@@ -41,25 +41,20 @@ class SimpleNode {
     std::ofstream out;
     out.open(snapshotFileName, std::ofstream::out | std::ofstream::app);
     if (out.is_open()) {
-      out << node_.GetSleepingTime() << "\n";
       std::vector<uint64_t> data_snapshots = node_.GetDataSnapshots();
       std::vector<VersionVector> vv_snapshots = node_.GetVVSnapshots();
       std::vector<std::vector<ReceiveWindow>> rw_snapshots = node_.GetRWSnapshots();
-      double receive_first_syncACK_delay = node_.ReceiveFirstSyncACKDelay();
-      double receive_last_syncACK_delay = node_.ReceiveLastSyncACKDelay();
+      std::vector<std::pair<double, int>> receive_first_syncACK_delay = node_.ReceiveFirstSyncACKDelay();
+      std::vector<std::pair<double, int>> receive_last_syncACK_delay = node_.ReceiveLastSyncACKDelay();
+      auto first_syncACK_str = ToString(receive_first_syncACK_delay);
+      auto last_syncACK_str = ToString(receive_last_syncACK_delay);
       
-      std::cout << "data snapshot size = " << data_snapshots.size() << std::endl;
-      std::cout << "rw snapshot size = " << rw_snapshots.size() << std::endl;
-      std::cout << "average first-syncACK-delay = " << receive_first_syncACK_delay << std::endl;
-      std::cout << "average last-syncACK-delay = " << receive_last_syncACK_delay << std::endl;
-      //out << receive_first_syncACK_delay << "\n";
-      //out << receive_last_syncACK_delay << "\n";
-      // out << node_.GetCollisionNum() << "\n";
-      //out << node_.GetSuppressionNum() << "\n";
-      //out << node_.GetCollisionNum() << "\n";
-      //out << node_.GetOutDataInterestNum() << "\n";
-      out << node_.GetInterestSize() << "\n";
-      out << node_.GetDataSize() << "\n";
+      out << node_.GetWorkingTime() << "\n";
+      out << node_.GetSyncDelay() / node_.GetWorkingTime() << "\n";
+      out << node_.GetCollisionNum() << "\n";
+      out << node_.GetSuppressionNum() << "\n";
+      out << node_.GetOutInterestNum() << "\n";
+      
       // get the outVsyncData & outVsyncInterest info
       /*
       std::string outVsyncinfo = node_.GetOutVsyncInfo();
@@ -74,6 +69,11 @@ class SimpleNode {
       if (data_snapshots.size() != vv_snapshots.size()) {
         std::cout << "data_snapshots size doesn't equal to vv_snapshots size" << std::endl;
       }
+
+      out << first_syncACK_str.first;
+      out << first_syncACK_str.second;
+      out << last_syncACK_str.first;
+      out << last_syncACK_str.second;
       out << ToString(node_.GetActiveRecord()) << "\n";
       out << ToString(data_snapshots) << "\n";
       for (auto rw: rw_snapshots) {
@@ -85,11 +85,25 @@ class SimpleNode {
     }
   }
 
+  /*
   void PublishData() {
     // std::cout << "node(" << gid_ << "," << nid_ << ") PublishData" << std::endl; 
     node_.PublishData("Hello from " + to_string(node_.GetNodeID()));
     scheduler_.scheduleEvent(time::milliseconds(rdist_(rengine_)),
                              [this] { PublishData(); });
+  }
+  */
+
+  std::pair<std::string, std::string> ToString(std::vector<std::pair<double, int>> list) {
+    std::string delay = "";
+    std::string pending_list_size = "";
+    for (auto entry: list) {
+      delay += to_string(entry.first) + ",";
+      pending_list_size += to_string(entry.second) + ",";
+    }
+    delay += "\n";
+    pending_list_size += "\n";
+    return std::pair<std::string, std::string>(delay, pending_list_size);
   }
 
   std::string ToString(std::vector<uint64_t> list) {

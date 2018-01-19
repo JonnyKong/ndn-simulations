@@ -1,23 +1,11 @@
 #!/bin/bash
-echo "compiling ns-3"
-cd ..
-cd ns-3
-./waf >/dev/null
-./waf install >/dev/null
-cd ..
-cd syncforsleep-simulations
-./waf configure --debug >/dev/null
-echo "finish compiling ns-3"
-
 time=0
-while(( $time<1 ))
+while(( $time<5 ))
 do
   echo "start simulation $time"
   rm snapshot.txt
-  ./waf --run sync-for-sleep 
-  python data_availability2.py
+  ./waf --run sync-for-sleep >/dev/null
+  python data_availability2.py >> result2/synctimer2/st150-dt20-node10.txt
   echo "finish simulation $time"
   let "time++"
 done
-
-#>/dev/null

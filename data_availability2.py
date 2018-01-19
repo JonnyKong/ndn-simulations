@@ -6,30 +6,61 @@ file = open("snapshot.txt")
 pattern = re.compile(r'\(([0-9]+)\:([0-9]+)-([0-9]+)\)')
 node_num = 10
 snapshot_num = 150
-sleeping_time = []
-#first_syncACK_delay = []
-#last_syncACK_delay = []
+
+working_time = []
+sync_working = []
+collision = []
 suppression = []
 outInterest = []
-collision_num = []
-data_snapshots_array = []
+
+first_syncACK_delay = []
+first_syncACK_listsize = []
+last_syncACK_delay = []
+last_syncACK_listsize = []
 active_snapshots_array = []
+data_snapshots_array = []
+
 rw_snapshots_array = []
 
-line_idx = 0
+line_idx = -1
 node_id = -1
 for line in file:
-  if line_idx % (snapshot_num + 5) == 0:
-    sleeping_time.append(int(line))
+  line_idx += 1
+  if line_idx % (snapshot_num + 11) == 0:
+    working_time.append(float(line))
     node_id += 1
-  elif line_idx % (snapshot_num + 5) == 1:
+  elif line_idx % (snapshot_num + 11) == 1:
+    sync_working.append(float(line))
+  elif line_idx % (snapshot_num + 11) == 2:
+    collision.append(float(line))
+  elif line_idx % (snapshot_num + 11) == 3:
     suppression.append(float(line))
-  elif line_idx % (snapshot_num + 5) == 2:
+  elif line_idx % (snapshot_num + 11) == 4:
     outInterest.append(float(line))
-  elif line_idx % (snapshot_num + 5) == 3:
+  elif line_idx % (snapshot_num + 11) == 5:
+    #first_syncACK_delay.append(line)
+    if line == "\n":
+      continue;
+    first_syncACK_delay.extend(map(float, line[:-2].split(",")))
+  elif line_idx % (snapshot_num + 11) == 6:
+    #first_syncACK_listsize.append(line)
+    if line == "\n":
+      continue;
+    first_syncACK_listsize.extend(map(int, line[:-2].split(",")))
+  elif line_idx % (snapshot_num + 11) == 7:
+    #last_syncACK_delay.append(line)
+    if line == "\n":
+      continue;
+    last_syncACK_delay.extend(map(float, line[:-2].split(",")))
+  elif line_idx % (snapshot_num + 11) == 8:
+    #last_syncACK_listsize.append(line)
+    if line == "\n":
+      continue;
+    last_syncACK_listsize.extend(map(int, line[:-2].split(",")))
+  elif line_idx % (snapshot_num + 11) == 9:
     new_active_snapshot = map(int, line.split(","))
     active_snapshots_array.append(new_active_snapshot)
-  elif line_idx % (snapshot_num + 5) == 4:
+  elif line_idx % (snapshot_num + 11) == 10:
     new_data_snapshot = map(int, line.split(","))
     data_snapshots_array.append(new_data_snapshot)
 
@@ -44,7 +75,7 @@ for line in file:
       else:
         recv_window[nodeID] = interval[startSeq, endSeq]
     rw_snapshots_array[node_id].append(recv_window)
-  line_idx += 1
+
 # convert to np array
 data_snapshots = np.array(data_snapshots_array)
 active_snapshots = np.array(active_snapshots_array)
@@ -100,10 +131,16 @@ for i in range(snapshot_num):
             hitting_data_count += 1
 
 print((hitting_data_count / total_data_count))
+print(working_time)
+print(sync_working)
+print(np.sum(np.array(collision)))
 print(np.sum(np.array(suppression)))
 print(np.sum(np.array(outInterest)))
-print(sleeping_time)
-print(np.mean(active_num))
+print(first_syncACK_delay)
+print(first_syncACK_listsize)
+print(last_syncACK_delay)
+print(last_syncACK_listsize)
+
 
 
 

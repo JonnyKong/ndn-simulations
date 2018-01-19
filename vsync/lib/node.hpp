@@ -90,20 +90,26 @@ class Node {
     return rw_snapshots;
   }
 
-  double ReceiveFirstSyncACKDelay() {
+  std::vector<std::pair<double, int>> ReceiveFirstSyncACKDelay() {
+    /*
     double total = 0.0;
     for (auto delay: receive_first_syncACK_delay) {
       total += delay;
     }
     return total / sync_num;
+    */
+    return receive_first_syncACK_delay;
   }
 
-  double ReceiveLastSyncACKDelay() {
+  std::vector<std::pair<double, int>> ReceiveLastSyncACKDelay() {
+    /*
     double total = 0.0;
     for (auto delay: receive_last_syncACK_delay) {
       total += delay;
     }
     return total / sync_num;
+    */
+    return receive_last_syncACK_delay;
   }
 
   std::string GetOutVsyncInfo() {
@@ -118,42 +124,30 @@ class Node {
     return suppression_num;
   }
 
-  uint64_t GetOutDataInterestNum() {
-    return out_data_interest_num;
-  }
-
-  double GetInterestSize() {
-    return (sync_interest_size + syncACK_interest_size + data_interest_size) / 3;
-  }
-
-  uint64_t GetDataSize() {
-    return data_size;
+  uint64_t GetOutInterestNum() {
+    return out_interest_num;
   }
 
   std::vector<uint64_t> GetActiveRecord() {
     return active_record;
   }
 
+  double GetSyncDelay() {
+    double delay = 0.0;
+    for (auto entry: sync_delay) {
+      delay += entry;
+    }
+    return delay;
+  }
+
+  double GetWorkingTime() {
+    return working_time;
+  }
+
  private:
 
   Node(const Node&) = delete;
   Node& operator=(const Node&) = delete;
-
-  struct MissingData {
-    NodeID node_id;
-    uint64_t seq;
-    MissingData(NodeID node_id_, uint64_t seq_) {
-      node_id = node_id_;
-      seq = seq_;
-    }
-  };
-
-  inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void SendDataInterest(const NodeID& node_id, uint64_t seq);
-
-  void OnSyncInterest(const Interest& interest);
-  void OnDataInterest(const Interest& interest);
-  void OnRemoteData(const Data& data);
 
   Face& face_;
   KeyChain& key_chain_;
@@ -162,85 +156,78 @@ class Node {
   Name prefix_;
   const GroupID gid_;
   uint32_t group_size;
+  Scheduler& scheduler_;
 
   VersionVector version_vector_;
-  // std::vector<std::vector<std::shared_ptr<Data>>> data_store_;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   std::vector<ReceiveWindow> recv_window;
   DataCb data_cb_;
-
-  //std::unordered_set<NodeID> received_reply;
-  std::unordered_map<NodeID, uint64_t> received_reply;
-  Scheduler& scheduler_;
   NodeState node_state;
   double energy_consumption;
+  time::system_clock::time_point sleep_start;
+  time::system_clock::time_point wakeup;
   uint64_t sleeping_time;
+  double working_time;
+  uint32_t time_slot;
+
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
   std::vector<std::vector<ReceiveWindow>> rw_snapshots;
-
-  time::system_clock::time_point sleep_start;
-  std::vector<MissingData> missing_data;
-  NodeID current_sync_sender;
-  uint64_t current_sync_index;
-  bool is_syncing;
-
-  EventId sync_interest_scheduler;
-  EventId sync_duration_scheduler;
-  EventId syncACK_scheduler;
-  EventId syncACK_delay_scheduler;
-  EventId data_interest_scheduler;
-  EventId data_interest_delay_scheduler;
-
-  bool receive_ack_for_sync_interest;
-  std::unordered_set<uint64_t> receive_syncACK_sender;
-  NodeState lastState;
-
-  bool sync_initializer;
-  time::system_clock::time_point send_sync_interest_time;
-  bool receive_syncACK;
-  std::vector<double> receive_first_syncACK_delay;
-  std::vector<double> receive_last_syncACK_delay;
-  double sync_num;
-
-  uint32_t index;
-
   std::string outVsyncInfo;
-
   uint64_t collision_num;
   uint64_t suppression_num;
-  uint64_t out_data_interest_num;
-
-  double data_interest_size;
-  double sync_interest_size;
-  double syncACK_interest_size;
-  uint64_t data_size;
+  uint64_t out_interest_num;
   std::vector<uint64_t> active_record;
 
-  // functions for sleeping mechanisms
-  inline void MakeDecision(uint32_t make_decision_time);
-  inline void OnProbeIntermediateInterest(const Interest& interest);
-  inline void SendProbeInterest();
-  inline void SendReplyInterest();
-  inline void OnProbeInterest(const Interest& interest);
-  inline void OnReplyInterest(const Interest& interest);
-  inline void OnSleepCommandInterest(const Interest& interest);
-  inline void CalculateReply();
-  inline void SendSyncACKInterest(uint32_t syncACK_time, const Name& syncACK_name);
-  inline void OnSyncACKInterest(const Interest& interest);
-  inline void SyncInterestTimeout(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void RequestMissingData();
-  inline void OnDataInterestTimeout();
-  inline void CheckOneWakeupNode();
-  inline void OnStartRequestDataInterest(const Interest& interest);
-  inline void OnCancelDataInterestTimer(const Interest& interest);
+  // state for sync-responder
+  std::vector<std::pair<Name, int>> pending_interest;
+  bool sync_responder_success;
+  bool receive_sync_interest;
+  // timers for sync-responder interests
+  EventId inst_wt;
+  EventId inst_dt;
+
+
+  // state for sync-requester
+  bool receive_ack_for_sync_interest;
+  std::unordered_set<uint64_t> receive_syncACK_responder;
+  bool sync_requester;
+  time::system_clock::time_point send_sync_interest_time;
+  std::vector<std::pair<double, int>> receive_first_syncACK_delay;
+  std::vector<std::pair<double, int>> receive_last_syncACK_delay;
+  std::vector<double> sync_delay;
+  double sync_num;
+  // timers for sync-responder interests
+  EventId sync_interest_scheduler;
+  EventId sync_duration_scheduler;
+
+  // functions for sleeping scheduling
+  inline void EnterIntermediateState();
+  inline void CheckState();
+  inline void Reset();
+
+  // functions for sync-requester
   inline void OnIncomingSyncACKInterest(const Interest& interest);
-  inline void SendGetOutVsyncInfoInterest();
-  inline void OnOutVsyncInfo(const Data& data);
   inline void OnSyncDurationTimeOut();
+  inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
+  inline void SyncInterestTimeout(const Name& sync_interest_name, const uint32_t& sync_interest_time);
+  inline void OnSyncACKInterest(const Interest& interest);
+
+  // functions for sync-responder
+  inline void OnIncomingData(const Interest& interest);
+  inline void OnIncomingInterest(const Interest& interest);
+  inline void SendInterest();
+  void OnSyncInterest(const Interest& interest);
+  void OnDataInterest(const Interest& interest);
+  void OnRemoteData(const Data& data);
+  inline void OnDataForSyncack(const Data& data);
 
   // helper functions
+  inline void StartSimulation();
+  inline void SendGetOutVsyncInfoInterest();
   inline void PrintVectorClock();
+  inline void ReceiveInterest();
+  inline void ReceiveData();
 
   std::random_device rdevice_;
   std::mt19937 rengine_;
