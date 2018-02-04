@@ -73,7 +73,7 @@ main (int argc, char *argv[])
 
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (50));
+  randomizer->SetAttribute ("Max", DoubleValue (600));
 
   Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
   randomizerZ->SetAttribute ("Min", DoubleValue (0));
@@ -105,11 +105,7 @@ main (int argc, char *argv[])
   ndnHelper.InstallAll();
 
   // 4. Set Forwarding Strategy
-  //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
-  // StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
   StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
-
-  // initialize the total vector clock
 
   // install SyncApp
   uint64_t idx = 0;
@@ -120,27 +116,21 @@ main (int argc, char *argv[])
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
 
     AppHelper syncForSleepAppHelper("SyncForSleepApp");
-    syncForSleepAppHelper.SetAttribute("GroupID", StringValue("group0"));
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("GroupSize", UintegerValue(10));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
-    app.Stop(Seconds (1300.0 + idx));
+    app.Stop(Seconds (210.0 + idx));
 
     StackHelper::setNodeID(idx, object);
-    FibHelper::AddRoute(object, "/ndn/sleepingProbe/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingReply/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsync/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/vsyncData/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/sleepingCommand/group0", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/syncACK/group0", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsync", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
   ////////////////
 
-  Simulator::Stop (Seconds (1350.0));
+  Simulator::Stop (Seconds (225.0));
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));

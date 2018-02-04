@@ -71,6 +71,9 @@ main (int argc, char *argv[])
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
+  NodeContainer nodes;
+  nodes.Create (2);
+  /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
   randomizer->SetAttribute ("Max", DoubleValue (50));
@@ -84,11 +87,15 @@ main (int argc, char *argv[])
                                  "X", PointerValue (randomizer),
                                  "Y", PointerValue (randomizer),
                                  "Z", PointerValue (randomizerZ));
-
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-
-  NodeContainer nodes;
-  nodes.Create (6);
+  */
+  MobilityHelper mobility;
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  positionAlloc->Add (Vector (0.0, 0.0, 0.0));
+  positionAlloc->Add (Vector (426.0, 0.0, 0.0));
+  // <= 426, you can hear each other
+  mobility.SetPositionAllocator (positionAlloc);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   ////////////////
   // 1. Install Wifi

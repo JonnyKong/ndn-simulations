@@ -38,23 +38,28 @@ class TestRangeNode {
   }
 
   void Start() {
+    /*
     scheduler_.scheduleEvent(time::milliseconds(nid_ * 100),
                              [this] { SendInterest(); });
+    */
+    if (nid_ == 0) SendInterest();
   }
 
   void SendInterest() {
-    std::cout << std::endl;
     Name n = kTestRangePrefix;
     n.appendNumber(nid_);
     Interest interest(n);
     face_.expressInterest(interest, std::bind(&TestRangeNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
-    std::cout << "Send interest name=" << n.toUri() << std::endl; 
+    time::system_clock::time_point send_interest_time = time::system_clock::now();
+    uint64_t milliseconds = time::toUnixTimestamp(send_interest_time).count();
+    std::cout << "node(" << nid_ << ")Send interest name=" << n.toUri() << " current time = " << milliseconds << std::endl; 
   }
 
   void OnTestRangeInterest(const Interest& interest) {
-    std::cout << "node(" << nid_ << ") receives the interest" << std::endl;
+    time::system_clock::time_point cur_time = time::system_clock::now();
+    std::cout << "node(" << nid_ << ") receives the interest, current time = " << time::toUnixTimestamp(cur_time).count() << std::endl;
   }
 
 

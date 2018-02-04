@@ -62,21 +62,13 @@ class Node {
    * @param on_data    Callback for notifying new data to the application
    */
   Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
-       const Name& prefix, const GroupID& gid, const uint64_t group_size, DataCb on_data);
+       const Name& prefix, DataCb on_data);
 
   const NodeID& GetNodeID() const { return nid_; };
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
   void SyncData();
-
-  double GetEnergyConsumption() {
-    return energy_consumption;
-  }
-
-  uint64_t GetSleepingTime() {
-    return sleeping_time;
-  }
 
   std::vector<uint64_t> GetDataSnapshots() {
     return data_snapshots;
@@ -86,34 +78,8 @@ class Node {
     return vv_snapshots;
   }
 
-  std::vector<std::vector<ReceiveWindow>> GetRWSnapshots() {
+  std::vector<std::unordered_map<NodeID, ReceiveWindow>> GetRWSnapshots() {
     return rw_snapshots;
-  }
-
-  std::vector<std::pair<double, int>> ReceiveFirstSyncACKDelay() {
-    /*
-    double total = 0.0;
-    for (auto delay: receive_first_syncACK_delay) {
-      total += delay;
-    }
-    return total / sync_num;
-    */
-    return receive_first_syncACK_delay;
-  }
-
-  std::vector<std::pair<double, int>> ReceiveLastSyncACKDelay() {
-    /*
-    double total = 0.0;
-    for (auto delay: receive_last_syncACK_delay) {
-      total += delay;
-    }
-    return total / sync_num;
-    */
-    return receive_last_syncACK_delay;
-  }
-
-  std::string GetOutVsyncInfo() {
-    return outVsyncInfo;
   }
 
   uint64_t GetCollisionNum() {
@@ -128,22 +94,6 @@ class Node {
     return out_interest_num;
   }
 
-  std::vector<uint64_t> GetActiveRecord() {
-    return active_record;
-  }
-
-  double GetSyncDelay() {
-    double delay = 0.0;
-    for (auto entry: sync_delay) {
-      delay += entry;
-    }
-    return delay;
-  }
-
-  double GetWorkingTime() {
-    return working_time;
-  }
-
  private:
 
   Node(const Node&) = delete;
@@ -154,85 +104,45 @@ class Node {
 
   const NodeID nid_;
   Name prefix_;
-  const GroupID gid_;
-  uint32_t group_size;
   Scheduler& scheduler_;
 
   VersionVector version_vector_;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
-  std::vector<ReceiveWindow> recv_window;
+  std::unordered_map<NodeID, ReceiveWindow> recv_window;
   DataCb data_cb_;
-  NodeState node_state;
-  double energy_consumption;
-  time::system_clock::time_point sleep_start;
-  time::system_clock::time_point wakeup;
-  uint64_t sleeping_time;
-  double working_time;
-  uint32_t time_slot;
 
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
-  std::vector<std::vector<ReceiveWindow>> rw_snapshots;
-  std::string outVsyncInfo;
+  std::vector<std::unordered_map<NodeID, ReceiveWindow>> rw_snapshots;
+
   uint64_t collision_num;
   uint64_t suppression_num;
   uint64_t out_interest_num;
-  std::vector<uint64_t> active_record;
+  int data_num;
 
-  // state for sync-responder
-  std::vector<std::pair<Name, int>> pending_interest;
-  bool sync_responder_success;
-  bool receive_sync_interest;
-  // timers for sync-responder interests
-  EventId inst_wt;
+  std::unordered_map<Name, int> pending_interest;
   EventId inst_dt;
+  std::unordered_map<Name, EventId> wt_list;
+  bool in_dt;
 
-
-  // state for sync-requester
-  bool receive_ack_for_sync_interest;
-  std::unordered_set<uint64_t> receive_syncACK_responder;
-  bool sync_requester;
-  time::system_clock::time_point send_sync_interest_time;
-  std::vector<std::pair<double, int>> receive_first_syncACK_delay;
-  std::vector<std::pair<double, int>> receive_last_syncACK_delay;
-  std::vector<double> sync_delay;
-  double sync_num;
-  // timers for sync-responder interests
-  EventId sync_interest_scheduler;
-  EventId sync_duration_scheduler;
-
-  // functions for sleeping scheduling
-  inline void EnterIntermediateState();
-  inline void CheckState();
-  inline void Reset();
 
   // functions for sync-requester
-  inline void OnIncomingSyncACKInterest(const Interest& interest);
-  inline void OnSyncDurationTimeOut();
   inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void SyncInterestTimeout(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void OnSyncACKInterest(const Interest& interest);
-
+  inline void OnSyncACK(const Data& data);
   // functions for sync-responder
-  inline void OnIncomingData(const Interest& interest);
-  inline void OnIncomingInterest(const Interest& interest);
-  inline void SendInterest();
   void OnSyncInterest(const Interest& interest);
+  inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
+  void OnDTTimeout();
+  void OnWTTimeout(const Name& name, int cur_transmission_time);
   void OnRemoteData(const Data& data);
-  inline void OnDataForSyncack(const Data& data);
 
   // helper functions
   inline void StartSimulation();
-  inline void SendGetOutVsyncInfoInterest();
   inline void PrintVectorClock();
-  inline void ReceiveInterest();
-  inline void ReceiveData();
 
   std::random_device rdevice_;
   std::mt19937 rengine_;
-  std::uniform_int_distribution<> rdist_;
-
 };
 
 }  // namespace vsync
