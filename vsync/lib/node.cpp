@@ -184,6 +184,7 @@ void Node::OnSyncInterest(const Interest& interest) {
         for (uint64_t seq = it->lower(); seq <= it->upper(); ++seq) {
           //missing_data.push_back(MissingData(i, seq));
           Name data_interest_name = MakeDataName(node_id, seq);
+          if (data_store_.find(data_interest_name) != data_store_.end()) continue;
           if (pending_interest.find(data_interest_name) != pending_interest.end() &&
             pending_interest[data_interest_name] != 0) continue;
           pending_interest[data_interest_name] = kInterestTransmissionTime;

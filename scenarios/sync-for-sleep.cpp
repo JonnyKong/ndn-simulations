@@ -73,7 +73,7 @@ main (int argc, char *argv[])
 
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (600));
+  randomizer->SetAttribute ("Max", DoubleValue (800));
 
   Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
   randomizerZ->SetAttribute ("Min", DoubleValue (0));
