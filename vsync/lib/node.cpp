@@ -23,8 +23,8 @@ static time::milliseconds kInterestWT = time::milliseconds(50);
 static time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 
-static const int kSnapshotNum = 90;
-static time::milliseconds kSnapshotInterval = time::milliseconds(2000);
+static const int kSnapshotNum = 18000;
+static time::milliseconds kSnapshotInterval = time::milliseconds(10);
 static const std::string availabilityFileName = "availability.txt";
 
 static const int data_generation_rate_mean = 20000;
@@ -174,6 +174,7 @@ void Node::OnSyncNotify(const Data& data) {
           if (data_store_.find(data_interest_name) != data_store_.end()) continue;
           if (pending_interest.find(data_interest_name) != pending_interest.end() &&
             pending_interest[data_interest_name] != 0) continue;
+          else if (wt_list.find(data_interest_name) != wt_list.end()) continue;
           pending_interest[data_interest_name] = kInterestTransmissionTime;
         }
         it++;
@@ -217,7 +218,10 @@ void Node::SendDataInterest() {
     return;
   }
 
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
+  int delay = dt_dist(rengine_);
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") schedule to send interest after " << delay << "nanoseconds" );
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") nanoseconds.count = " << time::nanoseconds(delay).count() );
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnDTTimeout(); });
 }
 
 void Node::OnDTTimeout() {
@@ -264,7 +268,10 @@ void Node::OnDTTimeout() {
     in_dt = false;
     return;
   }
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
+  int delay = dt_dist(rengine_);
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") schedule to send interest after " << delay << "nanoseconds" );
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") nanoseconds.count = " << time::nanoseconds(delay).count() );
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnDTTimeout(); });
 }
 
 void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {

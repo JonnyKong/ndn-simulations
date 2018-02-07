@@ -22,7 +22,7 @@ using ns3::ndn::FibHelper;
 
 NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
 
-uint32_t MacTxDropCount, PhyTxDropCount, PhyRxDropCount;
+uint32_t MacTxDropCount, PhyTxDropCount, PhyRxDropCount, PhyRxBeginCount, PhyRxEndCount;
 
 void
 MacTxDrop(Ptr<const Packet> p)
@@ -34,9 +34,13 @@ MacTxDrop(Ptr<const Packet> p)
 void
 PrintDrop()
 {
+  std::cout << "******************** Collision Results ******************" << std::endl;
   std::cout << "MacTxDropCount: " << MacTxDropCount << std::endl;
   std::cout << "PhyTxDropCount: " << PhyTxDropCount << std::endl;
-  std::cout << "PhyRxDropCount: " << PhyRxDropCount << std::endl; 
+  std::cout << "PhyRxDropCount: " << PhyRxDropCount << std::endl;
+  std::cout << "PhyRxBeginCount: " << PhyRxBeginCount << std::endl; 
+  std::cout << "PhyRxEndCount: " << PhyRxEndCount << std::endl;
+  std::cout << "******************** Collision Results ******************" << std::endl;
 }
 
 void
@@ -50,6 +54,16 @@ PhyRxDrop(Ptr<const Packet> p)
 {
   // NS_LOG_INFO("Packet Drop");
   PhyRxDropCount++;
+}
+void
+PhyRxBegin(Ptr<const Packet> p)
+{
+  PhyRxBeginCount++;
+}
+void
+PhyRxEnd(Ptr<const Packet> p)
+{
+  PhyRxEndCount++;
 }
 
 //
@@ -162,6 +176,8 @@ main (int argc, char *argv[])
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxDrop", MakeCallback(&PhyRxDrop));
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyTxDrop", MakeCallback(&PhyTxDrop));
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxBegin", MakeCallback(&PhyRxBegin));
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxEnd", MakeCallback(&PhyRxEnd));
   ////////////////
 
   Simulator::Stop (Seconds (240.0));
@@ -175,3 +191,5 @@ main (int argc, char *argv[])
 
   return 0;
 }
+
+
