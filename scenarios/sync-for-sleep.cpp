@@ -22,6 +22,36 @@ using ns3::ndn::FibHelper;
 
 NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
 
+uint32_t MacTxDropCount, PhyTxDropCount, PhyRxDropCount;
+
+void
+MacTxDrop(Ptr<const Packet> p)
+{
+  // NS_LOG_INFO("Packet Drop");
+  MacTxDropCount++;
+}
+
+void
+PrintDrop()
+{
+  std::cout << "MacTxDropCount: " << MacTxDropCount << std::endl;
+  std::cout << "PhyTxDropCount: " << PhyTxDropCount << std::endl;
+  std::cout << "PhyRxDropCount: " << PhyRxDropCount << std::endl; 
+}
+
+void
+PhyTxDrop(Ptr<const Packet> p)
+{
+  // NS_LOG_INFO("Packet Drop");
+  PhyTxDropCount++;
+}
+void
+PhyRxDrop(Ptr<const Packet> p)
+{
+  // NS_LOG_INFO("Packet Drop");
+  PhyRxDropCount++;
+}
+
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
 //              directly over AdHoc channel.
@@ -128,9 +158,15 @@ main (int argc, char *argv[])
     idx++;
   }
 
+  // Trace Collisions
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxDrop", MakeCallback(&PhyRxDrop));
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyTxDrop", MakeCallback(&PhyTxDrop));
   ////////////////
 
   Simulator::Stop (Seconds (240.0));
+
+  Simulator::Schedule(Seconds(200.0), &PrintDrop);
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));
