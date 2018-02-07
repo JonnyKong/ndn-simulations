@@ -68,7 +68,7 @@ class Node {
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
-  void SyncData();
+  void SyncData(const Name& data_name);
 
   std::vector<uint64_t> GetDataSnapshots() {
     return data_snapshots;
@@ -126,11 +126,9 @@ class Node {
   bool in_dt;
 
 
-  // functions for sync-requester
-  inline void SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time);
-  inline void OnSyncACK(const Data& data);
   // functions for sync-responder
-  void OnSyncInterest(const Interest& interest);
+  void OnIncomingSyncInterest(const Interest& interest);
+  void OnSyncNotify(const Data& data);
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnDTTimeout();

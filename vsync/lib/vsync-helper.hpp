@@ -52,9 +52,9 @@ inline VersionVector DecodeVV(const std::string& vv_encode) {
 
 // Naming conventions for interests and data
 
-inline Name MakeSyncInterestName(const NodeID& nid, const std::string& encoded_vv) {
+inline Name MakeSyncNotifyName(const NodeID& nid, const std::string& encoded_vv) {
   // name = /[vsync_prefix]/[node_id]/[encoded_version_vector]
-  Name n(kSyncPrefix);
+  Name n(kSyncNotifyPrefix);
   n.appendNumber(nid).append(encoded_vv);
   return n;
 }

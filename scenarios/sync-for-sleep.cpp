@@ -73,7 +73,7 @@ main (int argc, char *argv[])
 
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (600));
+  randomizer->SetAttribute ("Max", DoubleValue (800));
 
   Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
   randomizerZ->SetAttribute ("Min", DoubleValue (0));
@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (10);
+  nodes.Create (20);
 
   ////////////////
   // 1. Install Wifi
@@ -123,14 +123,14 @@ main (int argc, char *argv[])
     app.Stop(Seconds (210.0 + idx));
 
     StackHelper::setNodeID(idx, object);
-    FibHelper::AddRoute(object, "/ndn/vsync", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
   ////////////////
 
-  Simulator::Stop (Seconds (225.0));
+  Simulator::Stop (Seconds (240.0));
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));

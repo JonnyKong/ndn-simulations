@@ -18,20 +18,18 @@ namespace vsync {
 
 static int kInterestTransmissionTime = 3;
 
-static int kInterestDT = 90;
+static int kInterestDT = 5000;
 static time::milliseconds kInterestWT = time::milliseconds(50);
 static time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 
-static const int kSnapshotNum = 25;
-static time::milliseconds kSnapshotInterval = time::milliseconds(8000);
+static const int kSnapshotNum = 90;
+static time::milliseconds kSnapshotInterval = time::milliseconds(2000);
 static const std::string availabilityFileName = "availability.txt";
 
 static const int data_generation_rate_mean = 20000;
-static const int sync_timer_mean = 50;
 
 std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
-std::poisson_distribution<> sync_timer_dist(sync_timer_mean);
 std::uniform_int_distribution<> dt_dist(0, kInterestDT);
 
 Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
@@ -50,10 +48,10 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   data_num = 0;
 
   face_.setInterestFilter(
-      Name(kSyncPrefix), std::bind(&Node::OnSyncInterest, this, _2),
+      Name(kIncomingSyncPrefix), std::bind(&Node::OnIncomingSyncInterest, this, _2),
       [this](const Name&, const std::string& reason) {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register vsync prefix: " << reason); 
-        throw Error("Failed to register vsync prefix: " + reason);
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register incomingSync prefix: " << reason); 
+        throw Error("Failed to register incomingSync prefix: " + reason);
       });
 
 
@@ -99,7 +97,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 
   if (data_num == 1) {
     data_num = 0;
-    SyncData();
+    SyncData(n);
   }
 }
 
@@ -109,53 +107,18 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 /* most three times if it doesn't receive any data              */
 /****************************************************************/
 
-void Node::SyncData() {
+void Node::SyncData(const Name& data_name) {
   std::string vv_encode = EncodeVV(version_vector_);
-  auto sync_interest_name = MakeSyncInterestName(nid_, vv_encode);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Sync Interest: name = " << sync_interest_name.toUri() );
+  auto sync_data_name = MakeSyncNotifyName(nid_, vv_encode);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast Sync Data: name = " << sync_data_name.toUri() );
 
-  // SendSyncInterest(sync_interest_name, 0);
-  // currently just derictly send out the sync interest
-  Interest i(sync_interest_name, kSendOutInterestLifetime);
-  face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
+  std::shared_ptr<Data> data = std::make_shared<Data>(sync_data_name);
+  data->setFreshnessPeriod(time::seconds(3600));
+  data->setContent(data_store_[data_name]->getContent());
+  data->setContentType(data_store_[data_name]->getContentType());
+  key_chain_.sign(*data, signingWithSha256());
+  face_.put(*data);
 }
-
-/*
-void Node::SendSyncInterest(const Name& sync_interest_name, const uint32_t& sync_interest_time) {
-  scheduler_.cancelEvent(inst_dt);
-  // scheduler_.cancelEvent(inst_wt);
-  // wt_name = Name("/");
-
-  if (sync_interest_time == 3) {
-    // should start the pending_list
-    in_dt = true;
-    SendDataInterest();
-    return;
-  }
-  std::uniform_real_distribution<> rdist_(0, kInterestDT);
-  inst_dt = scheduler_.scheduleEvent(time::milliseconds(dt_dist(rengine_)),
-    [this, sync_interest_name, sync_interest_time] {
-      VSYNC_LOG_TRACE("node(" << nid_ << ") Send Sync Interest: i.name=" << sync_interest_name.toUri());
-      Interest i(sync_interest_name, kSendOutInterestLifetime);
-      face_.expressInterest(i, std::bind(&Node::OnSyncACK(), this, _2),
-                            [](const Interest&, const lp::Nack&) {},
-                            [](const Interest&) {});
-      inst_wt = scheduler_.scheduleEvent(kInterestWT, [this] { SendSyncInterest(sync_interest_name, sync_interest_time + 1); });
-      wt_name = sync_interest_name;
-    });
-}
-
-void Node::OnSyncACK(const Data& data) {
-  scheduler_.cancelEvent(inst_dt);
-  // scheduler_.cancelEvent(inst_wt);
-  // wt_name = Name("/");
-
-  in_dt = true;
-  SendDataInterest();
-}
-*/
 
 /****************************************************************/
 /* pipeline for sync-responder                         
@@ -163,14 +126,38 @@ void Node::OnSyncACK(const Data& data) {
 /* most three times if it doesn't receive any data interests or 
 /* SyncACK interest                                             
 /****************************************************************/
-void Node::OnSyncInterest(const Interest& interest) {
+void Node::OnIncomingSyncInterest(const Interest& interest) {
   const auto& n = interest.getName();
-  auto sync_requester = ExtractNodeID(n);
-  auto other_vv_str = ExtractEncodedVV(n);
+  auto node_id = ExtractNodeID(n);
+  auto vv = ExtractEncodedVV(n);
 
-  VersionVector other_vv = DecodeVV(other_vv_str);
-  VSYNC_LOG_TRACE("node(" << nid_ << ") Recv Sync Interest: i.version_vector=" << VersionVectorToString(other_vv));
+  auto notify = MakeSyncNotifyName(node_id, vv);
+  Interest i(notify, kSendOutInterestLifetime);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << notify.toUri());
 
+  face_.expressInterest(i, std::bind(&Node::OnSyncNotify, this, _2),
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+}
+
+void Node::OnSyncNotify(const Data& data) {
+  const auto& n = data.getName();
+  auto sender_id = ExtractNodeID(n);
+  auto vv = ExtractEncodedVV(n);
+  auto other_vv = DecodeVV(vv);
+
+  // first store the current data
+  auto data_name = MakeDataName(sender_id, other_vv[sender_id]);
+  std::shared_ptr<Data> new_data = std::make_shared<Data>(data_name);
+  new_data->setFreshnessPeriod(time::seconds(3600));
+  new_data->setContent(data.getContent());
+  new_data->setContentType(data.getContentType());
+  key_chain_.sign(*new_data, signingWithSha256());
+  data_store_[data_name] = new_data;
+  recv_window[sender_id].Insert(other_vv[sender_id]);
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") store the data from SyncNotify: " << new_data->getName().toUri() );
+
+  // update the vv, and fetch the other missing data
   for (auto entry: other_vv) {
     NodeID node_id = entry.first;
     uint64_t other_seq = entry.second;
@@ -184,6 +171,7 @@ void Node::OnSyncInterest(const Interest& interest) {
         for (uint64_t seq = it->lower(); seq <= it->upper(); ++seq) {
           //missing_data.push_back(MissingData(i, seq));
           Name data_interest_name = MakeDataName(node_id, seq);
+          if (data_store_.find(data_interest_name) != data_store_.end()) continue;
           if (pending_interest.find(data_interest_name) != pending_interest.end() &&
             pending_interest[data_interest_name] != 0) continue;
           pending_interest[data_interest_name] = kInterestTransmissionTime;
@@ -192,12 +180,6 @@ void Node::OnSyncInterest(const Interest& interest) {
       }
     }
   }
-
-  // send back data
-  std::shared_ptr<Data> data = std::make_shared<Data>(n);
-  data->setFreshnessPeriod(time::seconds(3600));
-  key_chain_.sign(*data, signingWithSha256());
-  face_.put(*data);
 
   // print the pending interest
   std::string pending_list = "";
@@ -209,6 +191,7 @@ void Node::OnSyncInterest(const Interest& interest) {
     in_dt = true;
     SendDataInterest();
   }
+  
 }
 
 void Node::SendDataInterest() {
@@ -234,7 +217,7 @@ void Node::SendDataInterest() {
     return;
   }
 
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_) * 100), [this] { OnDTTimeout(); });
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
 }
 
 void Node::OnDTTimeout() {
@@ -281,7 +264,7 @@ void Node::OnDTTimeout() {
     in_dt = false;
     return;
   }
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_) * 100), [this] { OnDTTimeout(); });
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
 }
 
 void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {

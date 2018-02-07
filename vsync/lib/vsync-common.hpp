@@ -26,7 +26,8 @@ using NodeID = uint64_t;
 using VersionVector = std::unordered_map<uint64_t, uint64_t>;
 using GroupID = std::string;
 
-static const Name kSyncPrefix = Name("/ndn/vsync");
+static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
+static const Name kIncomingSyncPrefix = Name("/ndn/incomingSync");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 
 }  // namespace vsync
