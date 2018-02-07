@@ -88,7 +88,7 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
   NodeContainer nodes;
-  nodes.Create (10);
+  nodes.Create (20);
 
   ////////////////
   // 1. Install Wifi
@@ -130,7 +130,7 @@ main (int argc, char *argv[])
 
   ////////////////
 
-  Simulator::Stop (Seconds (225.0));
+  Simulator::Stop (Seconds (240.0));
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));

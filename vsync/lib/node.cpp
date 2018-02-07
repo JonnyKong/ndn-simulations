@@ -18,13 +18,13 @@ namespace vsync {
 
 static int kInterestTransmissionTime = 3;
 
-static int kInterestDT = 90;
+static int kInterestDT = 5000;
 static time::milliseconds kInterestWT = time::milliseconds(50);
 static time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 
-static const int kSnapshotNum = 25;
-static time::milliseconds kSnapshotInterval = time::milliseconds(8000);
+static const int kSnapshotNum = 90;
+static time::milliseconds kSnapshotInterval = time::milliseconds(2000);
 static const std::string availabilityFileName = "availability.txt";
 
 static const int data_generation_rate_mean = 20000;
@@ -234,7 +234,7 @@ void Node::SendDataInterest() {
     return;
   }
 
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_) * 100), [this] { OnDTTimeout(); });
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
 }
 
 void Node::OnDTTimeout() {
@@ -281,7 +281,7 @@ void Node::OnDTTimeout() {
     in_dt = false;
     return;
   }
-  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_) * 100), [this] { OnDTTimeout(); });
+  inst_dt = scheduler_.scheduleEvent(time::microseconds(dt_dist(rengine_)), [this] { OnDTTimeout(); });
 }
 
 void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {
