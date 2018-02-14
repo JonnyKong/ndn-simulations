@@ -20,11 +20,13 @@ static int kInterestTransmissionTime = 3;
 
 static int kInterestDT = 5000;
 static time::milliseconds kInterestWT = time::milliseconds(50);
+static time::seconds kSyncDataTimer = time::seconds(10);
 static time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 
-static const int kSnapshotNum = 18000;
-static time::milliseconds kSnapshotInterval = time::milliseconds(10);
+static const int kSimulationRecordingTime = 180;
+static const int kSnapshotNum = 90;
+static time::milliseconds kSnapshotInterval = time::milliseconds(2000);
 static const std::string availabilityFileName = "availability.txt";
 
 static const int data_generation_rate_mean = 20000;
@@ -63,6 +65,14 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
       });
 
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
+  scheduler_.scheduleEvent(time::seconds(kSimulationRecordingTime), [this] {PrintNDNTraffic(); });
+}
+
+void Node::PrintNDNTraffic() {
+  Interest i(kGetNDNTraffic, time::milliseconds(5));
+  face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
 }
 
 void Node::StartSimulation() {
@@ -82,8 +92,15 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   std::shared_ptr<Data> data = std::make_shared<Data>(n);
   data->setFreshnessPeriod(time::seconds(3600));
   // set data content
-  data->setContent(reinterpret_cast<const uint8_t*>(content.data()),
-                   content.size());
+  proto::Content content_proto;
+  EncodeVV(version_vector_, content_proto.mutable_vv());
+  content_proto.set_content(content);
+  const std::string& content_proto_str = content_proto.SerializeAsString();
+  data->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
+                   content_proto_str.size());
+
+  // data->setContent(reinterpret_cast<const uint8_t*>(content.data()),
+  //                  content.size());
   data->setContentType(type);
   key_chain_.sign(*data, signingWithSha256());
 
@@ -108,8 +125,8 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 /****************************************************************/
 
 void Node::SyncData(const Name& data_name) {
-  std::string vv_encode = EncodeVV(version_vector_);
-  auto sync_data_name = MakeSyncNotifyName(nid_, vv_encode);
+  // std::string vv_encode = EncodeVV(version_vector_);
+  auto sync_data_name = MakeSyncNotifyName(nid_, data_name.get(-1).toNumber());
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast Sync Data: name = " << sync_data_name.toUri() );
 
   std::shared_ptr<Data> data = std::make_shared<Data>(sync_data_name);
@@ -129,9 +146,9 @@ void Node::SyncData(const Name& data_name) {
 void Node::OnIncomingSyncInterest(const Interest& interest) {
   const auto& n = interest.getName();
   auto node_id = ExtractNodeID(n);
-  auto vv = ExtractEncodedVV(n);
+  auto seq = ExtractSequence(n);
 
-  auto notify = MakeSyncNotifyName(node_id, vv);
+  auto notify = MakeSyncNotifyName(node_id, seq);
   Interest i(notify, kSendOutInterestLifetime);
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << notify.toUri());
 
@@ -143,21 +160,28 @@ void Node::OnIncomingSyncInterest(const Interest& interest) {
 void Node::OnSyncNotify(const Data& data) {
   const auto& n = data.getName();
   auto sender_id = ExtractNodeID(n);
-  auto vv = ExtractEncodedVV(n);
-  auto other_vv = DecodeVV(vv);
+  auto sender_seq = ExtractNodeID(n);
 
   // first store the current data
-  auto data_name = MakeDataName(sender_id, other_vv[sender_id]);
+  auto data_name = MakeDataName(sender_id, sender_seq);
   std::shared_ptr<Data> new_data = std::make_shared<Data>(data_name);
   new_data->setFreshnessPeriod(time::seconds(3600));
   new_data->setContent(data.getContent());
   new_data->setContentType(data.getContentType());
   key_chain_.sign(*new_data, signingWithSha256());
   data_store_[data_name] = new_data;
-  recv_window[sender_id].Insert(other_vv[sender_id]);
+  recv_window[sender_id].Insert(sender_seq);
   VSYNC_LOG_TRACE ("node(" << nid_ << ") store the data from SyncNotify: " << new_data->getName().toUri() );
 
   // update the vv, and fetch the other missing data
+  const auto& content = data.getContent();
+  proto::Content content_proto;
+  if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
+    VSYNC_LOG_WARN("Invalid data content format: nid=" << nid_);
+    return;
+  }
+  auto other_vv = DecodeVV(content_proto.vv());
+
   for (auto entry: other_vv) {
     NodeID node_id = entry.first;
     uint64_t other_seq = entry.second;

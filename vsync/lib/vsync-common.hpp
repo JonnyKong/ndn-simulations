@@ -29,6 +29,7 @@ using GroupID = std::string;
 static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
 static const Name kIncomingSyncPrefix = Name("/ndn/incomingSync");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
+static const Name kGetNDNTraffic = Name("/ndn/getNDNTraffic");
 
 }  // namespace vsync
 }  // namespace ndn

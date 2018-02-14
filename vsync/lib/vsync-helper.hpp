@@ -26,6 +26,7 @@ inline std::string VersionVectorToString(const VersionVector& v) {
   return s;
 }
 
+/*
 inline std::string EncodeVV(const VersionVector& v) {
   std::string vv_encode = "";
   for (auto entry: v) {
@@ -49,13 +50,47 @@ inline VersionVector DecodeVV(const std::string& vv_encode) {
   }
   return vv;
 }
+*/
+inline void EncodeVV(const VersionVector& v, proto::VV* vv_proto) {
+  for (auto item: v) {
+    auto* entry = vv_proto->add_entry();
+    entry->set_nid(item.first);
+    entry->set_seq(item.second);
+  }
+}
+
+inline void EncodeVV(const VersionVector& v, std::string& out) {
+  proto::VV vv_proto;
+  EncodeVV(v, &vv_proto);
+  vv_proto.AppendToString(&out);
+}
+
+inline VersionVector DecodeVV(const proto::VV& vv_proto) {
+  VersionVector vv;
+  for (int i = 0; i < vv_proto.entry_size(); ++i) {
+    const auto& entry = vv_proto.entry(i);
+    auto nid = entry.nid();
+    auto seq = entry.seq();
+    vv[nid] = seq;
+  }
+  return vv;
+}
+
+inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
+  proto::VV vv_proto;
+  if (!vv_proto.ParseFromArray(buf, buf_size)) {
+    VersionVector res;
+    return res;
+  }
+  return DecodeVV(vv_proto);
+}
 
 // Naming conventions for interests and data
 
-inline Name MakeSyncNotifyName(const NodeID& nid, const std::string& encoded_vv) {
-  // name = /[vsync_prefix]/[node_id]/[encoded_version_vector]
+inline Name MakeSyncNotifyName(const NodeID& nid, uint64_t seq) {
+  // name = /[vsync_prefix]/[node_id]/[seq]
   Name n(kSyncNotifyPrefix);
-  n.appendNumber(nid).append(encoded_vv);
+  n.appendNumber(nid).appendNumber(seq);
   return n;
 }
 

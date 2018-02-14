@@ -138,6 +138,7 @@ class Node {
   // helper functions
   inline void StartSimulation();
   inline void PrintVectorClock();
+  inline void PrintNDNTraffic();
 
   std::random_device rdevice_;
   std::mt19937 rengine_;

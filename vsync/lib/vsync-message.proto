@@ -6,7 +6,11 @@ package ndn.vsync.proto;
 
 // Version Vector
 message VV {
-  repeated uint64 entry = 1;
+  message Entry {
+    uint64 nid = 1;
+    uint64 seq = 2;
+  }
+  repeated Entry entry = 1;
 }
 
 // Data List
@@ -16,4 +20,10 @@ message DL {
     string content = 2;
   }
   repeated Entry entry = 1;
+}
+
+// Vsync data content
+message Content {
+  VV vv = 1;
+  bytes content = 2;
 }
