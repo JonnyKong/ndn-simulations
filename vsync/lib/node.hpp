@@ -129,6 +129,7 @@ class Node {
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
   void OnSyncNotify(const Data& data);
+  void FindMissingData(const VersionVector& other_vv);
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnDTTimeout();

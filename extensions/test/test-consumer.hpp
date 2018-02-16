@@ -5,6 +5,7 @@
 #include "ns3/integer.h"
 #include "ns3/string.h"
 #include "test-consumer-node.hpp"
+#include "ns3/uinteger.h"
 
 namespace ns3 {
 
@@ -16,7 +17,9 @@ public:
   {
     static TypeId tid = TypeId("testConsumer")
       .SetParent<Application>()
-      .AddConstructor<testConsumer>();
+      .AddConstructor<testConsumer>()
+      .AddAttribute("NodeID", "NodeID for sync node", UintegerValue(0),
+                    MakeUintegerAccessor(&testConsumer::nid), MakeUintegerChecker<uint64_t>());
 
     return tid;
   }
@@ -26,7 +29,7 @@ protected:
   virtual void
   StartApplication()
   {
-    m_instance.reset(new ::ndn::TestConsumerNode());
+    m_instance.reset(new ::ndn::TestConsumerNode(nid));
     m_instance->Start();
   }
 
@@ -38,6 +41,7 @@ protected:
 
 private:
   std::unique_ptr<::ndn::TestConsumerNode> m_instance;
+  uint64_t nid;
 };
 
 }

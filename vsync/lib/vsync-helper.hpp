@@ -26,8 +26,7 @@ inline std::string VersionVectorToString(const VersionVector& v) {
   return s;
 }
 
-/*
-inline std::string EncodeVV(const VersionVector& v) {
+inline std::string EncodeVVToName(const VersionVector& v) {
   std::string vv_encode = "";
   for (auto entry: v) {
     vv_encode += (to_string(entry.first) + "-" + to_string(entry.second) + "_");
@@ -35,7 +34,7 @@ inline std::string EncodeVV(const VersionVector& v) {
   return vv_encode;
 }
 
-inline VersionVector DecodeVV(const std::string& vv_encode) {
+inline VersionVector DecodeVVFromName(const std::string& vv_encode) {
   int start = 0;
   VersionVector vv;
   for (size_t i = 0; i < vv_encode.size(); ++i) {
@@ -50,7 +49,7 @@ inline VersionVector DecodeVV(const std::string& vv_encode) {
   }
   return vv;
 }
-*/
+
 inline void EncodeVV(const VersionVector& v, proto::VV* vv_proto) {
   for (auto item: v) {
     auto* entry = vv_proto->add_entry();
@@ -87,29 +86,34 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 
 // Naming conventions for interests and data
 
-inline Name MakeSyncNotifyName(const NodeID& nid, uint64_t seq) {
-  // name = /[vsync_prefix]/[node_id]/[seq]
+inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::string encoded_data) {
+  // name = /[vsync_prefix]/[node_id]/[state-vector]/[data]
   Name n(kSyncNotifyPrefix);
-  n.appendNumber(nid).appendNumber(seq);
+  n.appendNumber(nid).append(encoded_vv).append(encoded_data);
   return n;
 }
 
 inline Name MakeDataName(const NodeID& nid, uint64_t seq) {
-  // name = /[vsyncData_prefix]/[node_id]/[seq]
+  // name = /[vsyncData_prefix]/[node_id]/[seq]/%0
   Name n(kSyncDataPrefix);
-  n.appendNumber(nid).appendNumber(seq);
+  n.appendNumber(nid).appendNumber(seq).appendNumber(0);
   return n;
 }
 
 inline uint64_t ExtractNodeID(const Name& n) {
-  return n.get(-2).toNumber();
+  return n.get(-3).toNumber();
 }
 
 inline std::string ExtractEncodedVV(const Name& n) {
+  return n.get(-2).toUri();
+}
+
+inline std::string ExtractData(const Name& n) {
   return n.get(-1).toUri();
 }
+
 inline uint64_t ExtractSequence(const Name& n) {
-  return n.get(-1).toNumber();
+  return n.get(-2).toNumber();
 }
 
 }  // namespace vsync

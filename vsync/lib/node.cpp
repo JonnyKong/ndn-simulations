@@ -78,7 +78,7 @@ void Node::PrintNDNTraffic() {
 void Node::StartSimulation() {
   scheduler_.scheduleEvent(time::milliseconds(3000), [this] { PrintVectorClock(); });
 
-  std::string content = "Hello from " + to_string(nid_);
+  std::string content = "HelloFrom" + to_string(nid_);
   scheduler_.scheduleEvent(time::milliseconds(4000 * nid_),
                            [this, content] { PublishData(content); });
 }
@@ -114,7 +114,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 
   if (data_num == 1) {
     data_num = 0;
-    SyncData(n);
+    SyncData(content);
   }
 }
 
@@ -124,11 +124,13 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 /* most three times if it doesn't receive any data              */
 /****************************************************************/
 
-void Node::SyncData(const Name& data_name) {
+void Node::SyncData(const std::string& latest_data) {
   // std::string vv_encode = EncodeVV(version_vector_);
-  auto sync_data_name = MakeSyncNotifyName(nid_, data_name.get(-1).toNumber());
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast Sync Data: name = " << sync_data_name.toUri() );
+  std::string encoded_vv = EncodeVVToName(version_vector_);
+  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, latest_data);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast syncNotify Interest: name = " << sync_notify_interest_name.toUri() );
 
+  Interest sync_notify(sync_notify_interest_name, time::milliseconds())
   std::shared_ptr<Data> data = std::make_shared<Data>(sync_data_name);
   data->setFreshnessPeriod(time::seconds(3600));
   data->setContent(data_store_[data_name]->getContent());
@@ -178,10 +180,13 @@ void Node::OnSyncNotify(const Data& data) {
   proto::Content content_proto;
   if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
     VSYNC_LOG_WARN("Invalid data content format: nid=" << nid_);
-    return;
+    assert(false);
   }
   auto other_vv = DecodeVV(content_proto.vv());
+  FindMissingData(other_vv);
+}
 
+void Node::FindMissingData(const VersionVector& other_vv) {
   for (auto entry: other_vv) {
     NodeID node_id = entry.first;
     uint64_t other_seq = entry.second;
@@ -216,7 +221,6 @@ void Node::OnSyncNotify(const Data& data) {
     in_dt = true;
     SendDataInterest();
   }
-  
 }
 
 void Node::SendDataInterest() {
@@ -328,6 +332,8 @@ void Node::OnDataInterest(const Interest& interest) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") sends the data name = " << iter->second->getName());
   }
   else if (pending_interest.find(n) != pending_interest.end()) {
+    // no suppression now
+    /*
     suppression_num++;
     Interest i(n, kAddToPitInterestLifetime);
     // VSYNC_LOG_TRACE( "node(" << nid_ << ") Send: i.name=" << interest_name.toUri());
@@ -344,7 +350,9 @@ void Node::OnDataInterest(const Interest& interest) {
       in_dt = false;
       return;
     }
+    */
   }
+  else if (wt_list.find(n) != wt_list.end()) return;
   else {
     // even if you don't need to fetch this data, you can add the corresponding pit
     Interest i(n, kAddToPitInterestLifetime);
@@ -375,6 +383,16 @@ void Node::OnRemoteData(const Data& data) {
       scheduler_.cancelEvent(wt_list[n]);
       wt_list.erase(n);
     }
+
+    // check the state vector in data
+    const auto& content = data.getContent();
+    proto::Content content_proto;
+    if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
+      VSYNC_LOG_WARN("Invalid data content format: nid=" << nid_);
+      assert(false);
+    }
+    auto other_vv = DecodeVV(content_proto.vv());
+    FindMissingData(other_vv);
   }
 }
 

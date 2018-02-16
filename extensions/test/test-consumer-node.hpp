@@ -25,37 +25,65 @@ static const Name kTestPrefix = Name("/ndn/test");
 
 class TestConsumerNode {
  public:
-  TestConsumerNode(): scheduler_(face_.getIoService())
+  TestConsumerNode(int nodeID):
+    scheduler_(face_.getIoService()),
+    key_chain_(ns3::ndn::StackHelper::getKeyChain())
   {
-    std::cout << 0 << std::endl;
     index = 0;
+    nid = nodeID;
+
+    face_.setInterestFilter(
+      kTestPrefix, std::bind(&TestConsumerNode::OnTestInterest, this, _2),
+      [this](const Name&, const std::string& reason) {
+        std::cout << "Failed to register test-interest: " << reason << std::endl;
+      });
   }
 
   void Start() {
-    SendInterest();
+    if (nid == 0) SendInterest();
   }
 
   void SendInterest() {
-    index++;
-    if (index == 3) return;
-    Interest interest(kTestPrefix);
-    const std::string& content = "hello!";
-    face_.expressInterest(interest, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
-                          [](const Interest&, const lp::Nack&) {},
-                          [](const Interest&) {});
-    std::cout << "Consumer Send interest name=" << kTestPrefix.toUri() << std::endl; 
-    scheduler_.scheduleEvent(time::milliseconds(100), [this] { SendInterest(); });
+    scheduler_.scheduleEvent(time::milliseconds(2),
+                             [this] { SendOutInterest(); });
   }
 
 
   void OnRemoteData(const Data& data) {
-    std::cout << "Consumer Recv data name=" << data.getName().toUri() << std::endl;
+    std::cout << "node(" << nid << ") receives the data!" << std::endl;
+  }
+
+  void OnTestInterest(const Interest& interest) {
+    std::cout << "node(" << nid << ") receives the test interest!" << std::endl;
+    
+    /*if (index == 1) return;
+    index++;
+    scheduler_.scheduleEvent(time::milliseconds(2),
+                             [this] { SendOutInterest(); });
+    */
+    if (nid == 1) {
+      std::shared_ptr<Data> data = std::make_shared<Data>(interest.getName());
+      data->setFreshnessPeriod(time::seconds(3600));
+      data->setContent(make_shared< ::ndn::Buffer>(5));
+      key_chain_.sign(*data, signingWithSha256());
+      face_.put(*data);
+    }
+  }
+
+  void SendOutInterest() {
+    Interest i(kTestPrefix, time::milliseconds(1));
+    face_.expressInterest(i, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
+                          [](const Interest&, const lp::Nack&) {},
+                          [](const Interest&) {});
+    std::cout << "node(" << nid << ") sends out the test interest!" << std::endl;
   }
 
  private:
   uint32_t index;
   Face face_;
   Scheduler scheduler_;
+  KeyChain& key_chain_;
+  uint64_t nid;
 };
 
 }
