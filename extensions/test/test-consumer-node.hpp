@@ -19,7 +19,12 @@
 #include <ndn-cxx/util/scheduler.hpp>
 #include <ndn-cxx/util/signal.hpp>
 
+#include "ns3/simulator.h"
+#include "ns3/nstime.h"
+
 namespace ndn {
+
+NS_LOG_COMPONENT_DEFINE("ndn.testForwarding");
 
 static const Name kTestPrefix = Name("/ndn/test");
 
@@ -35,7 +40,7 @@ class TestConsumerNode {
     face_.setInterestFilter(
       kTestPrefix, std::bind(&TestConsumerNode::OnTestInterest, this, _2),
       [this](const Name&, const std::string& reason) {
-        std::cout << "Failed to register test-interest: " << reason << std::endl;
+        NS_LOG_INFO( "Failed to register test-interest: " << reason );
       });
   }
 
@@ -44,17 +49,18 @@ class TestConsumerNode {
   }
 
   void SendInterest() {
-    scheduler_.scheduleEvent(time::milliseconds(2),
+    scheduler_.scheduleEvent(time::nanoseconds(123456),
                              [this] { SendOutInterest(); });
   }
 
 
   void OnRemoteData(const Data& data) {
-    std::cout << "node(" << nid << ") receives the data!" << std::endl;
+    // NS_LOG_INFO( "node(" << nid << ") receives the data!" );
   }
 
   void OnTestInterest(const Interest& interest) {
-    std::cout << "node(" << nid << ") receives the test interest!" << std::endl;
+    NS_LOG_INFO ("node(" << nid << ") receives the test interest!" );
+    std::cout << ns3::Simulator::Now().GetNanoSeconds() << " us node(" << nid << ") receives the test interest!" << std::endl;
     
     /*if (index == 1) return;
     index++;
@@ -75,7 +81,8 @@ class TestConsumerNode {
     face_.expressInterest(i, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
-    std::cout << "node(" << nid << ") sends out the test interest!" << std::endl;
+    NS_LOG_INFO( "node(" << nid << ") sends out the test interest at!" );
+    std::cout << ns3::Simulator::Now().GetNanoSeconds() << " us node(" << nid << ") sends out the test interest!" << std::endl;
   }
 
  private:

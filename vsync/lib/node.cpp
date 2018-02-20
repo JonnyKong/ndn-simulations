@@ -11,6 +11,9 @@
 #include "vsync-helper.hpp"
 #include "logging.hpp"
 
+#include "ns3/simulator.h"
+#include "ns3/nstime.h"
+
 VSYNC_LOG_DEFINE(SyncForSleep);
 
 namespace ndn {
@@ -39,8 +42,8 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
            : face_(face),
              key_chain_(key_chain),
              nid_(nid),
-             scheduler_(scheduler),
              prefix_(prefix),
+             scheduler_(scheduler),
              data_cb_(std::move(on_data)),
              rengine_(rdevice_()) {
   collision_num = 0;
@@ -50,12 +53,11 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   data_num = 0;
 
   face_.setInterestFilter(
-      Name(kIncomingSyncPrefix), std::bind(&Node::OnIncomingSyncInterest, this, _2),
+      Name(kSyncNotifyPrefix), std::bind(&Node::OnSyncNotify, this, _2),
       [this](const Name&, const std::string& reason) {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register incomingSync prefix: " << reason); 
-        throw Error("Failed to register incomingSync prefix: " + reason);
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register syncNotify prefix: " << reason); 
+        throw Error("Failed to register syncNotify prefix: " + reason);
       });
-
 
   face_.setInterestFilter(
       Name(kSyncDataPrefix), std::bind(&Node::OnDataInterest, this, _2),
@@ -105,6 +107,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   key_chain_.sign(*data, signingWithSha256());
 
   data_store_[n] = data;
+  logDataStore(n);
   recv_window[nid_].Insert(version_vector_[nid_]);
 
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Publish Data: d.name=" << n.toUri() << " d.type=" << type << " d.content=" << content);
@@ -114,7 +117,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 
   if (data_num == 1) {
     data_num = 0;
-    SyncData(content);
+    SyncData(n);
   }
 }
 
@@ -124,19 +127,18 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 /* most three times if it doesn't receive any data              */
 /****************************************************************/
 
-void Node::SyncData(const std::string& latest_data) {
+void Node::SyncData(const Name& data_name) {
   // std::string vv_encode = EncodeVV(version_vector_);
   std::string encoded_vv = EncodeVVToName(version_vector_);
-  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, latest_data);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast syncNotify Interest: name = " << sync_notify_interest_name.toUri() );
+  auto data_block = data_store_[data_name]->wireEncode();
+  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, data_block);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Broadcast syncNotify Interest" );
 
-  Interest sync_notify(sync_notify_interest_name, time::milliseconds())
-  std::shared_ptr<Data> data = std::make_shared<Data>(sync_data_name);
-  data->setFreshnessPeriod(time::seconds(3600));
-  data->setContent(data_store_[data_name]->getContent());
-  data->setContentType(data_store_[data_name]->getContentType());
-  key_chain_.sign(*data, signingWithSha256());
-  face_.put(*data);
+  Interest sync_notify(sync_notify_interest_name);
+  face_.expressInterest(sync_notify, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  recv_sync_notify[sync_notify_interest_name] = 1;
 }
 
 /****************************************************************/
@@ -145,44 +147,44 @@ void Node::SyncData(const std::string& latest_data) {
 /* most three times if it doesn't receive any data interests or 
 /* SyncACK interest                                             
 /****************************************************************/
-void Node::OnIncomingSyncInterest(const Interest& interest) {
+void Node::OnSyncNotify(const Interest& interest) {
   const auto& n = interest.getName();
-  auto node_id = ExtractNodeID(n);
-  auto seq = ExtractSequence(n);
+  // check if received this notify before
+  if (recv_sync_notify.find(n) != recv_sync_notify.end()) return;
+  recv_sync_notify[n] = 1;
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv the syncNotify Interest" );
+  // TBD, when we receive this interest for n times, we can do some tricks, like cancel the transmission of notify(if still in DT)
 
-  auto notify = MakeSyncNotifyName(node_id, seq);
-  Interest i(notify, kSendOutInterestLifetime);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << notify.toUri());
-
-  face_.expressInterest(i, std::bind(&Node::OnSyncNotify, this, _2),
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-}
-
-void Node::OnSyncNotify(const Data& data) {
-  const auto& n = data.getName();
   auto sender_id = ExtractNodeID(n);
-  auto sender_seq = ExtractNodeID(n);
+  std::shared_ptr<Data> carried_data = std::make_shared<Data>(n.get(-1).blockFromValue());
 
-  // first store the current data
-  auto data_name = MakeDataName(sender_id, sender_seq);
-  std::shared_ptr<Data> new_data = std::make_shared<Data>(data_name);
-  new_data->setFreshnessPeriod(time::seconds(3600));
-  new_data->setContent(data.getContent());
-  new_data->setContentType(data.getContentType());
-  key_chain_.sign(*new_data, signingWithSha256());
-  data_store_[data_name] = new_data;
-  recv_window[sender_id].Insert(sender_seq);
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") store the data from SyncNotify: " << new_data->getName().toUri() );
-
-  // update the vv, and fetch the other missing data
-  const auto& content = data.getContent();
+  // extract the vv
+  const auto& content = carried_data->getContent();
   proto::Content content_proto;
   if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
     VSYNC_LOG_WARN("Invalid data content format: nid=" << nid_);
     assert(false);
   }
   auto other_vv = DecodeVV(content_proto.vv());
+
+  // first store the current data
+  auto data_name = carried_data->getName();
+  assert(data_store_.find(data_name) == data_store_.end());
+  if (data_store_.find(data_name) == data_store_.end()) {
+    data_store_[data_name] = carried_data;
+    logDataStore(data_name);
+
+    auto sender_seq = other_vv[sender_id];
+    recv_window[sender_id].Insert(sender_seq);
+  }
+
+  // re-broadcast the notify, add it into the pending_interest list. There is no retransmission for notify
+  pending_interest[n] = 1;
+  if (in_dt == false) {
+    in_dt = true;
+    SendDataInterest();
+  }
+
   FindMissingData(other_vv);
 }
 
@@ -214,7 +216,7 @@ void Node::FindMissingData(const VersionVector& other_vv) {
   // print the pending interest
   std::string pending_list = "";
   for (auto entry: pending_interest) {
-    pending_list += entry.first.toUri() + "\n";
+    pending_list += entry.first.getPrefix(4).toUri() + "\n";
   }
   VSYNC_LOG_TRACE( "(node" << nid_ << ") pending interest list = :\n" + pending_list);
   if (in_dt == false) {
@@ -232,10 +234,10 @@ void Node::SendDataInterest() {
   
   while (!pending_interest.empty() && (data_store_.find(pending_interest.begin()->first) != data_store_.end() || pending_interest.begin()->second == 0)) {
     if (data_store_.find(pending_interest.begin()->first) != data_store_.end()) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") already has the data: name = " << pending_interest.begin()->first.toUri() );
+      // VSYNC_LOG_TRACE( "node(" << nid_ << ") already has the data: name = " << pending_interest.begin()->first.toUri() );
     }
     else {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") has already retransmitted the data for three times: data name = " << pending_interest.begin()->first.toUri() );
+      // VSYNC_LOG_TRACE( "node(" << nid_ << ") has already retransmitted the interest for a pre-configured time" );
     }
     pending_interest.erase(pending_interest.begin());
   }
@@ -247,18 +249,16 @@ void Node::SendDataInterest() {
   }
 
   int delay = dt_dist(rengine_);
-  // VSYNC_LOG_TRACE( "node(" << nid_ << ") schedule to send interest after " << delay << "nanoseconds" );
-  // VSYNC_LOG_TRACE( "node(" << nid_ << ") nanoseconds.count = " << time::nanoseconds(delay).count() );
   inst_dt = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnDTTimeout(); });
 }
 
 void Node::OnDTTimeout() {
   while (!pending_interest.empty() && (data_store_.find(pending_interest.begin()->first) != data_store_.end() || pending_interest.begin()->second == 0)) {
     if (data_store_.find(pending_interest.begin()->first) != data_store_.end()) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") already has the data: name = " << pending_interest.begin()->first.toUri() );
+      // VSYNC_LOG_TRACE( "node(" << nid_ << ") already has the data: name = " << pending_interest.begin()->first.toUri() );
     }
     else {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") has already retransmitted the data for three times: data name = " << pending_interest.begin()->first.toUri() );
+      // VSYNC_LOG_TRACE( "node(" << nid_ << ") has already retransmitted the interest for a pre-configured time" );
     }
     pending_interest.erase(pending_interest.begin());
   }
@@ -271,14 +271,14 @@ void Node::OnDTTimeout() {
   auto n = pending_interest.begin()->first;
   int cur_transmission_time = pending_interest.begin()->second;
 
-  if (cur_transmission_time != kInterestTransmissionTime) {
+  if (cur_transmission_time != kInterestTransmissionTime && n.compare(0, 2, kSyncNotifyPrefix) != 0) {
     // add the collision_num (retransmission num)
     collision_num++;
   }
   // pending_interest.begin()->second--;
   Interest i(n, kSendOutInterestLifetime);
 
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << n.toUri());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << n.getPrefix(4).toUri());
 
   face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
                         [](const Interest&, const lp::Nack&) {},
@@ -287,7 +287,6 @@ void Node::OnDTTimeout() {
   scheduler_.cancelEvent(inst_dt);
   // scheduler_.cancelEvent(inst_wt);
   out_interest_num++;
-  VSYNC_LOG_TRACE("node(" << nid_ << ") Set WT " );
   assert(wt_list.find(n) == wt_list.end());
   wt_list[n] = scheduler_.scheduleEvent(kInterestWT, [this, n, cur_transmission_time] { OnWTTimeout(n, cur_transmission_time - 1); });
   
@@ -297,13 +296,13 @@ void Node::OnDTTimeout() {
     return;
   }
   int delay = dt_dist(rengine_);
-  // VSYNC_LOG_TRACE( "node(" << nid_ << ") schedule to send interest after " << delay << "nanoseconds" );
-  // VSYNC_LOG_TRACE( "node(" << nid_ << ") nanoseconds.count = " << time::nanoseconds(delay).count() );
   inst_dt = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnDTTimeout(); });
 }
 
 void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {
   wt_list.erase(name);
+  // An interest cannot exist in WT and DT at the same time
+  /*
   if (pending_interest.find(name) != pending_interest.end()) {
     assert(in_dt == true);
     return;
@@ -317,11 +316,20 @@ void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {
     }
     else assert(pending_interest.size() > 1);
   }
+  */
+  assert(pending_interest.find(name) == pending_interest.end());
+  pending_interest[name] = cur_transmission_time;
+  if (in_dt == false) {
+    assert(pending_interest.size() == 1);
+    in_dt = true;
+    SendDataInterest();
+  }
+  else assert(pending_interest.size() > 1);
 }
 
 void Node::OnDataInterest(const Interest& interest) {
   const auto& n = interest.getName();
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Process Data Interest: i.name=" << n.toUri());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv Data Interest: i.name=" << n.toUri());
 
   auto node_id = ExtractNodeID(n);
   auto seq = ExtractSequence(n);
@@ -332,35 +340,32 @@ void Node::OnDataInterest(const Interest& interest) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") sends the data name = " << iter->second->getName());
   }
   else if (pending_interest.find(n) != pending_interest.end()) {
-    // no suppression now
-    /*
     suppression_num++;
     Interest i(n, kAddToPitInterestLifetime);
-    // VSYNC_LOG_TRACE( "node(" << nid_ << ") Send: i.name=" << interest_name.toUri());
 
     face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
 
     int cur_transmission_time = pending_interest.begin()->second;
-    wt_list[n] = scheduler_.scheduleEvent(kInterestWT, [this, n, cur_transmission_time] { OnWTTimeout(n, cur_transmission_time - 1); });
+    wt_list[n] = scheduler_.scheduleEvent(kInterestWT, [this, n, cur_transmission_time] { OnWTTimeout(n, cur_transmission_time); });
     
     pending_interest.erase(n);
     if (pending_interest.empty()) {
       in_dt = false;
       return;
     }
-    */
   }
   else if (wt_list.find(n) != wt_list.end()) return;
   else {
     // even if you don't need to fetch this data, you can add the corresponding pit
     Interest i(n, kAddToPitInterestLifetime);
-    // VSYNC_LOG_TRACE( "node(" << nid_ << ") Send: i.name=" << interest_name.toUri());
-
     face_.expressInterest(i, std::bind(&Node::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
+
+    // we also need to set a corresponding WT
+    wt_list[n] = scheduler_.scheduleEvent(kInterestWT, [this, n] { OnWTTimeout(n, kInterestTransmissionTime); });
   }
 }
 
@@ -375,6 +380,7 @@ void Node::OnRemoteData(const Data& data) {
   if (data_store_.find(n) == data_store_.end()) {
     // update the version_vector, data_store_ and recv_window
     data_store_[n] = data.shared_from_this();
+    logDataStore(n);
     recv_window[node_id].Insert(seq);
 
     pending_interest.erase(n);
@@ -394,6 +400,11 @@ void Node::OnRemoteData(const Data& data) {
     auto other_vv = DecodeVV(content_proto.vv());
     FindMissingData(other_vv);
   }
+}
+
+void Node::logDataStore(const Name& name) {
+  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
+  std::cout << now << " microseconds node(" << nid_ << ") Store New Data: " << name.toUri() << std::endl;
 }
 
 // print the vector clock every 5 seconds

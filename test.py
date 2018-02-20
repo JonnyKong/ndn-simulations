@@ -5,20 +5,33 @@ import os
 import os.path
 import matplotlib.pyplot as plt
 import pylab as pl
-  
-xs = []
-ys = []
+
+'''
+x = []
+y = []
 file = open("test.txt")
 for line in file:
-    data = line.split(" ")
-    #print(data)
-    cur_x = float(data[3])
-    cur_y = float(data[4])
-    xs.append(cur_x)
-    ys.append(cur_y)
-plt.scatter(xs, ys)
-for i in range(20):
-    x = xs[i]
-    y = ys[i]
-    pl.text(x, y, str(i), color="red", fontsize=12)
+	elements = line.split(' ')
+	cur_x = float(elements[3])
+	cur_y = float(elements[4])
+	x.append(cur_x)
+	y.append(cur_y)
+
+#fig = pyplot.figure()
+#ax = fig.add_subplot(111)
+#ax.set_ylim(0,10)
+plt.scatter(x,y)
+for nid in range(20):
+    plt.annotate(str(nid),xy=(x[nid], y[nid]))
+
 plt.show()
+'''
+
+test = {}
+test[1] = 1
+test[2] = 2
+test[3] = 3
+for key, value in test.iteritems():
+	print value
+d = float(sum(test.values())) / len(test)
+print d

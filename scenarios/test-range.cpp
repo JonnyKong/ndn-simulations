@@ -72,7 +72,7 @@ main (int argc, char *argv[])
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
   NodeContainer nodes;
-  nodes.Create (2);
+  nodes.Create (10);
   /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
@@ -91,8 +91,11 @@ main (int argc, char *argv[])
   */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (426.0, 0.0, 0.0));
+  int index = 0;
+  for (int i = 0; i <= 400; i += 50) {
+    positionAlloc->Add (Vector (double(i), 0.0, 0.0));
+  }
+  positionAlloc->Add (Vector (425.0, 0.0, 0.0));
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");

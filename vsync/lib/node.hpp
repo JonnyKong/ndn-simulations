@@ -125,10 +125,11 @@ class Node {
   std::unordered_map<Name, EventId> wt_list;
   bool in_dt;
 
-
+  std::unordered_map<Name, uint64_t> recv_sync_notify;
+  
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
-  void OnSyncNotify(const Data& data);
+  void OnSyncNotify(const Interest& interest);
   void FindMissingData(const VersionVector& other_vv);
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
@@ -140,6 +141,7 @@ class Node {
   inline void StartSimulation();
   inline void PrintVectorClock();
   inline void PrintNDNTraffic();
+  inline void logDataStore(const Name& name);
 
   std::random_device rdevice_;
   std::mt19937 rengine_;

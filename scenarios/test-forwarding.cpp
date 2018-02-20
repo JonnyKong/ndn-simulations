@@ -9,6 +9,9 @@
 
 #include "broadcast_strategy.hpp"
 
+#include "ns3/random-variable-stream.h"
+#include "ns3/nstime.h"
+
 #include <map>
 
 using namespace std;
@@ -20,7 +23,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.TestRange");
+NS_LOG_COMPONENT_DEFINE ("ndn.testForwardingSim");
 
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
@@ -39,13 +42,18 @@ NS_LOG_COMPONENT_DEFINE ("ndn.TestRange");
 int
 main (int argc, char *argv[])
 {
+
   // disable fragmentation
   Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
 
+  /*
+  std::string resolution = "Time::FS";
   CommandLine cmd;
-  cmd.Parse (argc,argv);
+  cmd.AddValue ("resolution", "time resolution", resolution);
+  cmd.Parse (argc, argv);
+  */
 
   //////////////////////
   //////////////////////
@@ -136,9 +144,10 @@ main (int argc, char *argv[])
     idx++;
   }
 
-  ////////////////
+  Simulator::Stop(Seconds(5));
 
-  Simulator::Stop (Seconds (100.0));
+  ////////////////
+  Simulator::Schedule (MicroSeconds (123), [] { NS_LOG_INFO ("testing!"); });
 
   Simulator::Run ();
   Simulator::Destroy ();

@@ -85,11 +85,13 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 }
 
 // Naming conventions for interests and data
-
-inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::string encoded_data) {
+// TBD 
+// actually, the [state-vector] is no needed to be carried because the carried data contains the vv.
+// but lixia said we maybe should remove the vv from data.
+inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, const Block& data_block) {
   // name = /[vsync_prefix]/[node_id]/[state-vector]/[data]
   Name n(kSyncNotifyPrefix);
-  n.appendNumber(nid).append(encoded_vv).append(encoded_data);
+  n.appendNumber(nid).append(encoded_vv).append(data_block);
   return n;
 }
 
@@ -106,10 +108,6 @@ inline uint64_t ExtractNodeID(const Name& n) {
 
 inline std::string ExtractEncodedVV(const Name& n) {
   return n.get(-2).toUri();
-}
-
-inline std::string ExtractData(const Name& n) {
-  return n.get(-1).toUri();
 }
 
 inline uint64_t ExtractSequence(const Name& n) {

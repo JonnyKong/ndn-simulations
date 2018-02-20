@@ -6,7 +6,7 @@ file = open("snapshot.txt")
 pattern = re.compile(r'\(([0-9]+)\:([0-9]+)-([0-9]+)\)')
 pattern2 = re.compile(r'\(([0-9]+)\:([0-9]+)\)')
 node_num = 20
-snapshot_num = 18000
+snapshot_num = 90
 
 data_snapshots_array = []
 rw_snapshots_array = []
@@ -82,10 +82,12 @@ outFile = open("adhoc2.0-result.txt", 'w')
 for key in data_trace:
     outFile.write(key + "\n")
     for item in data_trace[key]:
+        '''
         if item == 0.0:
             continue
         elif item == 20.0:
             break
+        '''
         outFile.write(str(item) + ",")
     outFile.write("\n")
 

@@ -27,7 +27,6 @@ using VersionVector = std::unordered_map<uint64_t, uint64_t>;
 using GroupID = std::string;
 
 static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
-static const Name kIncomingSyncPrefix = Name("/ndn/incomingSync");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 static const Name kGetNDNTraffic = Name("/ndn/getNDNTraffic");
 

@@ -115,6 +115,8 @@ main (int argc, char *argv[])
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
+  /*
+  // constant mobility
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
   randomizer->SetAttribute ("Max", DoubleValue (800));
@@ -130,6 +132,22 @@ main (int argc, char *argv[])
                                  "Z", PointerValue (randomizerZ));
 
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  */
+
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
+                                 "X", StringValue ("400.0"),
+                                 "Y", StringValue ("400.0"),
+                                 "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=400]"));
+
+  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                             "Mode", StringValue ("Time"),
+                             "Time", StringValue ("5s"),
+                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
+                             "Bounds", StringValue ("0|800|0|800"));
+  mobility.InstallAll ();
+  // Config::Connect ("/NodeList/*/$ns3::MobilityModel/CourseChange",
+  //                 MakeCallback (&CourseChange));
 
   NodeContainer nodes;
   nodes.Create (20);
@@ -142,7 +160,6 @@ main (int argc, char *argv[])
   mobility.Install (nodes);
 
   // 3. Install NDN stack
-  NS_LOG_INFO ("Installing NDN stack");
   StackHelper ndnHelper;
   // ndnHelper.AddNetDeviceFaceCreateCallback (WifiNetDevice::GetTypeId (), MakeCallback (MyNetDeviceFaceCallback));
   //ndnHelper.SetDefaultRoutes (true);

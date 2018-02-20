@@ -3,7 +3,10 @@
 #ifndef NDN_VSYNC_LOGGING_HPP_
 #define NDN_VSYNC_LOGGING_HPP_
 
+/*
+#define NS3_LOG_ENABLE 
 #ifdef NS3_LOG_ENABLE
+*/
 
 #include "ns3/log.h"
 
@@ -15,6 +18,7 @@
 #define VSYNC_LOG_WARN(expr) NS_LOG_WARN(expr)
 #define VSYNC_LOG_ERROR(expr) NS_LOG_ERROR(expr)
 
+/*
 #else
 
 #include <ndn-cxx/util/logger.hpp>
@@ -29,4 +33,5 @@
 
 #endif
 
+*/
 #endif  // NDN_VSYNC_LOGGING_HPP_
