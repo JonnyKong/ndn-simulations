@@ -7,8 +7,6 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/ndnSIM-module.h"
 
-#include "broadcast_strategy.hpp"
-
 #include "ns3/random-variable-stream.h"
 #include "ns3/nstime.h"
 
@@ -80,7 +78,7 @@ main (int argc, char *argv[])
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
   NodeContainer nodes;
-  nodes.Create (3);
+  nodes.Create (2);
   /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
@@ -101,7 +99,7 @@ main (int argc, char *argv[])
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   positionAlloc->Add (Vector (0.0, 0.0, 0.0));
   positionAlloc->Add (Vector (200.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (400.0, 0.0, 0.0));
+  // positionAlloc->Add (Vector (400.0, 0.0, 0.0));
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");

@@ -6,7 +6,6 @@ import os.path
 import matplotlib.pyplot as plt
 import pylab as pl
 
-'''
 x = []
 y = []
 file = open("test.txt")
@@ -25,8 +24,8 @@ for nid in range(20):
     plt.annotate(str(nid),xy=(x[nid], y[nid]))
 
 plt.show()
-'''
 
+'''
 test = {}
 test[1] = 1
 test[2] = 2
@@ -35,3 +34,4 @@ for key, value in test.iteritems():
 	print value
 d = float(sum(test.values())) / len(test)
 print d
+'''

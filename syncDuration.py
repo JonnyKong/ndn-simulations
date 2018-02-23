@@ -27,12 +27,12 @@ def cdf_plot(data, name, number, c):
 
   #plt.step(x, y, label=name)
   plt.scatter(x, y, alpha=0.5, label=name, color=c)
-  plt.xlim(0, 5)
+  #plt.xlim(0, 5)
   plt.show()
 
 syncDuration = []
 
-file_name = "syncDuration-mobility-0loss.txt"
+file_name = "adhoc-result/syncDuration-0loss-speed5-change60.txt"
 file = open(file_name)
 for line in file:
     if line.find("microseconds") != -1:
@@ -51,14 +51,15 @@ for line in file:
         elif data_info.Owner == 20:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
-            #if cur_sync_duration >= 3000000:
-                # print(data_name)
+            if cur_sync_duration >= 3:
+                print(data_name)
+                print(cur_sync_duration)
             syncDuration.append(cur_sync_duration)
             #print(cur_sync_duration)
-cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
+# cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
 print("result for " + file_name)
-print("percentage of complete sync: " + str(len(syncDuration) / 20.0))
+print("percentage of complete sync: " + str(float(len(syncDuration)) / float(len(data_store))))
 syncDuration = np.array(syncDuration)
 print("mean: " + str(np.mean(syncDuration)))
 print("min: " + str(np.min(syncDuration)))

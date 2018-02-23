@@ -6,8 +6,7 @@
 #include "ns3/internet-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/ndnSIM-module.h"
-
-#include "broadcast_strategy.hpp"
+#include "ns3/netanim-module.h"
 
 #include <map>
 
@@ -103,7 +102,7 @@ main (int argc, char *argv[])
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
   wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
-  wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+  // wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
 
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
@@ -115,8 +114,8 @@ main (int argc, char *argv[])
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
-  /*
   // constant mobility
+  /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
   randomizer->SetAttribute ("Max", DoubleValue (800));
@@ -135,19 +134,70 @@ main (int argc, char *argv[])
   */
 
   MobilityHelper mobility;
+  /*
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
                                  "X", StringValue ("400.0"),
                                  "Y", StringValue ("400.0"),
                                  "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=400]"));
+  */
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  positionAlloc->Add (Vector (755.119, 560.052, 0.0));
+  positionAlloc->Add (Vector (668.265, 73.9326, 0.0));
+  positionAlloc->Add (Vector (61.8934, 325.192, 0.0));
+  positionAlloc->Add (Vector (666.997, 754.103, 0.0));
+  positionAlloc->Add (Vector (0.0876296, 244.216, 0.0));
+  positionAlloc->Add (Vector (429.497, 320.051, 0.0));
+  positionAlloc->Add (Vector (72.8159, 518.424, 0.0));
+  positionAlloc->Add (Vector (168.832, 549.124, 0.0));
+  positionAlloc->Add (Vector (756.332, 155.184, 0.0));
+  positionAlloc->Add (Vector (751.312, 468.99, 0.0));
+  positionAlloc->Add (Vector (672.91, 227.392, 0.0));
+  positionAlloc->Add (Vector (640.308, 13.9314, 0.0));
+  positionAlloc->Add (Vector (599.082, 726.259, 0.0));
+  positionAlloc->Add (Vector (404.931, 533.498, 0.0));
+  positionAlloc->Add (Vector (796.813, 152.158, 0.0));
+  positionAlloc->Add (Vector (161.655, 171.424, 0.0));
+  positionAlloc->Add (Vector (319.112, 233.189, 0.0));
+  positionAlloc->Add (Vector (93.6488, 709.356, 0.0));
+  positionAlloc->Add (Vector (113.604, 315.399, 0.0));
+  positionAlloc->Add (Vector (759.217, 660.893, 0.0));
+  mobility.SetPositionAllocator (positionAlloc);
 
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Mode", StringValue ("Time"),
-                             "Time", StringValue ("5s"),
-                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
+                             "Time", StringValue ("60s"),
+                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=5.0]"),
                              "Bounds", StringValue ("0|800|0|800"));
+
+  /*
+  MobilityHelper mobility;
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  positionAlloc->Add (Vector (755.119, 560.052, 0.0));
+  positionAlloc->Add (Vector (668.265, 73.9326, 0.0));
+  positionAlloc->Add (Vector (61.8934, 325.192, 0.0));
+  positionAlloc->Add (Vector (666.997, 754.103, 0.0));
+  positionAlloc->Add (Vector (0.0876296, 244.216, 0.0));
+  positionAlloc->Add (Vector (429.497, 320.051, 0.0));
+  positionAlloc->Add (Vector (72.8159, 518.424, 0.0));
+  positionAlloc->Add (Vector (168.832, 549.124, 0.0));
+  positionAlloc->Add (Vector (756.332, 155.184, 0.0));
+  positionAlloc->Add (Vector (751.312, 468.99, 0.0));
+  positionAlloc->Add (Vector (672.91, 227.392, 0.0));
+  positionAlloc->Add (Vector (640.308, 13.9314, 0.0));
+  positionAlloc->Add (Vector (599.082, 726.259, 0.0));
+  positionAlloc->Add (Vector (404.931, 533.498, 0.0));
+  positionAlloc->Add (Vector (796.813, 152.158, 0.0));
+  positionAlloc->Add (Vector (161.655, 171.424, 0.0));
+  positionAlloc->Add (Vector (319.112, 233.189, 0.0));
+  positionAlloc->Add (Vector (93.6488, 709.356, 0.0));
+  positionAlloc->Add (Vector (113.604, 315.399, 0.0));
+  positionAlloc->Add (Vector (759.217, 660.893, 0.0));
+
+  mobility.SetPositionAllocator (positionAlloc);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  */
+
   mobility.InstallAll ();
-  // Config::Connect ("/NodeList/*/$ns3::MobilityModel/CourseChange",
-  //                 MakeCallback (&CourseChange));
 
   NodeContainer nodes;
   nodes.Create (20);
@@ -200,6 +250,10 @@ main (int argc, char *argv[])
   Simulator::Stop (Seconds (240.0));
 
   Simulator::Schedule(Seconds(200.0), &PrintDrop);
+
+  std::string animFile = "ad-hoc-animation.xml";
+  AnimationInterface anim (animFile);
+  anim.SetMobilityPollInterval (Seconds (1));
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));

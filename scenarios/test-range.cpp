@@ -7,8 +7,6 @@
 #include "ns3/point-to-point-module.h"
 #include "ns3/ndnSIM-module.h"
 
-#include "broadcast_strategy.hpp"
-
 #include <map>
 
 using namespace std;
@@ -59,7 +57,7 @@ main (int argc, char *argv[])
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
   wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
-  wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+  // wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
 
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
@@ -72,7 +70,7 @@ main (int argc, char *argv[])
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
   NodeContainer nodes;
-  nodes.Create (10);
+  nodes.Create (8);
   /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
@@ -92,10 +90,10 @@ main (int argc, char *argv[])
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   int index = 0;
-  for (int i = 0; i <= 400; i += 50) {
+  for (int i = 0; i <= 300; i += 50) {
     positionAlloc->Add (Vector (double(i), 0.0, 0.0));
   }
-  positionAlloc->Add (Vector (425.0, 0.0, 0.0));
+  positionAlloc->Add (Vector (340.0, 0.0, 0.0));
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -117,7 +115,7 @@ main (int argc, char *argv[])
   // 4. Set Forwarding Strategy
   //StrategyChoiceHelper::InstallAll("/ndn/geoForwarding", "/localhost/nfd/strategy/broadcast");
   //StrategyChoiceHelper::Install<nfd::fw::BroadcastStrategy>(nodes, "/");
-  StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/multicast");
+  StrategyChoiceHelper::InstallAll("/", "/localhost/nfd/strategy/best-route");
 
   // initialize the total vector clock
 

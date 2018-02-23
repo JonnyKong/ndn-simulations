@@ -169,7 +169,7 @@ void Node::OnSyncNotify(const Interest& interest) {
 
   // first store the current data
   auto data_name = carried_data->getName();
-  assert(data_store_.find(data_name) == data_store_.end());
+  // assert(data_store_.find(data_name) == data_store_.end());
   if (data_store_.find(data_name) == data_store_.end()) {
     data_store_[data_name] = carried_data;
     logDataStore(data_name);

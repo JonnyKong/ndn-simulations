@@ -89,7 +89,7 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 // actually, the [state-vector] is no needed to be carried because the carried data contains the vv.
 // but lixia said we maybe should remove the vv from data.
 inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, const Block& data_block) {
-  // name = /[vsync_prefix]/[node_id]/[state-vector]/[data]
+  // name = /[vsync_prefix]/[node_id]/[state-vector]/[data]/[hop_count]
   Name n(kSyncNotifyPrefix);
   n.appendNumber(nid).append(encoded_vv).append(data_block);
   return n;

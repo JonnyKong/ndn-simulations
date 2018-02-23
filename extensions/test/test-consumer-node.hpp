@@ -62,11 +62,11 @@ class TestConsumerNode {
     NS_LOG_INFO ("node(" << nid << ") receives the test interest!" );
     std::cout << ns3::Simulator::Now().GetNanoSeconds() << " us node(" << nid << ") receives the test interest!" << std::endl;
     
-    /*if (index == 1) return;
+    if (index == 1) return;
     index++;
     scheduler_.scheduleEvent(time::milliseconds(2),
                              [this] { SendOutInterest(); });
-    */
+    /*
     if (nid == 1) {
       std::shared_ptr<Data> data = std::make_shared<Data>(interest.getName());
       data->setFreshnessPeriod(time::seconds(3600));
@@ -74,10 +74,11 @@ class TestConsumerNode {
       key_chain_.sign(*data, signingWithSha256());
       face_.put(*data);
     }
+    */
   }
 
   void SendOutInterest() {
-    Interest i(kTestPrefix, time::milliseconds(1));
+    Interest i(kTestPrefix, time::milliseconds(100));
     face_.expressInterest(i, std::bind(&TestConsumerNode::OnRemoteData, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
