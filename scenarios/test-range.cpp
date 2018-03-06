@@ -62,8 +62,8 @@ main (int argc, char *argv[])
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(15));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(15));
+  wifiPhyHelper.Set("TxPowerStart", DoubleValue(10));
+  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(10));
 
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();

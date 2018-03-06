@@ -23,12 +23,14 @@ namespace vsync {
 // Type and constant declarations for VectorSync
 
 using NodeID = uint64_t;
-using VersionVector = std::unordered_map<uint64_t, uint64_t>;
+using VersionVector = std::unordered_map<NodeID, uint64_t>;
 using GroupID = std::string;
 
 static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 static const Name kGetNDNTraffic = Name("/ndn/getNDNTraffic");
+static const Name kHeartbeatPrefix = Name("/ndn/heartbeat");
+static const Name kIncomingPacketNotify = Name("/ndn/incomingPacketNotify");
 
 }  // namespace vsync
 }  // namespace ndn

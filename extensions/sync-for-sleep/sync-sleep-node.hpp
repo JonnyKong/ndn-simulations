@@ -31,6 +31,7 @@ class SimpleNode {
   }
 
   void Stop() {
+    /*
     std::ofstream out;
     out.open(snapshotFileName, std::ofstream::out | std::ofstream::app);
     if (out.is_open()) {
@@ -49,6 +50,7 @@ class SimpleNode {
     else {
       std::cout << "Fail to write files" << std::endl; 
     }
+    */
   }
 
   std::string ToString(std::vector<uint64_t> list) {

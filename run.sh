@@ -1,11 +1,10 @@
 #!/bin/bash
 time=0
-while(( $time<5 ))
+while(( $time<10 ))
 do
   echo "start simulation $time"
-  rm snapshot.txt
-  ./waf --run sync-for-sleep >/dev/null
-  python data_availability2.py >> result2/synctimer2/st150-dt20-node10.txt
+  NS_LOG='SyncForSleep' ./waf --run sync-for-sleep > adhoc-log/syncDuration-smallrange-0loss.txt 2>&1
+  python syncDuration.py >> adhoc-result/syncDuration-timer3-interval3.txt
   echo "finish simulation $time"
   let "time++"
 done

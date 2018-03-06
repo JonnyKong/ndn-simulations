@@ -68,7 +68,7 @@ class Node {
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
-  void SyncData(const Name& data_name);
+  void SendSyncNotify();
 
   std::vector<uint64_t> GetDataSnapshots() {
     return data_snapshots;
@@ -121,16 +121,22 @@ class Node {
   int data_num;
 
   std::unordered_map<Name, int> pending_interest;
+  Name pending_sync_notify;
   EventId inst_dt;
   std::unordered_map<Name, EventId> wt_list;
   bool in_dt;
 
-  std::unordered_map<Name, uint64_t> recv_sync_notify;
+  EventId sync_notify_retx_scheduler;
+  EventId sync_notify_beacon_scheduler;
+  int sync_notify_time;
+  Name latest_data;
   
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
   void OnSyncNotify(const Interest& interest);
-  void FindMissingData(const VersionVector& other_vv);
+  void OnSyncNotifyRetxTimeout();
+  void OnSyncNotifyBeaconTimeout();
+  void FetchMissingData(const std::vector<NodeID>& missing_data);
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnDTTimeout();
@@ -142,6 +148,15 @@ class Node {
   inline void PrintVectorClock();
   inline void PrintNDNTraffic();
   inline void logDataStore(const Name& name);
+
+  // val for heartbeat feature
+  uint64_t recv_count;
+  EventId heartbeatScheduler;
+  bool is_isolated;
+  inline void SendHeartbeat();
+  inline void DetectIsolation();
+  inline void OnHeartbeat(const Interest& interest);
+  inline void OnIncomingPacketNotify(const Interest& interest);
 
   std::random_device rdevice_;
   std::mt19937 rengine_;

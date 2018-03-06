@@ -107,8 +107,8 @@ main (int argc, char *argv[])
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(15));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(15));
+  wifiPhyHelper.Set("TxPowerStart", DoubleValue(10));
+  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(10));
 
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
@@ -134,12 +134,10 @@ main (int argc, char *argv[])
   */
 
   MobilityHelper mobility;
-  /*
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
                                  "X", StringValue ("400.0"),
                                  "Y", StringValue ("400.0"),
                                  "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=400]"));
-  */
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   positionAlloc->Add (Vector (755.119, 560.052, 0.0));
   positionAlloc->Add (Vector (668.265, 73.9326, 0.0));
@@ -166,8 +164,9 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                              "Mode", StringValue ("Time"),
                              "Time", StringValue ("60s"),
-                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=5.0]"),
+                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),
                              "Bounds", StringValue ("0|800|0|800"));
+
 
   /*
   MobilityHelper mobility;
@@ -236,6 +235,7 @@ main (int argc, char *argv[])
     StackHelper::setNodeID(idx, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
