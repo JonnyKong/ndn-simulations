@@ -315,10 +315,14 @@ void Node::OnSyncNotify(const Interest& interest) {
     uint64_t other_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || version_vector_[node_id] < other_seq) {
       // current vv don't have the node_id
+      /*
       if (other_seq != 0) {
         updated = true;
         missing_data.push_back(node_id);
       }
+      */
+      updated = true;
+      missing_data.push_back(node_id);
       version_vector_[node_id] = other_seq;
       // update the corresponding detect_partition_timer
       scheduler_.cancelEvent(detect_partition_timer[node_id]);
@@ -476,7 +480,11 @@ void Node::OnDTTimeout() {
     in_dt = false;
     return;
   }
-
+  /*
+  if (nid_ == 9) {
+    VSYNC_LOG_TRACE( "node(9) will send interest, current position: " << get_current_pos_() );
+  }
+  */
   // choose an interest to send out. BundledInterest has highest priority, then SyncNotify
   if (pending_bundled_interest.compare(Name("/")) != 0) {
     auto n = pending_bundled_interest;

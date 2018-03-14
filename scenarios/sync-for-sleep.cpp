@@ -184,10 +184,10 @@ main (int argc, char *argv[])
 
   MobilityHelper groupB;
   Ptr<ListPositionAllocator> positionAlloc_B = CreateObject<ListPositionAllocator> ();
+  positionAlloc_B->Add (Vector (1000.0, 0.0, 0.0));
+  positionAlloc_B->Add (Vector (1100.0, 0.0, 0.0));
   positionAlloc_B->Add (Vector (1200.0, 0.0, 0.0));
   positionAlloc_B->Add (Vector (1300.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1400.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1500.0, 0.0, 0.0));
   groupB.SetPositionAllocator (positionAlloc_B);
   groupB.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
@@ -213,8 +213,8 @@ main (int argc, char *argv[])
   }
   mnode.Install (nodes.Get(9));
   Ptr<WaypointMobilityModel> wayMobility = nodes.Get(9)->GetObject<WaypointMobilityModel>();
-  Vector pos1 = Vector (550.0, 0.0, 0.0);
-  Vector pos2 = Vector (1050.0, 0.0, 0.0);
+  Vector pos1 = Vector (500.0, 0.0, 0.0);
+  Vector pos2 = Vector (900.0, 0.0, 0.0);
   int flag = 1;
   for (int time = 0; time <= 200; time += 20) {
     Vector curVec;
