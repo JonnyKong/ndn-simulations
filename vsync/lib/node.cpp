@@ -49,7 +49,7 @@ static time::seconds kSyncNotifyRetxTimer = time::seconds(3);
 
 static const bool kHeartbeat = true;
 static time::seconds kHeartbeatTimer = time::seconds(5);
-static time::seconds kDetectPartitionTimer = time::seconds(15);
+static time::seconds kDetectPartitionTimer = time::seconds(20);
 
 Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
            const NodeID& nid, const Name& prefix, Node::DataCb on_data, Node::GetCurrentPos getCurrentPos)
@@ -171,7 +171,7 @@ void Node::StartSimulation() {
   scheduler_.scheduleEvent(time::milliseconds(3000), [this] { PrintVectorClock(); });
 
   std::string content = "Hello From " + to_string(nid_);
-  scheduler_.scheduleEvent(time::milliseconds(4000 * nid_),
+  scheduler_.scheduleEvent(time::milliseconds(10 * nid_),
                            [this, content] { PublishData(content); });
 }
 
