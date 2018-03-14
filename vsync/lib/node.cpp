@@ -271,6 +271,18 @@ void Node::OnSyncNotify(const Interest& interest) {
     auto seq = ExtractSequence(data_name);
     recv_window[seq_owner].Insert(seq);
     latest_data = data_name;
+
+    if (pending_interest.find(data_name) != pending_interest.end()) {
+      pending_interest.erase(data_name);
+      if (pending_sync_notify.compare(Name("/")) == 0 && pending_interest.empty()) {
+        scheduler_.cancelEvent(inst_dt);
+        in_dt = false;
+      }
+    }
+    else if (wt_list.find(data_name) != wt_list.end()) {
+      scheduler_.cancelEvent(wt_list[data_name]);
+      wt_list.erase(data_name);
+    }
   }
 
   // 2. detect the new comer
