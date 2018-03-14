@@ -62,15 +62,15 @@ main (int argc, char *argv[])
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(10));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(10));
+  wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
+  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
 
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
   NodeContainer nodes;
-  nodes.Create (8);
+  nodes.Create (60);
   /*
   Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
   randomizer->SetAttribute ("Min", DoubleValue (0));
@@ -90,10 +90,9 @@ main (int argc, char *argv[])
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   int index = 0;
-  for (int i = 0; i <= 300; i += 50) {
+  for (int i = 0; i <= 300; i += 5) {
     positionAlloc->Add (Vector (double(i), 0.0, 0.0));
   }
-  positionAlloc->Add (Vector (340.0, 0.0, 0.0));
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");

@@ -16,11 +16,12 @@ namespace sync_for_sleep {
 static const std::string snapshotFileName = "snapshot.txt";
 class SimpleNode {
  public:
-  SimpleNode(const NodeID& nid, const Name& prefix)
+
+  SimpleNode(const NodeID& nid, const Name& prefix, Node::GetCurrentPos getCurrentPos)
       : scheduler_(face_.getIoService()),
         nid_(nid),
         node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
-              std::bind(&SimpleNode::OnData, this, _1))
+              std::bind(&SimpleNode::OnData, this, _1), getCurrentPos)
         {
         }
 

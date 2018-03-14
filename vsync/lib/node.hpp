@@ -25,6 +25,9 @@ class Node {
   using DataCb =
       std::function<void(const VersionVector& vv)>;
 
+  using GetCurrentPos =
+      std::function<double()>;
+
   enum DataType : uint32_t {
     kUserData = 0,
     kGeoData  = 1,
@@ -62,7 +65,7 @@ class Node {
    * @param on_data    Callback for notifying new data to the application
    */
   Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
-       const Name& prefix, DataCb on_data);
+       const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos);
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -107,9 +110,12 @@ class Node {
   Scheduler& scheduler_;
 
   VersionVector version_vector_;
+  VersionVector heartbeat_vector_;
+  std::unordered_map<NodeID, EventId> detect_partition_timer;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   std::unordered_map<NodeID, ReceiveWindow> recv_window;
   DataCb data_cb_;
+  GetCurrentPos get_current_pos_;
 
   std::vector<uint64_t> data_snapshots;
   std::vector<VersionVector> vv_snapshots;
@@ -122,21 +128,26 @@ class Node {
 
   std::unordered_map<Name, int> pending_interest;
   Name pending_sync_notify;
+  Name pending_bundled_interest;
   EventId inst_dt;
   std::unordered_map<Name, EventId> wt_list;
   bool in_dt;
 
+  // retx and sync timer
   EventId sync_notify_retx_scheduler;
   EventId sync_notify_beacon_scheduler;
+  EventId heartbeat_scheduler;
   int sync_notify_time;
   Name latest_data;
   
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
   void OnSyncNotify(const Interest& interest);
+  void FastExchangeMissingData(const Name& sync_notify_name);
+  void FetchMissingData(const std::vector<NodeID>& missing_data);
   void OnSyncNotifyRetxTimeout();
   void OnSyncNotifyBeaconTimeout();
-  void FetchMissingData(const std::vector<NodeID>& missing_data);
+  void OnDetectPartitionTimeout(NodeID node_id);
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnDTTimeout();
@@ -147,16 +158,17 @@ class Node {
   inline void StartSimulation();
   inline void PrintVectorClock();
   inline void PrintNDNTraffic();
+  inline void OnSyncNotifyData(const Data& data);
   inline void logDataStore(const Name& name);
 
-  // val for heartbeat feature
-  uint64_t recv_count;
-  EventId heartbeatScheduler;
-  bool is_isolated;
   inline void SendHeartbeat();
-  inline void DetectIsolation();
-  inline void OnHeartbeat(const Interest& interest);
-  inline void OnIncomingPacketNotify(const Interest& interest);
+  inline void UpdateHeartbeat();
+  // inline void OnIncomingPacketNotify(const Interest& interest);
+
+  // for fast recovery
+  inline void SendBundledDataInterest(const NodeID& recv_id, const VersionVector& other_vv);
+  inline void OnBundledDataInterest(const Interest& interest);
+  inline void OnBundledData(const Data& data);
 
   std::random_device rdevice_;
   std::mt19937 rengine_;

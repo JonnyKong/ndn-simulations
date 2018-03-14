@@ -8,6 +8,7 @@ import math
 import re
 
 data_store = {}
+node_num = 10
 
 class DataInfo:
     def __init__(self, birth):
@@ -32,7 +33,7 @@ def cdf_plot(data, name, number, c):
 
 syncDuration = []
 
-file_name = "adhoc-log/syncDuration-smallrange-0loss.txt"
+file_name = "adhoc-log/syncDuration-heartbeat.txt"
 file = open(file_name)
 for line in file:
     if line.find("microseconds") != -1:
@@ -46,14 +47,18 @@ for line in file:
             data_store[data_name].Owner += 1
             data_store[data_name].LastTime = int(time)
         data_info = data_store[data_name]
-        if data_info.Owner > 20:
+        if data_info.Owner > node_num:
             raise AssertionError()
-        elif data_info.Owner == 20:
+        elif data_info.Owner == node_num:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
-            #if cur_sync_duration >= 3:
-                #print(data_name)
-                #print(cur_sync_duration)
+            '''
+            if cur_sync_duration >= 25:
+                print(data_name)
+                print(cur_sync_duration)
+            '''
+            print(data_name)
+            print(cur_sync_duration)
             syncDuration.append(cur_sync_duration)
             #print(cur_sync_duration)
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')

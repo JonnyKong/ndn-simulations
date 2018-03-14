@@ -3,6 +3,14 @@
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
 
+#include "ns3/application.h"
+#include "ns3/ptr.h"
+#include "ns3/simulator.h"
+#include "ns3/nstime.h"
+#include "ns3/wifi-net-device.h"
+#include "ns3/wifi-module.h"
+#include "ns3/mobility-module.h"
+
 #include "sync-sleep-node.hpp"
 
 namespace ns3 {
@@ -28,12 +36,19 @@ public:
     return tid;
   }
 
+double
+GetCurrentPosition() {
+  double cur_pos = GetNode()->GetObject<MobilityModel>()->GetPosition().x;
+  //std::cout << "App " << m_appId << " on Node " << GetNode()->GetId() << " connected to " << dest << std::endl;
+  return cur_pos;
+}
+
 protected:
   // inherited from Application base class.
   virtual void
   StartApplication()
   {
-    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_));
+    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_, std::bind(&SyncForSleepApp::GetCurrentPosition, this)));
     m_instance->Start();
   }
 
