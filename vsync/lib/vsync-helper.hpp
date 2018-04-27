@@ -88,52 +88,45 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 // TBD 
 // actually, the [state-vector] is no needed to be carried because the carried data contains the vv.
 // but lixia said we maybe should remove the vv from data.
-inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::string encoded_hv, const Block& data_block) {
-  // name = /[syncNotify_prefix]/[nid]/[state-vector]/[heartbeat-vector]/[data]
+inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::string encoded_hv) {
+  // name = /[syncNotify_prefix]/[nid]/[state-vector]/[heartbeat-vector]
   Name n(kSyncNotifyPrefix);
-  n.appendNumber(nid).append(encoded_vv).append(encoded_hv).append(data_block);
+  n.appendNumber(nid).append(encoded_vv).append(encoded_hv);
   return n;
 }
 
 inline Name MakeDataName(const NodeID& nid, uint64_t seq) {
   // name = /[vsyncData_prefix]/[node_id]/[seq]/%0
   Name n(kSyncDataPrefix);
-  n.appendNumber(nid).appendNumber(seq).appendNumber(0).appendNumber(0);
+  n.appendNumber(nid).appendNumber(seq).appendNumber(0);
   return n;
 }
 
 inline Name MakeBundledDataName(const NodeID& nid, std::string missing_data_vector) {
   // name = /[bundledData_prefix]/[node_id]/[missing_data_vector]/%0
   Name n(kBundledDataPrefix);
-  n.appendNumber(nid).append(missing_data_vector).appendNumber(0).appendNumber(0);
-  return n;
-}
-
-inline Name MakeHeartbeatName(const NodeID nid) {
-  // name = /[heartbeat_prefix]/[node_id]/%0/%0
-  Name n(kHeartbeatPrefix);
-  n.appendNumber(nid).appendNumber(0).appendNumber(0).appendNumber(0);
+  n.appendNumber(nid).append(missing_data_vector).appendNumber(0);
   return n;
 }
 
 inline uint64_t ExtractNodeID(const Name& n) {
-  return n.get(-4).toNumber();
-}
-
-inline std::string ExtractEncodedVV(const Name& n) {
-  return n.get(-3).toUri();
-}
-
-inline std::string ExtractEncodedMV(const Name& n) {
-  return n.get(-3).toUri();
-}
-
-inline uint64_t ExtractSequence(const Name& n) {
   return n.get(-3).toNumber();
 }
 
-inline std::string ExtractEncodedHV(const Name& n) {
+inline std::string ExtractEncodedVV(const Name& n) {
   return n.get(-2).toUri();
+}
+
+inline std::string ExtractEncodedMV(const Name& n) {
+  return n.get(-2).toUri();
+}
+
+inline uint64_t ExtractSequence(const Name& n) {
+  return n.get(-2).toNumber();
+}
+
+inline std::string ExtractEncodedHV(const Name& n) {
+  return n.get(-1).toUri();
 }
 
 }  // namespace vsync

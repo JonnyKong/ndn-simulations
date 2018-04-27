@@ -92,6 +92,16 @@ class ReceiveWindow {
       return win.begin()->upper();
   }
 
+  uint64_t LastRecvData() const {
+    if (win.empty())
+      return 0;
+    else {
+      auto it = win.end();
+      it--;
+      return it->upper();
+    }
+  }
+
   bool HasData(uint64_t seq) {
     auto it = win.begin();
     while (it != win.end()) {

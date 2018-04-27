@@ -52,6 +52,11 @@ class Node {
     std::string what_;
   };
 
+  struct HistoryInfo {
+    std::vector<int> update_node_count;
+    int cur_update_node_count = 0;
+  };
+
   /**
    * @brief 
    *
@@ -65,7 +70,8 @@ class Node {
    * @param on_data    Callback for notifying new data to the application
    */
   Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
-       const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos);
+       const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos,
+       bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer);
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -125,10 +131,12 @@ class Node {
   uint64_t suppression_num;
   uint64_t out_interest_num;
   int data_num;
+  bool generate_data;
 
   std::unordered_map<Name, int> pending_interest;
   Name pending_sync_notify;
-  Name pending_bundled_interest;
+  // Name pending_bundled_interest;
+  std::unordered_map<Name, int> pending_bundled_interest;
   EventId inst_dt;
   std::unordered_map<Name, EventId> wt_list;
   bool in_dt;
@@ -137,14 +145,23 @@ class Node {
   EventId sync_notify_retx_scheduler;
   EventId sync_notify_beacon_scheduler;
   EventId heartbeat_scheduler;
+  EventId adjust_heartbeat_scheduler;
+  HistoryInfo history_info;
   int sync_notify_time;
   Name latest_data;
+
+  // heartbeat
+  bool kHeartbeat;
+  time::seconds kHeartbeatTimer;
+  time::seconds kDetectPartitionTimer;
+  // fast resync
+  bool kFastResync;
   
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
   void OnSyncNotify(const Interest& interest);
   void FastExchangeMissingData(const Name& sync_notify_name);
-  void FetchMissingData(const std::vector<NodeID>& missing_data);
+  void FetchMissingData();
   void OnSyncNotifyRetxTimeout();
   void OnSyncNotifyBeaconTimeout();
   void OnDetectPartitionTimeout(NodeID node_id);
@@ -160,18 +177,24 @@ class Node {
   inline void PrintNDNTraffic();
   inline void OnSyncNotifyData(const Data& data);
   inline void logDataStore(const Name& name);
+  inline void AdjustHeartbeatTimer();
 
   inline void SendHeartbeat();
   inline void UpdateHeartbeat();
   // inline void OnIncomingPacketNotify(const Interest& interest);
 
   // for fast recovery
-  inline void SendBundledDataInterest(const NodeID& recv_id, const VersionVector& other_vv);
+  inline void SendBundledDataInterest(const NodeID& recv_id, VersionVector mv);
   inline void OnBundledDataInterest(const Interest& interest);
   inline void OnBundledData(const Data& data);
 
   std::random_device rdevice_;
   std::mt19937 rengine_;
+
+  // detect the average time to meet a new node
+  int count = 0;
+  int64_t last;
+  double total_time = 0;
 };
 
 }  // namespace vsync

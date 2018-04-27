@@ -30,7 +30,16 @@ public:
       .AddAttribute("NodeID", "NodeID for sync node", UintegerValue(0),
                     MakeUintegerAccessor(&SyncForSleepApp::nid_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
-                    MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker());
+                    MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker())
+      .AddAttribute("UseHeartbeat", "if use heartbeat", BooleanValue(true),
+                    MakeBooleanAccessor(&SyncForSleepApp::useHeartbeat_), MakeBooleanChecker())
+      .AddAttribute("UseFastResync", "if use fast resync", BooleanValue(true),
+                    MakeBooleanAccessor(&SyncForSleepApp::useFastResync_), MakeBooleanChecker())
+      .AddAttribute("HeartbeatTimer", "HeartbeatTimer", UintegerValue(5),
+                    MakeUintegerAccessor(&SyncForSleepApp::heartbeatTimer_), MakeUintegerChecker<uint64_t>())
+      .AddAttribute("DetectPartitionTimer", "DetectPartitionTimer", UintegerValue(20),
+                    MakeUintegerAccessor(&SyncForSleepApp::detectPartitionTimer_), MakeUintegerChecker<uint64_t>());
+
       
 
     return tid;
@@ -48,7 +57,8 @@ protected:
   virtual void
   StartApplication()
   {
-    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_, std::bind(&SyncForSleepApp::GetCurrentPosition, this)));
+    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_, std::bind(&SyncForSleepApp::GetCurrentPosition, this),
+      useHeartbeat_, useFastResync_, heartbeatTimer_, detectPartitionTimer_));
     m_instance->Start();
   }
 
@@ -63,6 +73,10 @@ private:
   std::unique_ptr<vsync::sync_for_sleep::SimpleNode> m_instance;
   vsync::NodeID nid_;
   Name prefix_;
+  bool useHeartbeat_;
+  bool useFastResync_;
+  uint64_t heartbeatTimer_;
+  uint64_t detectPartitionTimer_;
 };
 
 } // namespace ndn

@@ -6,9 +6,10 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import math
 import re
+import sys
 
 data_store = {}
-node_num = 10
+node_num = 40
 
 class DataInfo:
     def __init__(self, birth):
@@ -31,9 +32,13 @@ def cdf_plot(data, name, number, c):
   #plt.xlim(0, 5)
   plt.show()
 
+# out_file_name = sys.argv[1]
 syncDuration = []
+out_interest = []
+out_data = []
 
-file_name = "adhoc-log/syncDuration-heartbeat.txt"
+file_name = sys.argv[1]
+# file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
 for line in file:
     if line.find("microseconds") != -1:
@@ -57,20 +62,62 @@ for line in file:
                 print(data_name)
                 print(cur_sync_duration)
             '''
-            print(data_name)
-            print(cur_sync_duration)
             syncDuration.append(cur_sync_duration)
-            #print(cur_sync_duration)
+    if line.find("NFD:") != -1:
+      if line.find("m_outInterest") != -1:
+        elements = line.split(' ')
+        cur_out_interest = elements[4][:-1]
+        out_interest.append(float(cur_out_interest))
+      elif line.find("m_outData") != -1:
+        elements = line.split(' ')
+        cur_out_data = elements[4][:-1]
+        out_data.append(float(cur_out_data))
+
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
+# print the unsynced data
+'''
+print("The un-synced data:")
+for data_name in data_store:
+    if data_store[data_name].Owner != node_num:
+        print(data_name)
+'''
+'''
+with open(out_file_name, 'w') as outFile:
+  outFile.write(str(syncDuration) + "\n")
+  outFile.write("result for " + file_name + "\n")
+  outFile.write("the number of synced data: " + str(len(syncDuration)) + "\n")
+  outFile.write("percentage of complete sync: " + str(float(len(syncDuration)) / float(len(data_store))) + "\n")
+  syncDuration = np.array(syncDuration)
+  outFile.write("mean: " + str(np.mean(syncDuration)) + "\n")
+  outFile.write("min: " + str(np.min(syncDuration)) + "\n")
+  outFile.write("max: " + str(np.max(syncDuration)) + "\n")
+  outFile.write("std: " + str(np.std(syncDuration)) + "\n")
+'''
+
+#print(data_store)
+'''
+print(str(syncDuration))
 print("result for " + file_name)
+print("the number of synced data: " + str(len(syncDuration)))
 print("percentage of complete sync: " + str(float(len(syncDuration)) / float(len(data_store))))
 syncDuration = np.array(syncDuration)
 print("mean: " + str(np.mean(syncDuration)))
 print("min: " + str(np.min(syncDuration)))
 print("max: " + str(np.max(syncDuration)))
 print("std: " + str(np.std(syncDuration)))
+print("average outInterest: " + str(np.mean(np.array(out_interest))))
+print("std outInterest: " + str(np.std(np.array(out_interest))))
+print("average outData: " + str(np.mean(np.array(out_data))))
+print("std outData: " + str(np.std(np.array(out_data))))
+'''
 
-
-
+print(str(float(len(syncDuration)) / float(len(data_store))))
+syncDuration = np.array(syncDuration)
+print(str(np.mean(syncDuration)))
+print(str(np.std(syncDuration)))
+print(str(np.mean(np.array(out_interest))))
+print(str(np.std(np.array(out_interest))))
+print(str(np.mean(np.array(out_data))))
+print(str(np.std(np.array(out_data))))
 

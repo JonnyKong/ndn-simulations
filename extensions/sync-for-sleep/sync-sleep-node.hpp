@@ -17,11 +17,13 @@ static const std::string snapshotFileName = "snapshot.txt";
 class SimpleNode {
  public:
 
-  SimpleNode(const NodeID& nid, const Name& prefix, Node::GetCurrentPos getCurrentPos)
+  SimpleNode(const NodeID& nid, const Name& prefix, Node::GetCurrentPos getCurrentPos,
+    bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer)
       : scheduler_(face_.getIoService()),
         nid_(nid),
         node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
-              std::bind(&SimpleNode::OnData, this, _1), getCurrentPos)
+              std::bind(&SimpleNode::OnData, this, _1), getCurrentPos,
+              useHeartbeat, useFastResync, heartbeatTimer, detectPartitionTimer)
         {
         }
 

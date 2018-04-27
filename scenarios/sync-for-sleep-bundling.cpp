@@ -19,7 +19,7 @@ using ns3::ndn::StrategyChoiceHelper;
 using ns3::ndn::L3RateTracer;
 using ns3::ndn::FibHelper;
 
-NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
+// NS_LOG_COMPONENT_DEFINE ("ndn.SyncForSleep");
 
 uint32_t MacTxDropCount, PhyTxDropCount, PhyRxDropCount, PhyRxBeginCount, PhyRxEndCount;
 
@@ -113,62 +113,6 @@ main (int argc, char *argv[])
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
-  // constant mobility
-  /*
-  Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
-  randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (800));
-
-  Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
-  randomizerZ->SetAttribute ("Min", DoubleValue (0));
-  randomizerZ->SetAttribute ("Max", DoubleValue (0));
-
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
-                                 "X", PointerValue (randomizer),
-                                 "Y", PointerValue (randomizer),
-                                 "Z", PointerValue (randomizerZ));
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  */
-
-  /*
-  // RandomWalk
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
-                                 "X", StringValue ("400.0"),
-                                 "Y", StringValue ("400.0"),
-                                 "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=400]"));
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (755.119, 560.052, 0.0));
-  positionAlloc->Add (Vector (668.265, 73.9326, 0.0));
-  positionAlloc->Add (Vector (61.8934, 325.192, 0.0));
-  positionAlloc->Add (Vector (666.997, 754.103, 0.0));
-  positionAlloc->Add (Vector (0.0876296, 244.216, 0.0));
-  positionAlloc->Add (Vector (429.497, 320.051, 0.0));
-  positionAlloc->Add (Vector (72.8159, 518.424, 0.0));
-  positionAlloc->Add (Vector (168.832, 549.124, 0.0));
-  positionAlloc->Add (Vector (756.332, 155.184, 0.0));
-  positionAlloc->Add (Vector (751.312, 468.99, 0.0));
-  positionAlloc->Add (Vector (672.91, 227.392, 0.0));
-  positionAlloc->Add (Vector (640.308, 13.9314, 0.0));
-  positionAlloc->Add (Vector (599.082, 726.259, 0.0));
-  positionAlloc->Add (Vector (404.931, 533.498, 0.0));
-  positionAlloc->Add (Vector (796.813, 152.158, 0.0));
-  positionAlloc->Add (Vector (161.655, 171.424, 0.0));
-  positionAlloc->Add (Vector (319.112, 233.189, 0.0));
-  positionAlloc->Add (Vector (93.6488, 709.356, 0.0));
-  positionAlloc->Add (Vector (113.604, 315.399, 0.0));
-  positionAlloc->Add (Vector (759.217, 660.893, 0.0));
-  mobility.SetPositionAllocator (positionAlloc);
-
-  mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                             "Mode", StringValue ("Time"),
-                             "Time", StringValue ("60s"),
-                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),
-                             "Bounds", StringValue ("0|800|0|800"));
-  */
-
   // new mpbility model
   // node 0, 1, 2, 3, 4 static, in one partition group A. node 5, 6, 7, 8 in group B. node 9 is moving between group A and group B
   MobilityHelper groupA;
@@ -187,6 +131,7 @@ main (int argc, char *argv[])
   positionAlloc_B->Add (Vector (1100.0, 0.0, 0.0));
   positionAlloc_B->Add (Vector (1200.0, 0.0, 0.0));
   positionAlloc_B->Add (Vector (1300.0, 0.0, 0.0));
+  positionAlloc_B->Add (Vector (1400.0, 0.0, 0.0));
   groupB.SetPositionAllocator (positionAlloc_B);
   groupB.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 
@@ -196,7 +141,7 @@ main (int argc, char *argv[])
   // mobility.InstallAll ();
 
   NodeContainer nodes;
-  nodes.Create (10);
+  nodes.Create (11);
 
   ////////////////
   // 1. Install Wifi

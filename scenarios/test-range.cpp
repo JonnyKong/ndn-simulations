@@ -42,8 +42,13 @@ main (int argc, char *argv[])
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
 
+  /*
+  bool test = false;
   CommandLine cmd;
+  cmd.AddValue("test", "test", test);
   cmd.Parse (argc,argv);
+  std::cout << test << std::endl;
+  */
 
   //////////////////////
   //////////////////////
@@ -56,14 +61,16 @@ main (int argc, char *argv[])
 
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
+  // wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
   // wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+  wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel",
+                                  "MaxRange", DoubleValue(50));
 
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
+  // wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
+  // wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
 
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
@@ -71,22 +78,13 @@ main (int argc, char *argv[])
 
   NodeContainer nodes;
   nodes.Create (60);
-  /*
-  Ptr<UniformRandomVariable> randomizer = CreateObject<UniformRandomVariable> ();
-  randomizer->SetAttribute ("Min", DoubleValue (0));
-  randomizer->SetAttribute ("Max", DoubleValue (50));
 
-  Ptr<UniformRandomVariable> randomizerZ = CreateObject<UniformRandomVariable> ();
-  randomizerZ->SetAttribute ("Min", DoubleValue (0));
-  randomizerZ->SetAttribute ("Max", DoubleValue (0));
 
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator ("ns3::RandomBoxPositionAllocator",
-                                 "X", PointerValue (randomizer),
-                                 "Y", PointerValue (randomizer),
-                                 "Z", PointerValue (randomizerZ));
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  */
+  ////////////////
+  // 1. Install Wifi
+  NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
+
+  // 2. Install Mobility model
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   int index = 0;
@@ -96,13 +94,17 @@ main (int argc, char *argv[])
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-
-  ////////////////
-  // 1. Install Wifi
-  NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
-
-  // 2. Install Mobility model
   mobility.Install (nodes);
+
+  AsciiTraceHelper ascii;
+  MobilityHelper::EnableAsciiAll (ascii.CreateFileStream ("mobility-test.mob"));
+  /*
+  std::cout << "start to feed the trace file" << std::endl;
+  auto traceFile = "mobility-test.mob";
+  Ns2MobilityHelper ns2 = Ns2MobilityHelper (traceFile);
+  ns2.Install ();
+  std::cout << "finishing feeding the trace file" << std::endl;
+  */
 
   // 3. Install NDN stack
   NS_LOG_INFO ("Installing NDN stack");
@@ -119,9 +121,11 @@ main (int argc, char *argv[])
   // initialize the total vector clock
 
   // install SyncApp
+  std::cout << "start to install app" << std::endl;
   uint64_t idx = 0;
   for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
     Ptr<Node> object = *i;
+
     Ptr<MobilityModel> position = object->GetObject<MobilityModel>();
     Vector pos = position->GetPosition();
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << " " << pos.z << std::endl;

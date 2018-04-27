@@ -32,7 +32,8 @@ message Content {
 message PackData {
   message Entry {
     string name = 1;
-    string content = 2;
+    bytes content = 2;
   }
   repeated Entry entry = 1;
+  VV nextvv = 2;
 }
