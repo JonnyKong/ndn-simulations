@@ -135,6 +135,9 @@ class Node {
 
   std::unordered_map<Name, int> pending_interest;
   Name pending_sync_notify;
+  Name waiting_sync_notify;
+  int notify_time;
+  EventId wt_notify;
   // Name pending_bundled_interest;
   std::unordered_map<Name, int> pending_bundled_interest;
   EventId inst_dt;
@@ -142,12 +145,9 @@ class Node {
   bool in_dt;
 
   // retx and sync timer
-  EventId sync_notify_retx_scheduler;
-  EventId sync_notify_beacon_scheduler;
   EventId heartbeat_scheduler;
   EventId adjust_heartbeat_scheduler;
   HistoryInfo history_info;
-  int sync_notify_time;
   Name latest_data;
 
   // heartbeat
@@ -170,6 +170,7 @@ class Node {
   void OnDTTimeout();
   void OnWTTimeout(const Name& name, int cur_transmission_time);
   void OnRemoteData(const Data& data);
+  void onNotifyACK(const Data& ack);
 
   // helper functions
   inline void StartSimulation();

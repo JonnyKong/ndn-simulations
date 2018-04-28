@@ -75,9 +75,9 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   out_interest_num = 0;
   in_dt = false;
   data_num = 0;
-  sync_notify_time = 0;
   latest_data = Name("/");
   pending_sync_notify = Name("/");
+  notify_time = 0;
   // pending_bundled_interest = Name("/");
   // initialize the version_vector_ and heartbeat_vector_
   version_vector_[nid_] = 0;
@@ -177,18 +177,6 @@ void Node::PrintNDNTraffic() {
                         [](const Interest&) {});
 }
 
-void Node::OnSyncNotifyRetxTimeout() {
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") SyncNotifyRetxTimeout" );
-  sync_notify_time++;
-  SendSyncNotify();
-}
-
-void Node::OnSyncNotifyBeaconTimeout() {
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") SyncNotifyBeaconTimeout" );
-  SendSyncNotify();
-  sync_notify_beacon_scheduler = scheduler_.scheduleEvent(kSyncNotifyBeaconTimer, [this] { OnSyncNotifyBeaconTimeout(); });
-}
-
 void Node::OnDetectPartitionTimeout(NodeID node_id) {
   VSYNC_LOG_TRACE( "node(" << nid_ << ") DetectPartitionTimeout for node(" << node_id << ")" );
   // erase the node_id from history infoemation
@@ -199,9 +187,6 @@ void Node::OnDetectPartitionTimeout(NodeID node_id) {
 void Node::StartSimulation() {
   // scheduler_.scheduleEvent(time::milliseconds(3000), [this] { PrintVectorClock(); });
   // scheduler_.scheduleEvent(kDetectIsolationTimer, [this] { DetectIsolation(); });
-  if (kSyncNotifyBeacon == true) {
-    sync_notify_beacon_scheduler = scheduler_.scheduleEvent(kSyncNotifyBeaconTimer, [this] { OnSyncNotifyBeaconTimeout(); });
-  }
   if (kHeartbeat == true) {
     scheduler_.scheduleEvent(kHeartbeatTimer, [this] { UpdateHeartbeat(); });
     heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
@@ -284,12 +269,6 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   if (data_num >= 1) {
     data_num = 0;
     SendSyncNotify();
-
-    if (kSyncNotifyRetx == true) {
-      // when we update the vv, we need to send out the latest state vector for three times
-      sync_notify_time = 0;
-      scheduler_.cancelEvent(sync_notify_retx_scheduler);
-    }
   }
 }
 
@@ -306,6 +285,8 @@ void Node::SendSyncNotify() {
   auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, encoded_hv);
 
   pending_sync_notify = sync_notify_interest_name;
+  notify_time = kSyncNotifyMax;
+
   // pending_interest[sync_notify_interest_name] = 1;
   if (in_dt == false) {
     in_dt = true;
@@ -322,6 +303,11 @@ void Node::SendSyncNotify() {
 void Node::OnSyncNotify(const Interest& interest) {
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest" );
   const auto& n = interest.getName();
+
+  // send back ack
+  std::shared_ptr<Data> ack = std::make_shared<Data>(n);
+  key_chain_.sign(*ack, signingWithSha256());
+  face_.put(*ack);
 
   // extract node_id
   NodeID node_id = ExtractNodeID(n);
@@ -452,12 +438,6 @@ void Node::OnSyncNotify(const Interest& interest) {
     // send out the notify, add it into the pending_interest list. There is no retransmission for notify
     // the state vector in the notify should be the merged one
     SendSyncNotify();
-  }
-
-  if (kSyncNotifyRetx == true) {
-    // when we update the vv, we need to send out the latest state vector for three times
-    sync_notify_time = 0;
-    scheduler_.cancelEvent(sync_notify_retx_scheduler);
   }
 
   // 5. fetch missing data
@@ -636,6 +616,8 @@ void Node::OnDTTimeout() {
     in_dt = false;
     return;
   }
+  // erase invalid notify_interest
+  if (notify_time == 0) pending_sync_notify = Name("/");
   /*
   if (nid_ == 9) {
     VSYNC_LOG_TRACE( "node(9) will send interest, current position: " << get_current_pos_() );
@@ -662,22 +644,14 @@ void Node::OnDTTimeout() {
 
     Interest i(n, kSendOutInterestLifetime);
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Interest: i.name=" << n.getPrefix(5).toUri());
-    face_.expressInterest(i, [](const Interest&, const Data&) {},
+    face_.expressInterest(i, std::bind(&Node::onNotifyACK, this, _2),
                           [](const Interest&, const lp::Nack&) {},
                           [](const Interest&) {});
 
-    if (kSyncNotifyRetx == true) {
-      if (sync_notify_time == kSyncNotifyMax) {
-        sync_notify_time = 0;
-      }
-      else {
-        sync_notify_retx_scheduler = scheduler_.scheduleEvent(kSyncNotifyRetxTimer, [this] { OnSyncNotifyRetxTimeout(); });
-      }
-    }
-    if (kSyncNotifyBeacon == true) {
-      scheduler_.cancelEvent(sync_notify_beacon_scheduler);
-      sync_notify_beacon_scheduler = scheduler_.scheduleEvent(kSyncNotifyBeaconTimer, [this] { OnSyncNotifyBeaconTimeout(); });
-    }
+    waiting_sync_notify = n;
+    scheduler_.cancelEvent(wt_notify);
+    wt_notify = scheduler_.scheduleEvent(kInterestWT, [this, n] { OnWTTimeout(n, notify_time - 1); });
+
     if (kHeartbeat == true) {
       scheduler_.cancelEvent(heartbeat_scheduler);
       heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
@@ -714,15 +688,27 @@ void Node::OnDTTimeout() {
 }
 
 void Node::OnWTTimeout(const Name& name, int cur_transmission_time) {
-  wt_list.erase(name);
-  // may have been cached by fast recover
-  if (data_store_.find(name) != data_store_.end()) return;
-  // An interest cannot exist in WT and DT at the same time
-  assert(pending_interest.find(name) == pending_interest.end() && pending_bundled_interest.find(name) == pending_bundled_interest.end());
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") WT time out for: " << name.toUri());
   if (name.compare(0, 2, kBundledDataPrefix) == 0) {
+    wt_list.erase(name);
+    // An interest cannot exist in WT and DT at the same time 
+    assert(pending_bundled_interest.find(name) == pending_bundled_interest.end());
     pending_bundled_interest[name] = cur_transmission_time;
   }
-  else pending_interest[name] = cur_transmission_time;
+  else if (name.compare(0, 2, kSyncNotifyPrefix) == 0) {
+    if (pending_sync_notify.compare(Name("/")) == 0) {
+      pending_sync_notify = name;
+      notify_time = cur_transmission_time;
+    }
+  }
+  else {
+    wt_list.erase(name);
+    // may have been cached by fast recover
+    if (data_store_.find(name) != data_store_.end()) return;
+    // An interest cannot exist in WT and DT at the same time
+    assert(pending_interest.find(name) == pending_interest.end());
+    pending_interest[name] = cur_transmission_time;
+  }
   if (in_dt == false) {
     in_dt = true;
     SendDataInterest();
@@ -872,6 +858,17 @@ void Node::OnBundledData(const Data& data) {
   auto next_vv = DecodeVV(pack_data_proto.nextvv());
   SendBundledDataInterest(recv_nid, next_vv);
 }
+
+void Node::onNotifyACK(const Data& ack) {
+  const auto& n = ack.getName();
+  if (n.compare(waiting_sync_notify) == 0) {
+    scheduler_.cancelEvent(wt_notify);
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV NotifyACK: " << ack.getName().toUri());
+  }
+  else {
+    // don't process it
+  }
+} 
 
 void Node::logDataStore(const Name& name) {
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
