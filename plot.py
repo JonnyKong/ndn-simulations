@@ -9,9 +9,15 @@ import math
 pause = [0, 30, 60, 120, 300, 600, 900]
 color = ['red', 'orange', 'yellow', 'springgreen', 'cyan', 'blue', 'mediumpurple', 'pink']
 loss = [0.0, 0.01, 0.05, 0.1, 0.3, 0.5]
-wifi_range = [250, 200, 150, 100, 80, 60, 40, 20]
+wifi_range = [20, 40, 60, 80, 100, 150, 200, 250]
 heartbeat = [3, 5, 10, 15, 20, 25, 30, 40]
-log_line = 12
+log_line = 15
+
+def rotate(list):
+  result = []
+  for i in range(len(list)):
+    result.append(list[(-1) * (i + 1)])
+  return result
 
 def cdf_plot(data, label, number, c):
   """
@@ -27,42 +33,60 @@ def cdf_plot(data, label, number, c):
   plt.scatter(x, y, alpha=0.5, label=label, color=c, s=8)
   #plt.xlim(0, 5)
 
-def get_cdf_range():
-  file_name = "adhoc-result/syncDuration-range-onetime.txt"
-  file = open(file_name)
+def get_cdf(filename, list, type):
+  file = open(filename)
   idx = 0
-  data_availability_list = []
+  data_availability = []
   delay = []
-  std = []
-  out_interest = []
-  std_out_interest = []
+  out_notify_interest = []
+  out_data_interest = []
+  out_bundled_interest = []
   out_data = []
-  std_out_data = []
+  out_bundled_data = []
+  collision = []
+  cache_hit = []
+  retx_notify_interest = []
+  retx_data_interest = []
+  retx_bundled_interest = []
+  cur_collision = 0
   for line in file:
     if idx % log_line == 0:
+      data_availability.append(float(line.split(" ")[-1]))
+    if idx % log_line == 1:
       sync_delay = np.array(map(float, line[1:-2].split(",")))
-      cdf_plot(sync_delay, "wifi range = " + str(wifi_range[idx / log_line]), 1000, color[idx / log_line])
-    elif idx % log_line == 3:
-      data_availability_list.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 4:
+      cdf_plot(sync_delay, type + " = " + str(list[idx / log_line]), 1000, color[idx / log_line])
+    elif idx % log_line == 2:
       delay.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 7:
-      std.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 8:
-      out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 9:
-      std_out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 10:
+    elif idx % log_line == 3:
+      out_notify_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 4:
+      out_data_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 5:
+      out_bundled_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 6:
       out_data.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 7:
+      out_bundled_data.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 8:
+      cur_collision += float(line.split(" ")[-1])
+    elif idx % log_line == 9:
+      cur_collision += float(line.split(" ")[-1])
+      collision.append(cur_collision)
+      cur_collision = 0
     elif idx % log_line == 11:
-      std_out_data.append(float(line.split(" ")[-1]))
+      cache_hit.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 12:
+      retx_notify_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 13:
+      retx_data_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 14:
+      retx_bundled_interest.append(float(line.split(" ")[-1]))
     idx += 1
-  plt.title("CDF of sync delay of different wifi ranges")
-  plt.ylim(0)
-  plt.xlim(-50)
+  print(data_availability)
+  plt.title("CDF of Sync Delay of Different " + type)
   plt.legend(bbox_to_anchor=(0.60, 0.55), loc=2, borderaxespad=0.)
   plt.show()
-
+  '''
   xticks = ['250', '200', '150', '100', '80', '60', '40', '20']
   plt.bar(np.arange(len(wifi_range)) + 1, data_availability_list, width=0.35, align="center", color="c", alpha=0.8)
   plt.xticks(np.arange(len(wifi_range)) + 1, xticks, size="small")
@@ -71,90 +95,49 @@ def get_cdf_range():
   plt.ylabel("Data Availability")
   plt.title("Data Availability - Wifi Range")
   plt.show()
-
-  plt.errorbar(wifi_range, delay, std, linestyle='None', marker='^')
-  plt.plot(wifi_range, delay, alpha=0.5, color='b')
-  plt.xlabel("Wifi Range")
+  '''
+  plt.plot(list, delay, alpha=0.5, color='royalblue', linewidth=2.0)
+  plt.xlabel(type)
   plt.ylabel("Sync Delay")
-  plt.title("Sync Delay - Wifi Range")
-  plt.xlim(15, 255)
+  plt.title("Sync Delay - " + type)
   plt.show()
 
-  plt.errorbar(wifi_range, out_interest, std_out_interest, linestyle='None', marker='^', color='b')
-  plt.plot(wifi_range, out_interest, alpha=0.5, color='b', label="#(outInterest)")
-  plt.errorbar(wifi_range, out_data, std_out_data, linestyle='None', marker='^', color='r')
-  plt.plot(wifi_range, out_data, alpha=0.5, color='r', label="#(outData)")
-  plt.xlabel("Wifi Range")
-  plt.ylabel("Packet Number")
-  plt.xlim(15, 255)
-  plt.title("Packet Number - Wifi Range")
+  plt.plot(list, out_data_interest, alpha=0.5, color='orange', label="#(Out Data Interest)", linewidth=2.0)
+  plt.plot(list, out_data, alpha=0.5, color='royalblue', label="#(Out Data)", linewidth=2.0)
+  plt.plot(list, retx_data_interest, '--', alpha=0.5, color='orange', label="#(Retx Data Interest)", linewidth=2.0)
+  plt.xlabel(type)
+  plt.ylabel("Out Data/Data-Interest")
+  plt.title("Out Data/Data-Interest - " + type)
+  plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
+  plt.show() 
+
+  plt.plot(list, out_notify_interest, alpha=0.5, color='red', linewidth=2.0)
+  plt.plot(list, retx_notify_interest, '--', alpha=0.5, color='red', linewidth=2.0)
+  plt.xlabel(type)
+  plt.ylabel("Out Notify-Interest")
+  plt.title("Out Notify-Interest - " + type)
+  plt.show()
+
+  plt.plot(list, out_bundled_interest, alpha=0.5, color='orange', label="#(Out Bundled Interest)", linewidth=2.0)
+  plt.plot(list, out_bundled_data, alpha=0.5, color='royalblue', label="#(Out Bundled Data)", linewidth=2.0)
+  plt.xlabel(type)
+  plt.ylabel("Out Bundled Interest/Data")
+  plt.title("Out Bundled Interest/Data - " + type)
   plt.legend(bbox_to_anchor=(0.60, 0.55), loc=2, borderaxespad=0.)
+  plt.show()
+
+  plt.plot(list, cache_hit, alpha=0.5, color='red', linewidth=2.0)
+  plt.xlabel(type)
+  plt.ylabel("Number of Local Cache Hit for Data Interest")
+  plt.title("Number of Local Cache Hit for Data Interest - " + type)
+  plt.show()
+
+  plt.plot(list, collision, alpha=0.5, color='royalblue', linewidth=2.0)
+  plt.xlabel(type)
+  plt.ylabel("Collision")
+  plt.title("Collision - " + type)
   plt.show()  
 
-
-def get_cdf_loss():
-  file_name = "adhoc-result/syncDuration-loss-onetime.txt"
-  file = open(file_name)
-  idx = 0
-  data_availability_list = []
-  delay = []
-  std = []
-  out_interest = []
-  std_out_interest = []
-  out_data = []
-  std_out_data = []
-  for line in file:
-    if idx % log_line == 0:
-      sync_delay = np.array(map(float, line[1:-2].split(",")))
-      cdf_plot(sync_delay, "loss rate = " + str(loss[idx / log_line]), 1000, color[idx / log_line])
-    elif idx % log_line == 3:
-      data_availability_list.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 4:
-      delay.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 7:
-      std.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 8:
-      out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 9:
-      std_out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 10:
-      out_data.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 11:
-      std_out_data.append(float(line.split(" ")[-1]))
-    idx += 1
-  plt.title("CDF of sync delay of different loss rate")
-  plt.ylim(0)
-  plt.xlim(-50)
-  plt.legend(bbox_to_anchor=(0.55, 0.45), loc=2, borderaxespad=0.)
-  plt.show()
-
-  xticks = ['0.0', '0.01', '0.05', '0.1', '0.3', '0.5']
-  plt.bar(np.arange(len(loss)) + 1, data_availability_list, width=0.35, align="center", color="c", alpha=0.8)
-  plt.xticks(np.arange(len(loss)) + 1, xticks, size="small")
-  plt.ylim(0.0, 1.2)
-  plt.xlabel("Loss Rate")
-  plt.ylabel("Data Availability")
-  plt.title("Data Availability - Loss Rate")
-  plt.show()
-
-  #plt.errorbar(loss, delay, std, linestyle='None', marker='^')
-  plt.plot(loss, delay, alpha=0.5, color='b')
-  plt.xlabel("Loss Rate")
-  plt.ylabel("Sync Delay")
-  plt.title("Sync Delay - Loss Rate")
-  plt.xlim(-0.1, 0.6)
-  plt.show()
-
-  plt.errorbar(loss, out_interest, std_out_interest, linestyle='None', marker='^', color='b')
-  plt.plot(loss, out_interest, alpha=0.5, color='b', label="#(outInterest)")
-  plt.errorbar(loss, out_data, std_out_data, linestyle='None', marker='^', color='r')
-  plt.plot(loss, out_data, alpha=0.5, color='r', label="#(outData)")
-  plt.xlabel("Loss Rate")
-  plt.ylabel("Packet Number")
-  plt.xlim(-0.1, 0.6)
-  plt.title("Packet Number - Loss Rate")
-  plt.legend(bbox_to_anchor=(0.2, 0.8), loc=2, borderaxespad=0.)
-  plt.show()  
 
 def get_cdf_fast_resync():
   file_name = "adhoc-result/syncDuration-fastresync.txt"
@@ -206,59 +189,6 @@ def get_cdf_fast_resync():
   plt.xticks(np.arange(2) + 1, xticks, size="small")
   plt.ylabel("Packet Number")
   plt.show()
-
-
-def get_cdf_pause():
-  file_name = "adhoc-result/syncDuration-pause-onetime.txt"
-  file = open(file_name)
-  idx = 0
-  data_availability_list = []
-  delay = []
-  std = []
-  out_interest = []
-  std_out_interest = []
-  out_data = []
-  std_out_data = []
-  for line in file:
-    if idx % log_line == 0:
-      sync_delay = np.array(map(float, line[1:-2].split(",")))
-      cdf_plot(sync_delay, "pause time = " + str(pause[idx / log_line]), 1000, color[idx / log_line])
-    elif idx % log_line == 3:
-      data_availability_list.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 4:
-      delay.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 7:
-      std.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 8:
-      out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 9:
-      std_out_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 10:
-      out_data.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 11:
-      std_out_data.append(float(line.split(" ")[-1]))
-    idx += 1
-  plt.title("CDF of sync delay of different pause time")
-  plt.ylim(0)
-  plt.xlim(-50)
-  plt.legend(bbox_to_anchor=(0.55, 0.45), loc=2, borderaxespad=0.)
-  plt.show()
-
-  xticks = ["0", "30", "60", "120", "300", "600", "900"]
-  plt.bar(np.arange(len(pause)) + 1, data_availability_list, width=0.35, align="center", color="c", alpha=0.8)
-  plt.xticks(np.arange(len(pause)) + 1, xticks, size="small")
-  plt.ylim(0.0, 1.2)
-  plt.xlabel("Pause Time")
-  plt.ylabel("Data Availability")
-  plt.title("Data Availability - Pause Time")
-  plt.show()
-
-  # plt.errorbar(loss, delay, std, linestyle='None', marker='^')
-  plt.plot(pause, delay, alpha=0.5, color='b')
-  plt.xlabel("Pause Time")
-  plt.ylabel("Sync Delay")
-  plt.xlim(-10, 910)
-  plt.show() 
 
 def get_cdf_heartbeat():
   file_name = "adhoc-result/syncDuration-heartbeat.txt"
@@ -428,6 +358,29 @@ def get_ave(item_list, type, name):
     plt.legend(bbox_to_anchor=(0.2, 0.8), loc=2, borderaxespad=0.)
     plt.show()
   
+def plot_statics():
+  ave_degree = [0.08206876142284943, 0.31483480484515297, 0.6886629630015076, 1.1937351177658715, 1.820660418809224, 3.843645067144771, 6.450435820774718, 9.444968038269112]
+  ave_partition_num = [38.3783803830538, 34.06969019556215, 27.906314058024588, 21.143619003018774, 14.893813726234733, 4.477356615703358, 1.545460172760808, 1.0898109118883266]
+  ave_partition_degree = [0.9978202573463185, 0.990762274206064, 0.9760037268078395, 0.946357683908825, 0.8861889534250988, 0.44526418410272744, 0.061306388076070195, 0.007949117941246074]
+  x = wifi_range
+  # plot ave_degree
+  plt.plot(x, ave_degree, alpha=0.8)
+  plt.xlabel("Wifi Range (m)")
+  plt.ylabel("Average Connection Degree")
+  plt.title("Average Connection Degree - Wifi Range")
+  plt.show()
+  # plot ave_partition_num
+  plt.plot(x, ave_partition_num, alpha=0.8)
+  plt.xlabel("Wifi Range (m)")
+  plt.ylabel("Average Partition Number")
+  plt.title("Average Partition Number - Wifi Range")
+  plt.show()
+  # plot ave_partition_degree
+  plt.plot(x, ave_partition_degree, alpha=0.8)
+  plt.xlabel("Wifi Range (m)")
+  plt.ylabel("Average Partition Degree")
+  plt.title("Average Partition Degree - Wifi Range")
+  plt.show()
 
 if __name__ == "__main__":
   # get_cdf_pause()
@@ -435,6 +388,9 @@ if __name__ == "__main__":
   # get_ave_sync_duration()
   # get_cdf_range()
   # get_cdf_fast_resync()
-  get_cdf_heartbeat()
-  get_ave(heartbeat, "heartbeat", "Heartbeat Interval")
+  #get_cdf_heartbeat()
+  #get_ave(heartbeat, "heartbeat", "Heartbeat Interval")
   # get_ave([True, False], "fastresync", "Fast Resync")
+  # plot_statics()
+  get_cdf("adhoc-result2/syncDuration-range-onetime.txt", wifi_range, "Wifi Range")
+  get_cdf("adhoc-result2/syncDuration-loss-onetime.txt", loss, "Loss Rate")

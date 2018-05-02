@@ -132,6 +132,9 @@ class Node {
   uint64_t out_interest_num;
   int data_num;
   bool generate_data;
+  uint64_t retx_data_interest;
+  uint64_t retx_notify_interest;
+  uint64_t retx_bundled_interest;
 
   std::unordered_map<Name, int> pending_interest;
   Name pending_sync_notify;
@@ -196,6 +199,9 @@ class Node {
   int count = 0;
   int64_t last;
   double total_time = 0;
+
+  // beacon
+  inline void SendBeacon();
 };
 
 }  // namespace vsync

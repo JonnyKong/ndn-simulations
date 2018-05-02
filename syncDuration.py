@@ -34,8 +34,18 @@ def cdf_plot(data, name, number, c):
 
 # out_file_name = sys.argv[1]
 syncDuration = []
-out_interest = []
+out_notify_interest = []
+out_data_interest = []
+out_bundled_interest = []
 out_data = []
+out_bundled_data = []
+collision_rx = []
+collision_tx = []
+cache_hit = []
+cache_hit_special = []
+retx_notify_interest = []
+retx_data_interest = []
+retx_bundled_interest = []
 
 file_name = sys.argv[1]
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
@@ -64,14 +74,40 @@ for line in file:
             '''
             syncDuration.append(cur_sync_duration)
     if line.find("NFD:") != -1:
-      if line.find("m_outInterest") != -1:
+      if line.find("m_outNotifyInterest") != -1:
         elements = line.split(' ')
-        cur_out_interest = elements[4][:-1]
-        out_interest.append(float(cur_out_interest))
+        cur_out_notify_interest = elements[4][:-1]
+        out_notify_interest.append(float(cur_out_notify_interest))
+      elif line.find("m_outDataInterest") != -1:
+        elements = line.split(' ')
+        cur_out_data_interest = elements[4][:-1]
+        out_data_interest.append(float(cur_out_data_interest))
+      elif line.find("m_outBundledInterest") != -1:
+        elements = line.split(' ')
+        cur_out_bundled_interest = elements[4][:-1]
+        out_bundled_interest.append(float(cur_out_bundled_interest))
       elif line.find("m_outData") != -1:
         elements = line.split(' ')
         cur_out_data = elements[4][:-1]
         out_data.append(float(cur_out_data))
+      elif line.find("m_outBundledData") != -1:
+        elements = line.split(' ')
+        cur_out_bundled_data = elements[4][:-1]
+        out_bundled_data.append(float(cur_out_bundled_data))
+    if line.find("CollisionRx") != -1:
+      collision_rx.append(float(line.split(' ')[-1]))
+    if line.find("CollisionTx") != -1:
+      collision_tx.append(float(line.split(' ')[-1]))
+    if line.find("m_cacheHit") != -1:
+      cache_hit.append(float(line.split(' ')[-1]))
+    if line.find("m_cacheHitSpecial") != -1:
+      cache_hit_special.append(float(line.split(' ')[-1]))
+    if line.find("retx_notify_interest") != -1:
+      retx_notify_interest.append(float(line.split(' ')[-1]))
+    if line.find("retx_data_interest") != -1:
+      retx_data_interest.append(float(line.split(' ')[-1]))
+    if line.find("retx_bundled_interest") != -1:
+      retx_bundled_interest.append(float(line.split(' ')[-1]))
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
@@ -112,12 +148,19 @@ print("average outData: " + str(np.mean(np.array(out_data))))
 print("std outData: " + str(np.std(np.array(out_data))))
 '''
 
-print(str(float(len(syncDuration)) / float(len(data_store))))
+print("data availability = " + str(float(len(syncDuration)) / float(len(data_store))))
+print(str(syncDuration))
 syncDuration = np.array(syncDuration)
-print(str(np.mean(syncDuration)))
-print(str(np.std(syncDuration)))
-print(str(np.mean(np.array(out_interest))))
-print(str(np.std(np.array(out_interest))))
-print(str(np.mean(np.array(out_data))))
-print(str(np.std(np.array(out_data))))
-
+print("sync delay = " + str(np.mean(syncDuration)))
+print("out notify interest = " + str(np.sum(np.array(out_notify_interest))))
+print("out data interest = " + str(np.sum(np.array(out_data_interest))))
+print("out bundled interest = " + str(np.sum(np.array(out_bundled_interest))))
+print("out data = " + str(np.sum(np.array(out_data))))
+print("out bundled data = " + str(np.sum(np.array(out_bundled_data))))
+print("collision rx = " + str(np.mean(np.array(collision_rx))))
+print("collision tx = " + str(np.mean(np.array(collision_tx))))
+print("cache hit = " + str(np.sum(np.array(cache_hit))))
+print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
+print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
+print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
+print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))

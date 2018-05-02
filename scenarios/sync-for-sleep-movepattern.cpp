@@ -66,6 +66,14 @@ PhyRxEnd(Ptr<const Packet> p)
   PhyRxEndCount++;
 }
 
+/*
+void PrintCollision(YansWifiPhyHelper* wifiPhyHelper)
+{
+  std::cout << "CollisionRx = " << wifiPhyHelper->GetCollisionRx << std::endl;
+  std::cout << "CollisionTx = " << wifiPhyHelper->GetCollisionTx << std::endl;
+}
+*/
+
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
 //              directly over AdHoc channel.
@@ -157,10 +165,12 @@ void installMobility(NodeContainer& c, bool constant_pause, int pause_time) {
 int
 main (int argc, char *argv[])
 {
+  std::string phyMode("DsssRate11Mbps");
+  // std::string phyMode("OfdmRate24Mbps");
   // disable fragmentation
   Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
-  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
 
   bool constant_pause = true;
   int pause_time = 0;
@@ -170,8 +180,8 @@ main (int argc, char *argv[])
   // parameters for app
   bool useHeartbeat = true;
   bool useFastResync = true;
-  uint64_t heartbeatTimer = 5;
-  uint64_t detectPartitionTimer = 20;
+  uint64_t heartbeatTimer = 10;
+  uint64_t detectPartitionTimer = 40;
   CommandLine cmd;
   cmd.AddValue("constantPause", "if the pause_time is constant", constant_pause);
   cmd.AddValue("wifiRange", "the wifi range", range);
@@ -192,9 +202,10 @@ main (int argc, char *argv[])
   //////////////////////
   WifiHelper wifi = WifiHelper::Default ();
   // wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
-  wifi.SetStandard (WIFI_PHY_STANDARD_80211a);
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
-                                "DataMode", StringValue ("OfdmRate24Mbps"));
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
+  wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+                               "DataMode", StringValue(phyMode),
+                               "ControlMode", StringValue(phyMode));
 
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
@@ -270,7 +281,7 @@ main (int argc, char *argv[])
 
   Simulator::Stop (Seconds (sim_time));
 
-  // Simulator::Schedule(Seconds(200.0), &PrintDrop);
+  // Simulator::Schedule(Seconds(sim_time), &PrintCollision, &wifiPhyHelper);
 
   // std::string animFile = "ad-hoc-animation.xml";
   // AnimationInterface anim (animFile);

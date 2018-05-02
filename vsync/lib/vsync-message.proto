@@ -28,6 +28,10 @@ message Content {
   bytes content = 2;
 }
 
+message AckContent {
+  VV vv = 1;
+}
+
 // Pack Data
 message PackData {
   message Entry {

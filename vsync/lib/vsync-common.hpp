@@ -31,6 +31,7 @@ static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 static const Name kBundledDataPrefix = Name("/ndn/bundledData");
 static const Name kGetNDNTraffic = Name("/ndn/getNDNTraffic");
+static const Name kBeaconPrefix = Name("/ndn/beacon");
 
 }  // namespace vsync
 }  // namespace ndn

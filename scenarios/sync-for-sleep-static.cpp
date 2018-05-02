@@ -8,6 +8,7 @@
 #include "ns3/ndnSIM-module.h"
 #include "ns3/netanim-module.h"
 
+#include <random>
 #include <map>
 
 using namespace std;
@@ -65,6 +66,14 @@ PhyRxEnd(Ptr<const Packet> p)
   PhyRxEndCount++;
 }
 
+/*
+void PrintCollision(YansWifiPhyHelper* wifiPhyHelper)
+{
+  std::cout << "CollisionRx = " << wifiPhyHelper->GetCollisionRx << std::endl;
+  std::cout << "CollisionTx = " << wifiPhyHelper->GetCollisionTx << std::endl;
+}
+*/
+
 //
 // DISCLAIMER:  Note that this is an extremely simple example, containing just 2 wifi nodes communicating
 //              directly over AdHoc channel.
@@ -79,95 +88,102 @@ PhyRxEnd(Ptr<const Packet> p)
 //   return face;
 // }
 
+// std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
+// std::uniform_real_distribution<> dt_dist(0, kInterestDT);
+
+static const int node_num = 40;
+static const int generate_data_time = 900;
+static const int sim_time = generate_data_time * 3;
+static const int x_range = 800;
+static const int y_range = 800;
+static const int max_speed = 20;
+// wifi-coverage is about 160
+
 int
 main (int argc, char *argv[])
 {
+  std::string phyMode("DsssRate11Mbps");
+  // std::string phyMode("OfdmRate24Mbps");
   // disable fragmentation
   Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
-  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
 
+  bool constant_pause = true;
+  int pause_time = 0;
+  double loss_rate = 0.0;
+  int range = 50;
+  int run = 0;
+  // parameters for app
+  bool useHeartbeat = true;
+  bool useFastResync = true;
+  uint64_t heartbeatTimer = 10;
+  uint64_t detectPartitionTimer = 40;
   CommandLine cmd;
+  cmd.AddValue("constantPause", "if the pause_time is constant", constant_pause);
+  cmd.AddValue("wifiRange", "the wifi range", range);
+  cmd.AddValue("pauseTime", "pause time", pause_time);
+  cmd.AddValue("lossRate", "loss rate", loss_rate);
+  cmd.AddValue("run", "run number", run);
+
+  cmd.AddValue("useHeartbeat", "useHeartbeat", useHeartbeat);
+  cmd.AddValue("useFastResync", "useFastResync", useFastResync);
+  cmd.AddValue("heartbeatTimer", "heartbeatTimer", heartbeatTimer);
+  cmd.AddValue("detectPartitionTimer", "detectPartitionTimer", detectPartitionTimer);
   cmd.Parse (argc,argv);
+  RngSeedManager::SetRun (run);
 
   //////////////////////
   //////////////////////
   //////////////////////
   WifiHelper wifi = WifiHelper::Default ();
   // wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
-  wifi.SetStandard (WIFI_PHY_STANDARD_80211a);
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
-                                "DataMode", StringValue ("OfdmRate24Mbps"));
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
+  wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+                               "DataMode", StringValue(phyMode),
+                               "ControlMode", StringValue(phyMode));
 
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
-  // wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+  // wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
+  wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel",
+                                  "MaxRange", DoubleValue(50));
 
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
+  // wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
+  // wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
 
-  // new mpbility model
-  // node 0, 1, 2, 3, 4 static, in one partition group A. node 5, 6, 7, 8 in group B. node 9 is moving between group A and group B
-  MobilityHelper groupA;
-  Ptr<ListPositionAllocator> positionAlloc_A = CreateObject<ListPositionAllocator> ();
-  positionAlloc_A->Add (Vector (0.0, 0.0, 0.0));
-  positionAlloc_A->Add (Vector (100.0, 0.0, 0.0));
-  positionAlloc_A->Add (Vector (200.0, 0.0, 0.0));
-  positionAlloc_A->Add (Vector (300.0, 0.0, 0.0));
-  positionAlloc_A->Add (Vector (400.0, 0.0, 0.0));
-  groupA.SetPositionAllocator (positionAlloc_A);
-  groupA.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-
-  MobilityHelper groupB;
-  Ptr<ListPositionAllocator> positionAlloc_B = CreateObject<ListPositionAllocator> ();
-  positionAlloc_B->Add (Vector (1000.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1100.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1200.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1300.0, 0.0, 0.0));
-  positionAlloc_B->Add (Vector (1400.0, 0.0, 0.0));
-  groupB.SetPositionAllocator (positionAlloc_B);
-  groupB.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-
-  MobilityHelper mnode;
-  mnode.SetMobilityModel("ns3::WaypointMobilityModel");
-
-  // mobility.InstallAll ();
-
   NodeContainer nodes;
-  nodes.Create (11);
+  nodes.Create (node_num);
 
   ////////////////
   // 1. Install Wifi
   NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
 
   // 2. Install Mobility model
-  // mobility.Install (nodes);
-  for (int i = 0; i < 5; ++i) {
-    groupA.Install (nodes.Get(i));
-  }
-  for (int i = 5; i < 9; ++i) {
-    groupB.Install (nodes.Get(i));
-  }
-  mnode.Install (nodes.Get(9));
-  Ptr<WaypointMobilityModel> wayMobility = nodes.Get(9)->GetObject<WaypointMobilityModel>();
-  Vector pos1 = Vector (500.0, 0.0, 0.0);
-  Vector pos2 = Vector (900.0, 0.0, 0.0);
-  int flag = 1;
-  for (int time = 0; time <= 600; time += 20) {
-    Vector curVec;
-    if (flag == 1) curVec = pos2;
-    else curVec = pos1;
-    flag *= -1;
-    Waypoint cur(Seconds(time), curVec);
-    wayMobility->AddWaypoint(cur);
-  }
+  // installMobility(nodes, constant_pause, pause_time);
+  MobilityHelper mobility;
+  // setup the grid itself: objects are layed out
+  // started from (-100,-100) with 20 objects per row, 
+  // the x interval between each object is 5 meters
+  // and the y interval between each object is 20 meters
+  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
+                                 "MinX", DoubleValue (0.0),
+                                 "MinY", DoubleValue (0.0),
+                                 "DeltaX", DoubleValue (50.0),
+                                 "DeltaY", DoubleValue (50.0),
+                                 "GridWidth", UintegerValue (6),
+                                 "LayoutType", StringValue ("RowFirst"));
+  // each object will be attached a static position.
+  // i.e., once set by the "position allocator", the
+  // position will never change.
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (nodes);
 
   // 3. Install NDN stack
   StackHelper ndnHelper;
@@ -189,11 +205,15 @@ main (int argc, char *argv[])
     AppHelper syncForSleepAppHelper("SyncForSleepApp");
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
+    syncForSleepAppHelper.SetAttribute("UseHeartbeat", BooleanValue(useHeartbeat));
+    syncForSleepAppHelper.SetAttribute("UseFastResync", BooleanValue(useFastResync));
+    syncForSleepAppHelper.SetAttribute("HeartbeatTimer", UintegerValue(heartbeatTimer));
+    syncForSleepAppHelper.SetAttribute("DetectPartitionTimer", UintegerValue(detectPartitionTimer));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
-    // app.Stop(Seconds (210.0 + idx));
 
     StackHelper::setNodeID(idx, object);
+    StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     // FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
@@ -209,13 +229,13 @@ main (int argc, char *argv[])
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxEnd", MakeCallback(&PhyRxEnd));
   ////////////////
 
-  Simulator::Stop (Seconds (600.0));
+  Simulator::Stop (Seconds (sim_time));
 
-  // Simulator::Schedule(Seconds(200.0), &PrintDrop);
+  // Simulator::Schedule(Seconds(sim_time), &PrintCollision, &wifiPhyHelper);
 
-  std::string animFile = "ad-hoc-animation.xml";
-  AnimationInterface anim (animFile);
-  anim.SetMobilityPollInterval (Seconds (1));
+  // std::string animFile = "ad-hoc-animation.xml";
+  // AnimationInterface anim (animFile);
+  // anim.SetMobilityPollInterval (Seconds (1));
 
   // L3RateTracer::InstallAll("test-rate-trace.txt", Seconds(0.5));
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));

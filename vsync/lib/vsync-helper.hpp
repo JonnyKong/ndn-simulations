@@ -109,6 +109,12 @@ inline Name MakeBundledDataName(const NodeID& nid, std::string missing_data_vect
   return n;
 }
 
+inline Name MakeBeaconName(uint64_t seq) {
+  Name n(kBeaconPrefix);
+  n.appendNumber(seq);
+  return n;
+}
+
 inline uint64_t ExtractNodeID(const Name& n) {
   return n.get(-3).toNumber();
 }

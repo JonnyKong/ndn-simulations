@@ -34,13 +34,16 @@ NS_LOG_COMPONENT_DEFINE ("ndn.TestRange");
 //   return face;
 // }
 
+
 int
 main (int argc, char *argv[])
 {
+  // Modulation and wifi channel bit rate
+  std::string phyMode("DsssRate11Mbps");
   // disable fragmentation
   Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
-  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue ("OfdmRate24Mbps"));
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
 
   CommandLine cmd;
   cmd.Parse (argc,argv);
@@ -50,20 +53,20 @@ main (int argc, char *argv[])
   //////////////////////
   WifiHelper wifi = WifiHelper::Default ();
   // wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
-  wifi.SetStandard (WIFI_PHY_STANDARD_80211a);
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
-                                "DataMode", StringValue ("OfdmRate24Mbps"));
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
+  wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+                               "DataMode", StringValue(phyMode),
+                               "ControlMode", StringValue(phyMode));
 
   YansWifiChannelHelper wifiChannel;// = YansWifiChannelHelper::Default ();
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::ThreeLogDistancePropagationLossModel");
-  // wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel");
+  wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel",
+                                  "MaxRange", DoubleValue(15));
+
 
   //YansWifiPhy wifiPhy = YansWifiPhy::Default();
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
-  wifiPhyHelper.Set("TxPowerStart", DoubleValue(15));
-  wifiPhyHelper.Set("TxPowerEnd", DoubleValue(15));
 
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
@@ -91,7 +94,7 @@ main (int argc, char *argv[])
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   positionAlloc->Add (Vector (0.0, 0.0, 0.0));
   positionAlloc->Add (Vector (10.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (20.0, 0.0, 0.0));
+  positionAlloc->Add (Vector (40.0, 0.0, 0.0));
   // <= 426, you can hear each other
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -136,7 +139,7 @@ main (int argc, char *argv[])
 
   ////////////////
 
-  Simulator::Stop (Seconds (100.0));
+  Simulator::Stop (Seconds (2650.0));
 
   Simulator::Run ();
   Simulator::Destroy ();
