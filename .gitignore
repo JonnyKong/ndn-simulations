@@ -7,4 +7,5 @@ build/
 **/DS_Store
 adhoc-log/*
 adhoc-result/*
+adhoc-result2/*
 *.xml

@@ -38,7 +38,13 @@ public:
       .AddAttribute("HeartbeatTimer", "HeartbeatTimer", UintegerValue(5),
                     MakeUintegerAccessor(&SyncForSleepApp::heartbeatTimer_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("DetectPartitionTimer", "DetectPartitionTimer", UintegerValue(20),
-                    MakeUintegerAccessor(&SyncForSleepApp::detectPartitionTimer_), MakeUintegerChecker<uint64_t>());
+                    MakeUintegerAccessor(&SyncForSleepApp::detectPartitionTimer_), MakeUintegerChecker<uint64_t>())
+      .AddAttribute("UseHeartbeatFlood", "if use heartbeat flood", BooleanValue(false),
+                    MakeBooleanAccessor(&SyncForSleepApp::useHeartbeatFlood_), MakeBooleanChecker())
+      .AddAttribute("UseBeacon", "if use beacon", BooleanValue(false),
+                    MakeBooleanAccessor(&SyncForSleepApp::useBeacon_), MakeBooleanChecker())
+      .AddAttribute("UseBeaconSuppression", "if use suppression for beacon", BooleanValue(false),
+                    MakeBooleanAccessor(&SyncForSleepApp::useBeaconSuppression_), MakeBooleanChecker());
 
       
 
@@ -58,7 +64,7 @@ protected:
   StartApplication()
   {
     m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_, std::bind(&SyncForSleepApp::GetCurrentPosition, this),
-      useHeartbeat_, useFastResync_, heartbeatTimer_, detectPartitionTimer_));
+      useHeartbeat_, useFastResync_, heartbeatTimer_, detectPartitionTimer_, useHeartbeatFlood_, useBeacon_, useBeaconSuppression_));
     m_instance->Start();
   }
 
@@ -77,6 +83,9 @@ private:
   bool useFastResync_;
   uint64_t heartbeatTimer_;
   uint64_t detectPartitionTimer_;
+  bool useHeartbeatFlood_;
+  bool useBeacon_;
+  bool useBeaconSuppression_;
 };
 
 } // namespace ndn

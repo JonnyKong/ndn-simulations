@@ -18,12 +18,12 @@ class SimpleNode {
  public:
 
   SimpleNode(const NodeID& nid, const Name& prefix, Node::GetCurrentPos getCurrentPos,
-    bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer)
+    bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression)
       : scheduler_(face_.getIoService()),
         nid_(nid),
         node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
               std::bind(&SimpleNode::OnData, this, _1), getCurrentPos,
-              useHeartbeat, useFastResync, heartbeatTimer, detectPartitionTimer)
+              useHeartbeat, useFastResync, heartbeatTimer, detectPartitionTimer, useHeartbeatFlood, useBeacon, useBeaconSuppression)
         {
         }
 

@@ -54,7 +54,7 @@ def get_cdf(filename, list, type):
       data_availability.append(float(line.split(" ")[-1]))
     if idx % log_line == 1:
       sync_delay = np.array(map(float, line[1:-2].split(",")))
-      cdf_plot(sync_delay, type + " = " + str(list[idx / log_line]), 1000, color[idx / log_line])
+      # cdf_plot(sync_delay, type + " = " + str(list[idx / log_line]), 1000, color[idx / log_line])
     elif idx % log_line == 2:
       delay.append(float(line.split(" ")[-1]))
     elif idx % log_line == 3:
@@ -82,10 +82,14 @@ def get_cdf(filename, list, type):
     elif idx % log_line == 14:
       retx_bundled_interest.append(float(line.split(" ")[-1]))
     idx += 1
+
+  '''
+  # plot cdf
   print(data_availability)
   plt.title("CDF of Sync Delay of Different " + type)
   plt.legend(bbox_to_anchor=(0.60, 0.55), loc=2, borderaxespad=0.)
   plt.show()
+  '''
   '''
   xticks = ['250', '200', '150', '100', '80', '60', '40', '20']
   plt.bar(np.arange(len(wifi_range)) + 1, data_availability_list, width=0.35, align="center", color="c", alpha=0.8)
@@ -96,6 +100,7 @@ def get_cdf(filename, list, type):
   plt.title("Data Availability - Wifi Range")
   plt.show()
   '''
+
   plt.plot(list, delay, alpha=0.5, color='royalblue', linewidth=2.0)
   plt.xlabel(type)
   plt.ylabel("Sync Delay")
@@ -136,8 +141,12 @@ def get_cdf(filename, list, type):
   plt.xlabel(type)
   plt.ylabel("Collision")
   plt.title("Collision - " + type)
-  plt.show()  
+  plt.show()
 
+  out_interest = [i + j for i, j in zip(out_notify_interest, out_data_interest)]
+  out_interest = [i + j for i, j in zip(out_interest, out_bundled_interest)]
+  out_data = [i + j for i, j in zip(out_data, out_bundled_data)]
+  return delay, out_interest, out_data, collision
 
 def get_cdf_fast_resync():
   file_name = "adhoc-result/syncDuration-fastresync.txt"
@@ -392,5 +401,44 @@ if __name__ == "__main__":
   #get_ave(heartbeat, "heartbeat", "Heartbeat Interval")
   # get_ave([True, False], "fastresync", "Fast Resync")
   # plot_statics()
-  get_cdf("adhoc-result2/syncDuration-range-onetime.txt", wifi_range, "Wifi Range")
-  get_cdf("adhoc-result2/syncDuration-loss-onetime.txt", loss, "Loss Rate")
+  beacon_delay, beacon_interest, beacon_data, beacon_collision = get_cdf("adhoc-result2/syncDuration-range-beaon.txt", wifi_range, "Wifi Range")
+  flood_delay, flood_interest, flood_data, flood_collision = get_cdf("adhoc-result2/syncDuration-range-flood.txt", wifi_range, "Wifi Range")
+  noflood_delay, noflood_interest, noflood_data, noflood_collision = get_cdf("adhoc-result2/syncDuration-range-noflood.txt", wifi_range, "Wifi Range")
+  plt.plot(wifi_range, beacon_delay, alpha=0.5, color='red', linewidth=2.0, label='Beacon')
+  plt.plot(wifi_range, flood_delay, alpha=0.5, color='orange', linewidth=2.0, label='Heartbeat with Flood')
+  plt.plot(wifi_range, noflood_delay, alpha=0.5, color='yellow', linewidth=2.0, label='Heartbeat without Flood')
+  plt.xlabel("Wifi Range")
+  plt.ylabel("Sync Delay")
+  plt.title("Sync Delay - Wifi Range")
+  plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
+  plt.show()
+
+  plt.plot(wifi_range, beacon_collision, alpha=0.5, color='red', linewidth=2.0, label='Beacon')
+  plt.plot(wifi_range, flood_collision, alpha=0.5, color='orange', linewidth=2.0, label='Heartbeat with Flood')
+  plt.plot(wifi_range, noflood_collision, alpha=0.5, color='yellow', linewidth=2.0, label='Heartbeat without Flood')
+  plt.xlabel("Wifi Range")
+  plt.ylabel("Collision")
+  plt.title("Collision - Wifi Range")
+  plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
+  plt.show()
+
+  plt.plot(wifi_range, beacon_interest, alpha=0.5, color='red', linewidth=2.0, label='Beacon')
+  plt.plot(wifi_range, flood_interest, alpha=0.5, color='orange', linewidth=2.0, label='Heartbeat with Flood')
+  plt.plot(wifi_range, noflood_interest, alpha=0.5, color='yellow', linewidth=2.0, label='Heartbeat without Flood')
+  plt.xlabel("Wifi Range")
+  plt.ylabel("Out Interest")
+  plt.title("Out Interest - Wifi Range")
+  plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
+  plt.show()
+
+  plt.plot(wifi_range, beacon_data, alpha=0.5, color='red', linewidth=2.0, label='Beacon')
+  plt.plot(wifi_range, flood_data, alpha=0.5, color='orange', linewidth=2.0, label='Heartbeat with Flood')
+  plt.plot(wifi_range, noflood_data, alpha=0.5, color='yellow', linewidth=2.0, label='Heartbeat without Flood')
+  plt.xlabel("Wifi Range")
+  plt.ylabel("Out Data")
+  plt.title("Out Data - Wifi Range")
+  plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
+  plt.show()
+
+
+

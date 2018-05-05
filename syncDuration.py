@@ -46,8 +46,8 @@ cache_hit_special = []
 retx_notify_interest = []
 retx_data_interest = []
 retx_bundled_interest = []
-
 file_name = sys.argv[1]
+
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
 for line in file:
@@ -67,11 +67,6 @@ for line in file:
         elif data_info.Owner == node_num:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
-            '''
-            if cur_sync_duration >= 25:
-                print(data_name)
-                print(cur_sync_duration)
-            '''
             syncDuration.append(cur_sync_duration)
     if line.find("NFD:") != -1:
       if line.find("m_outNotifyInterest") != -1:
@@ -118,6 +113,7 @@ for data_name in data_store:
     if data_store[data_name].Owner != node_num:
         print(data_name)
 '''
+
 '''
 with open(out_file_name, 'w') as outFile:
   outFile.write(str(syncDuration) + "\n")

@@ -182,6 +182,9 @@ main (int argc, char *argv[])
   bool useFastResync = true;
   uint64_t heartbeatTimer = 10;
   uint64_t detectPartitionTimer = 40;
+  bool useHeartbeatFlood = false;
+  bool useBeacon = false;
+  bool useBeaconSuppression = false;
   CommandLine cmd;
   cmd.AddValue("constantPause", "if the pause_time is constant", constant_pause);
   cmd.AddValue("wifiRange", "the wifi range", range);
@@ -193,6 +196,9 @@ main (int argc, char *argv[])
   cmd.AddValue("useFastResync", "useFastResync", useFastResync);
   cmd.AddValue("heartbeatTimer", "heartbeatTimer", heartbeatTimer);
   cmd.AddValue("detectPartitionTimer", "detectPartitionTimer", detectPartitionTimer);
+  cmd.AddValue("useHeartbeatFlood", "useHeartbeatFlood", useHeartbeatFlood);
+  cmd.AddValue("useBeacon", "useBeacon", useBeacon);
+  cmd.AddValue("useBeaconSuppression", "useBeaconSuppression", useBeaconSuppression);
   cmd.Parse (argc,argv);
   assert(range != -1);
   RngSeedManager::SetRun (run);
@@ -259,6 +265,8 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("UseFastResync", BooleanValue(useFastResync));
     syncForSleepAppHelper.SetAttribute("HeartbeatTimer", UintegerValue(heartbeatTimer));
     syncForSleepAppHelper.SetAttribute("DetectPartitionTimer", UintegerValue(detectPartitionTimer));
+    syncForSleepAppHelper.SetAttribute("UseHeartbeatFlood", BooleanValue(useHeartbeatFlood));
+    syncForSleepAppHelper.SetAttribute("UseBeacon", BooleanValue(useBeacon));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 
@@ -268,6 +276,7 @@ main (int argc, char *argv[])
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     // FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/bundledData", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/beacon", std::numeric_limits<int32_t>::max());
     idx++;
   }
 

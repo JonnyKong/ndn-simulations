@@ -71,7 +71,7 @@ class Node {
    */
   Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
        const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-       bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer);
+       bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression);
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -159,6 +159,7 @@ class Node {
   time::seconds kDetectPartitionTimer;
   // fast resync
   bool kFastResync;
+  bool kHeartbeatFlood;
   
   // functions for sync-responder
   void OnIncomingSyncInterest(const Interest& interest);
@@ -202,6 +203,12 @@ class Node {
 
   // beacon
   inline void SendBeacon();
+  bool kBeacon;
+  bool kBeaconSuppression;
+  void OnBeacon(const Interest& beacon);
+  std::unordered_map<NodeID, EventId> one_hop;
+  EventId beacon_event;
+
 };
 
 }  // namespace vsync

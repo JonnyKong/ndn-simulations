@@ -95,6 +95,13 @@ inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::s
   return n;
 }
 
+inline Name MakeSyncNotifyName2(const NodeID& nid, std::string encoded_vv, int64_t timestamp) {
+  // name = /[syncNotify_prefix]/[nid]/[state-vector]/[heartbeat-vector]
+  Name n(kSyncNotifyPrefix);
+  n.appendNumber(nid).append(encoded_vv).appendNumber(timestamp);
+  return n;
+}
+
 inline Name MakeDataName(const NodeID& nid, uint64_t seq) {
   // name = /[vsyncData_prefix]/[node_id]/[seq]/%0
   Name n(kSyncDataPrefix);
@@ -111,7 +118,7 @@ inline Name MakeBundledDataName(const NodeID& nid, std::string missing_data_vect
 
 inline Name MakeBeaconName(uint64_t seq) {
   Name n(kBeaconPrefix);
-  n.appendNumber(seq);
+  n.appendNumber(seq).appendNumber(0).appendNumber(0);
   return n;
 }
 

@@ -7,13 +7,10 @@ import matplotlib.pyplot as plt
 import pylab as pl
 import sys
 
-test = sys.argv[1]
-print(test)
-with open("test-xin.txt", "r") as f:
-	for line in f:
-		print(line[1:-2])
-		str = "[0,1]"
-		print(str[1:-1])
+a = [1, 2, 3]
+b = [1, 2, 3]
+c = [i + j for i, j in zip(a, b)]
+print(c)
 '''
 x = []
 y = []
