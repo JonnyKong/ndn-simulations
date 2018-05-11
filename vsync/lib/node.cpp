@@ -33,42 +33,27 @@ static const int kSnapshotNum = 90;
 static time::milliseconds kSnapshotInterval = time::milliseconds(2000);
 static const std::string availabilityFileName = "availability.txt";
 */
-static const time::milliseconds kLogPositionInterval = time::milliseconds(1000);
-
 static const int data_generation_rate_mean = 40000;
-
-static time::seconds kDetectIsolationTimer = time::seconds(20);
-// static time::seconds kHeartbeatTimer = time::seconds(2);
 
 std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
 std::uniform_int_distribution<> dt_dist(0, kInterestDT);
 
-static const bool kSyncNotifyBeacon = false;
-static time::seconds kSyncNotifyBeaconTimer = time::seconds(6);
-
-static const bool kSyncNotifyRetx = true;
-static int kSyncRetx = 3;
 static int kSyncNotifyMax = 3;
-static time::seconds kSyncNotifyRetxTimer = time::seconds(5);
 
 // normal: 1s - 2s, lifetime = 4s
-std::uniform_int_distribution<> beacon_dist(1000000, 2000000);
-static time::seconds kBeaconLifetime = time::seconds(4);
-
-/*
-static const bool kHeartbeat = true;
-static time::seconds kHeartbeatTimer = time::seconds(5);
-static time::seconds kDetectPartitionTimer = time::seconds(20);
-static time::seconds kAdjustHeartbeatTimer = time::seconds(10);
-*/
+std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
+static time::seconds kBeaconLifetime = time::seconds(6);
+std::uniform_int_distribution<> heartbeat_dist(2000000, 3000000);
+static time::seconds kHeartbeatLifetime = time::seconds(6);
+static time::seconds kRetxTimer = time::seconds(2);
+static time::seconds kBeaconFloodLifetime = time::seconds(6);
 
 static int kMaxDataContent = 4000;
 static const int kMissingDataThreshold = 5;
 
 Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
            const NodeID& nid, const Name& prefix, Node::DataCb on_data, Node::GetCurrentPos getCurrentPos,
-           bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer,
-           bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression)
+           bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood)
            : face_(face),
              key_chain_(key_chain),
              nid_(nid),
@@ -102,12 +87,11 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   retx_bundled_interest = 0;
 
   kHeartbeat = useHeartbeat;
-  kFastResync = useFastResync;
-  kHeartbeatTimer = time::seconds(heartbeatTimer);
-  kDetectPartitionTimer = time::seconds(detectPartitionTimer);
   kHeartbeatFlood = useHeartbeatFlood;
   kBeacon = useBeacon;
   kBeaconSuppression = useBeaconSuppression;
+  kRetx = useRetx;
+  kBeaconFlood = useBeaconFlood;
 
   face_.setInterestFilter(
       Name(kSyncNotifyPrefix), std::bind(&Node::OnSyncNotify, this, _2),
@@ -137,14 +121,28 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
         throw Error("Failed to register BeaconInterest prefix: " + reason);
       });
 
+  face_.setInterestFilter(
+      Name(kHeartbeatPrefix), std::bind(&Node::OnHeartbeat, this, _2),
+      [this](const Name&, const std::string& reason) {
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register HeartbeatInterest prefix: " << reason); 
+        throw Error("Failed to register HeartbeatInterest prefix: " + reason);
+      });  
+
+  face_.setInterestFilter(
+      Name(kBeaconFloodPrefix), std::bind(&Node::OnBeaconFlood, this, _2),
+      [this](const Name&, const std::string& reason) {
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register BeaconFloodInterest prefix: " << reason); 
+        throw Error("Failed to register BeaconFloodInterest prefix: " + reason);
+      });
+
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
   // scheduler_.scheduleEvent(time::seconds(kSimulationRecordingTime), [this] { PrintNDNTraffic(); });
-  scheduler_.scheduleEvent(time::seconds(900), [this] {
+  scheduler_.scheduleEvent(time::seconds(400), [this] {
     generate_data = false;
   });
 
   // record the ndn traffic
-  scheduler_.scheduleEvent(time::seconds(2600), [this] {
+  scheduler_.scheduleEvent(time::seconds(1195), [this] {
     // std::cout << "node(" << nid_ << ") outInterest = " << out_interest_num << std::endl;
     // std::cout << "node(" << nid_ << ") average time to meet a new node = " << total_time / (double)count << std::endl;
     std::cout << "node(" << nid_ << ") retx_notify_interest = " << retx_notify_interest << std::endl;
@@ -153,13 +151,13 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
     PrintNDNTraffic();
   });
 
-  scheduler_.scheduleEvent(time::milliseconds(2600000 + 10 * nid_), [this] {
+  scheduler_.scheduleEvent(time::seconds(1196), [this] {
     uint64_t seq_sum = 0;
     for (auto entry: version_vector_) {
       seq_sum += entry.second;
     }
     std::cout << "node(" << nid_ << ") seq sum: " << seq_sum << std::endl;
-    std::cout << "node(" << nid_ << ") seq = " << version_vector_[nid_] << std::endl;
+    // std::cout << "node(" << nid_ << ") seq = " << version_vector_[nid_] << std::endl;
   });
 }
 
@@ -182,8 +180,6 @@ void Node::OnBeacon(const Interest& beacon) {
     for (auto entry: one_hop) one_hop_list += ", " + to_string(entry.first);
     // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: " << node_id << ", the current one-hop list: " << one_hop_list);
     SendSyncNotify();
-    // scheduler_.scheduleEvent(time::seconds(5), [this] { SendSyncNotify(); });
-    // scheduler_.scheduleEvent(time::seconds(10), [this] { SendSyncNotify(); });
   }
   // update the one_hop info
   scheduler_.cancelEvent(one_hop[node_id]);
@@ -199,15 +195,120 @@ void Node::OnBeacon(const Interest& beacon) {
   }
 }
 
-void Node::UpdateHeartbeat() {
-  VSYNC_LOG_TRACE ( "node(" << nid_ << ") Update Heartbeat Vector" );
-  heartbeat_vector_[nid_]++;
-  scheduler_.scheduleEvent(kHeartbeatTimer, [this] { UpdateHeartbeat(); });
+void Node::SendBeaconFlood() {
+  beacon_vector_[nid_]++;
+  auto n = MakeBeaconFloodName(nid_, nid_, beacon_vector_[nid_]);
+  // VSYNC_LOG_TRACE ( "node(" << nid_ << ") SEND a new beaconflood interest: " << n.toUri() );
+
+  Interest i(n, time::milliseconds(1));
+  face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  int next_beacon = beacon_dist(rengine_);
+  beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
+}
+
+void Node::OnBeaconFlood(const Interest& beacon) {
+  auto n = beacon.getName();
+  // VSYNC_LOG_TRACE ( "node(" << nid_ << ") RECV a new beaconflood interest");
+  auto sender = ExtractBeaconSender(n);
+  auto initializer = ExtractBeaconInitializer(n);
+  auto seq = ExtractBeaconSeq(n);
+  if (beacon_vector_[initializer] >= seq) return;
+
+  if (connected_group.find(sender) == connected_group.end()) {
+    // fast resync, send notify Interest
+    std::string connected_list = to_string(sender);
+    for (auto entry: connected_group) connected_list += ", " + to_string(entry.first);
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new connected node: " << sender << ", the current connected list: " << connected_list);
+    
+    SendSyncNotify();
+  }
+
+  beacon_vector_[initializer] = seq;
+  scheduler_.cancelEvent(connected_group[sender]);
+  scheduler_.cancelEvent(connected_group[initializer]);
+  connected_group[sender] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, sender] {
+    connected_group.erase(sender);
+  });
+  connected_group[initializer] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, initializer] {
+    connected_group.erase(initializer);
+  });
+
+  // flood the current beacon
+  auto flood_beacon_name = MakeBeaconFloodName(nid_, initializer, seq);
+  int delay = dt_dist(rengine_);
+  scheduler_.scheduleEvent(time::microseconds(delay), [this, flood_beacon_name] {
+    Interest i(flood_beacon_name, time::milliseconds(1));
+    face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  });
 }
 
 void Node::SendHeartbeat() {
+  // SendSyncNotify();
+  // heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
+  heartbeat_vector_[nid_]++;
+  std::string encoded_hv = EncodeVVToName(heartbeat_vector_);
+  std::string tag = to_string(nid_) + "-" + to_string(heartbeat_vector_[nid_]);
+  auto n = MakeHeartbeatName(nid_, encoded_hv, tag);
+  Interest i(n, time::milliseconds(1));
+  face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  int next_heartbeat = heartbeat_dist(rengine_);
+  heartbeat_event = scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
+}
+
+void Node::OnHeartbeat(const Interest& heartbeat) {
+  // ignore the heartbeat whose tag is old
+  auto n = heartbeat.getName();
+  auto node_id = ExtractNodeID(n);
+  /*
+  std::string tag = ExtractTag(n);
+  size_t dash = tag.find("-");
+  auto tag_id = std::stoull(tag.substr(0, dash));
+  uint64_t tag_seq = std::stoull(tag.substr(dash + 1));
+  if (heartbeat_vector_[tag_id] >= tag_seq) return;
+  */
+
+  if (partition_group.find(node_id) == partition_group.end()) {
+    std::string partition_list = to_string(node_id);
+    for (auto entry: partition_group) partition_list += ", " + to_string(entry.first);
+    // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new partition-group node: " << node_id << ", the current partition list: " << partition_list);
+    SendSyncNotify();
+  }
+  // update the partition_group info
+  auto other_hv = DecodeVVFromName(ExtractEncodedHV(n));
+  for (auto entry: other_hv) {
+    auto entry_id = entry.first;
+    auto entry_seq = entry.second;
+    if (heartbeat_vector_.find(entry_id) == heartbeat_vector_.end() || heartbeat_vector_[entry_id] < entry_seq) {
+      heartbeat_vector_[entry_id] = entry_seq;
+      scheduler_.cancelEvent(partition_group[entry_id]);
+      partition_group[entry_id] = scheduler_.scheduleEvent(kHeartbeatLifetime, [this, entry_id] {
+        partition_group.erase(entry_id);
+      });
+    }
+  }
+
+  /*
+  if (kHeartbeatFlood) {
+    if (update == true) {
+      // need to forward the current heartbeat.
+      scheduler_.cancelEvent(heartbeat_event);
+      auto tag = ExtractTag(n);
+      heartbeat_vector_[nid_]++;
+
+    }
+  }
+  */
+}
+
+void Node::RetxSyncNotify() {
   SendSyncNotify();
-  heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
+  retx_event = scheduler_.scheduleEvent(kRetxTimer, [this] { RetxSyncNotify(); });
 }
 
 void Node::PrintNDNTraffic() {
@@ -217,24 +318,23 @@ void Node::PrintNDNTraffic() {
                         [](const Interest&) {});
 }
 
-void Node::OnDetectPartitionTimeout(NodeID node_id) {
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") DetectPartitionTimeout for node(" << node_id << ")" );
-  // erase the node_id from history infoemation
-  scheduler_.cancelEvent(detect_partition_timer[node_id]);
-  detect_partition_timer.erase(node_id);
-}
-
 void Node::StartSimulation() {
   // scheduler_.scheduleEvent(time::milliseconds(3000), [this] { PrintVectorClock(); });
   // scheduler_.scheduleEvent(kDetectIsolationTimer, [this] { DetectIsolation(); });
   if (kHeartbeat == true) {
-    scheduler_.scheduleEvent(kHeartbeatTimer, [this] { UpdateHeartbeat(); });
-    heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
-    // adjust_heartbeat_scheduler = scheduler_.scheduleEvent(kAdjustHeartbeatTimer, [this] { AdjustHeartbeatTimer(); });
+    int next_heartbeat = heartbeat_dist(rengine_);
+    scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
   }
   if (kBeacon == true) {
     int next_beacon = beacon_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeacon(); });
+  }
+  if (kRetx == true) {
+    retx_event = scheduler_.scheduleEvent(kRetxTimer, [this] { RetxSyncNotify(); });
+  }
+  if (kBeaconFlood == true) {
+    int next_beacon = beacon_dist(rengine_);
+    beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
   }
 
   std::string content = std::string(100, '*');
@@ -302,10 +402,11 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 
   data_store_[n] = data;
   logDataStore(n);
+  logStateStore(nid_, version_vector_[nid_]);
   recv_window[nid_].Insert(version_vector_[nid_]);
   latest_data = n;
 
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Publish Data: d.name=" << n.toUri() );
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") Publish Data: d.name=" << n.toUri() );
 
   scheduler_.scheduleEvent(time::milliseconds(data_generation_dist(rengine_)),
                            [this, content] { PublishData(content); });
@@ -313,6 +414,10 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   if (data_num >= 1) {
     data_num = 0;
     SendSyncNotify();
+    if (kRetx) {
+      scheduler_.cancelEvent(retx_event);
+      retx_event = scheduler_.scheduleEvent(kRetxTimer, [this] { RetxSyncNotify(); });
+    }
     // scheduler_.scheduleEvent(time::seconds(5), [this] { SendSyncNotify(); });
     // scheduler_.scheduleEvent(time::seconds(10), [this] { SendSyncNotify(); });
   }
@@ -326,13 +431,9 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 
 void Node::SendSyncNotify() {
   std::string encoded_vv = EncodeVVToName(version_vector_);
-  std::string encoded_hv = EncodeVVToName(heartbeat_vector_);
   // auto data_block = data_store_[latest_data]->wireEncode();
-  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, encoded_hv);
-  if (kBeacon == true) {
-    auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
-    sync_notify_interest_name = MakeSyncNotifyName2(nid_, encoded_vv, cur_time);
-  }
+  auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
+  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
 
   pending_sync_notify = sync_notify_interest_name;
   notify_time = kSyncNotifyMax;
@@ -372,68 +473,42 @@ void Node::OnSyncNotify(const Interest& interest) {
   key_chain_.sign(*ack, signingWithSha256());
   face_.put(*ack);
 
+  bool send_bundled_interest = false;
   if (kHeartbeat == true) {
-    auto other_hv = DecodeVVFromName(ExtractEncodedHV(n));
-    // 2. detect the new comer
-    if (detect_partition_timer.find(node_id) == detect_partition_timer.end()) {
-      // fast exchange of missing data
-      if (kFastResync) {
-        VersionVector mv;
-        for (auto entry: other_vv) {
-          auto entry_id = entry.first;
-          auto entry_seq = entry.second;
-          if (entry_seq == 0) continue;
-          if (version_vector_.find(entry_id) == version_vector_.end()) {
-            mv[entry_id] = 1;
-          }
-          else if (version_vector_[entry_id] < entry_seq) {
-            mv[entry_id] = version_vector_[entry_id] + 1;
-          }
-        }
-        SendBundledDataInterest(node_id, mv);
-      }
-    }
-
-    // 3. update local version_vector_ and heartbeat_vector_
-    bool updated = false;
-    for (auto entry: other_vv) {
-      NodeID node_id = entry.first;
-      uint64_t other_seq = entry.second;
-      if (version_vector_.find(node_id) == version_vector_.end() || version_vector_[node_id] < other_seq) {
-        // current vv don't have the node_id
-        updated = true;
-        // missing_data.push_back(node_id);
-        version_vector_[node_id] = other_seq;
-        // update the corresponding detect_partition_timer
-        scheduler_.cancelEvent(detect_partition_timer[node_id]);
-        detect_partition_timer[node_id] = scheduler_.scheduleEvent(kDetectPartitionTimer,
-          [this, node_id] { OnDetectPartitionTimeout(node_id); });
-      }
-    }
-    for (auto entry: other_hv) {
-      NodeID node_id = entry.first;
-      uint64_t other_heartbeat = entry.second;
-      if (heartbeat_vector_.find(node_id) == heartbeat_vector_.end() || heartbeat_vector_[node_id] < other_heartbeat) {
-        heartbeat_vector_[node_id] = other_heartbeat;
-        // detect the average time to meet a new node
-        if (kHeartbeatFlood) updated = true;
-        // update the corresponding detect_partition_timer
-        scheduler_.cancelEvent(detect_partition_timer[node_id]);
-        detect_partition_timer[node_id] = scheduler_.scheduleEvent(kDetectPartitionTimer,
-          [this, node_id] { OnDetectPartitionTimeout(node_id); });
-      }
-    }
-
-    if (updated == true) {
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a New State Vector" );
-      // 4. re-send the merged vector
-      // send out the notify, add it into the pending_interest list. There is no retransmission for notify
-      // the state vector in the notify should be the merged one
+    // detect a new one hop node
+    if (partition_group.find(node_id) == partition_group.end()) {
+      std::string partition_list = to_string(node_id);
+      for (auto entry: partition_group) partition_list += ", " + to_string(entry.first);
+      // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new partition-group node: " << node_id << ", the current partition list: " << partition_list);
       SendSyncNotify();
     }
+    // update the one_hop info
+    scheduler_.cancelEvent(partition_group[node_id]);
+    partition_group[node_id] = scheduler_.scheduleEvent(kHeartbeatLifetime, [this, node_id] {
+      partition_group.erase(node_id);
+    });
 
-    // 5. fetch missing data
-    FetchMissingData();
+    int missing_data = 0;
+    VersionVector mv;
+    for (auto entry: other_vv) {
+      auto entry_id = entry.first;
+      auto entry_seq = entry.second;
+      if (entry_seq == 0) continue;
+      if (version_vector_.find(entry_id) == version_vector_.end()) {
+        mv[entry_id] = 1;
+        missing_data += entry_seq - mv[entry_id] + 1;
+      }
+      else if (version_vector_[entry_id] < entry_seq) {
+        mv[entry_id] = version_vector_[entry_id] + 1;
+        missing_data += entry_seq - mv[entry_id] + 1;
+      }
+    }
+    if (missing_data >= kMissingDataThreshold) {
+      SendBundledDataInterest(node_id, mv);
+      send_bundled_interest = true;
+      FetchMissingData();
+    }
+    else send_bundled_interest = false;
   }
   else if (kBeacon == true) {
     // detect a new one hop node
@@ -442,8 +517,6 @@ void Node::OnSyncNotify(const Interest& interest) {
       for (auto entry: one_hop) one_hop_list += ", " + to_string(entry.first);
       // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: " << node_id << ", the current one-hop list: " << one_hop_list);
       SendSyncNotify();
-      // scheduler_.scheduleEvent(time::seconds(5), [this] { SendSyncNotify(); });
-      // scheduler_.scheduleEvent(time::seconds(10), [this] { SendSyncNotify(); });
     }
     // update the one_hop info
     scheduler_.cancelEvent(one_hop[node_id]);
@@ -451,7 +524,7 @@ void Node::OnSyncNotify(const Interest& interest) {
       one_hop.erase(node_id);
     });
 
-    int difference = 0;
+    int missing_data = 0;
     VersionVector mv;
     for (auto entry: other_vv) {
       auto entry_id = entry.first;
@@ -459,35 +532,77 @@ void Node::OnSyncNotify(const Interest& interest) {
       if (entry_seq == 0) continue;
       if (version_vector_.find(entry_id) == version_vector_.end()) {
         mv[entry_id] = 1;
+        missing_data += entry_seq - mv[entry_id] + 1;
       }
       else if (version_vector_[entry_id] < entry_seq) {
         mv[entry_id] = version_vector_[entry_id] + 1;
-      }
-      difference += entry_seq - mv[entry_id] + 1;
-    }
-    if (difference >= kMissingDataThreshold) SendBundledDataInterest(node_id, mv);
-
-    // 3. update local version_vector_ and heartbeat_vector_
-    bool updated = false;
-    for (auto entry: other_vv) {
-      NodeID node_id = entry.first;
-      uint64_t other_seq = entry.second;
-      if (version_vector_.find(node_id) == version_vector_.end() || version_vector_[node_id] < other_seq) {
-        // current vv don't have the node_id
-        updated = true;
-        // missing_data.push_back(node_id);
-        version_vector_[node_id] = other_seq;
+        missing_data += entry_seq - mv[entry_id] + 1;
       }
     }
-    if (updated == true) {
-      // VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a New State Vector" );
-      // 4. re-send the merged vector
-      // send out the notify, add it into the pending_interest list. There is no retransmission for notify
-      // the state vector in the notify should be the merged one
+    if (missing_data >= kMissingDataThreshold) {
+      SendBundledDataInterest(node_id, mv);
+      send_bundled_interest = true;
+      FetchMissingData();
+    }
+    else send_bundled_interest = false;
+  }
+  else if (kBeaconFlood == true) {
+    if (connected_group.find(node_id) == connected_group.end()) {
       SendSyncNotify();
     }
+    // update the connected_group info
+    scheduler_.cancelEvent(connected_group[node_id]);
+    connected_group[node_id] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, node_id] {
+      connected_group.erase(node_id);
+    });
 
-    // 5. fetch missing data
+    int missing_data = 0;
+    VersionVector mv;
+    for (auto entry: other_vv) {
+      auto entry_id = entry.first;
+      auto entry_seq = entry.second;
+      if (entry_seq == 0) continue;
+      if (version_vector_.find(entry_id) == version_vector_.end()) {
+        mv[entry_id] = 1;
+        missing_data += entry_seq - mv[entry_id] + 1;
+      }
+      else if (version_vector_[entry_id] < entry_seq) {
+        mv[entry_id] = version_vector_[entry_id] + 1;
+        missing_data += entry_seq - mv[entry_id] + 1;
+      }
+    }
+    if (missing_data >= kMissingDataThreshold) {
+      SendBundledDataInterest(node_id, mv);
+      send_bundled_interest = true;
+      FetchMissingData();
+    }
+    else send_bundled_interest = false;
+  }
+
+  // 3. update local version_vector_
+  bool updated = false;
+  for (auto entry: other_vv) {
+    NodeID node_id = entry.first;
+    uint64_t other_seq = entry.second;
+    if (version_vector_.find(node_id) == version_vector_.end() || version_vector_[node_id] < other_seq) {
+      // current vv don't have the node_id
+      updated = true;
+      for (auto seq = version_vector_[node_id] + 1; seq <= other_seq; ++seq) {
+        logStateStore(node_id, seq);
+      }
+      version_vector_[node_id] = other_seq;
+    }
+  }
+  if (updated == true) {
+    // VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a New State Vector" );
+    // 4. re-send the merged vector
+    // send out the notify, add it into the pending_interest list. There is no retransmission for notify
+    // the state vector in the notify should be the merged one
+    SendSyncNotify();
+  }
+
+  // 5. fetch missing data
+  if (!send_bundled_interest) {
     FetchMissingData();
   }
 }
@@ -561,7 +676,7 @@ void Node::OnBundledDataInterest(const Interest& interest) {
   // add the next_vv tag
   EncodeVV(next_vv, pack_data_proto.mutable_nextvv());
 
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Back Packed Data" );
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Back Packed Data" );
   const std::string& pack_data = pack_data_proto.SerializeAsString();
   std::shared_ptr<Data> data = std::make_shared<Data>(n);
   data->setContent(reinterpret_cast<const uint8_t*>(pack_data.data()),
@@ -705,11 +820,6 @@ void Node::OnDTTimeout() {
     waiting_sync_notify = n;
     scheduler_.cancelEvent(wt_notify);
     wt_notify = scheduler_.scheduleEvent(kInterestWT, [this, n] { OnWTTimeout(n, notify_time - 1); });
-
-    if (kHeartbeat == true) {
-      scheduler_.cancelEvent(heartbeat_scheduler);
-      heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
-    }
   }
   else {
     auto n = pending_interest.begin()->first;
@@ -855,6 +965,7 @@ void Node::OnRemoteData(const Data& data) {
     }
 
     // check the state vector in data
+    /*
     const auto& content = data.getContent();
     proto::Content content_proto;
     if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
@@ -875,14 +986,21 @@ void Node::OnRemoteData(const Data& data) {
       }
     }
     FetchMissingData();
+    */
   }
 }
 
 void Node::OnBundledData(const Data& data) {
+  auto n = data.getName();
+  if (wt_list.find(n) != wt_list.end()) {
+    scheduler_.cancelEvent(wt_list[n]);
+    wt_list.erase(n);
+  }
+
   const auto& content = data.getContent();
   proto::PackData pack_data_proto;
   if (!pack_data_proto.ParseFromArray(content.value(), content.value_size())) {
-    VSYNC_LOG_WARN( "Invalid syncNotifyNotify reply content format" );
+    // VSYNC_LOG_WARN( "Invalid syncNotifyNotify reply content format" );
     return;
   }
   // VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv Bundled Data" );
@@ -915,7 +1033,6 @@ void Node::OnBundledData(const Data& data) {
     logDataStore(data_name);
   }
 
-  auto n = data.getName();
   auto recv_nid = ExtractNodeID(n);
   auto next_vv = DecodeVV(pack_data_proto.nextvv());
   SendBundledDataInterest(recv_nid, next_vv);
@@ -925,10 +1042,10 @@ void Node::onNotifyACK(const Data& ack) {
   const auto& n = ack.getName();
   if (n.compare(waiting_sync_notify) == 0) {
     scheduler_.cancelEvent(wt_notify);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV NotifyACK: " << ack.getName().toUri());
+    // VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV NotifyACK: " << ack.getName().toUri());
   }
   else {
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate NotifyACK: " << ack.getName().toUri());
+    // VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate NotifyACK: " << ack.getName().toUri());
   }
   // process the difference in ack
   const auto& content = ack.getContent();
@@ -946,6 +1063,9 @@ void Node::onNotifyACK(const Data& ack) {
     if (other_seq == 0) continue;
     if (version_vector_.find(node_id) == version_vector_.end() || version_vector_[node_id] < other_seq) {
       // current vv don't have the node_id
+      for (auto seq = version_vector_[node_id] + 1; seq <= other_seq; ++seq) {
+        logStateStore(node_id, seq);
+      }
       version_vector_[node_id] = other_seq;
     }
   }
@@ -955,6 +1075,12 @@ void Node::onNotifyACK(const Data& ack) {
 void Node::logDataStore(const Name& name) {
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
   std::cout << now << " microseconds node(" << nid_ << ") Store New Data: " << name.toUri() << std::endl;
+}
+
+void Node::logStateStore(const NodeID& nid, int64_t seq) {
+  std::string state_tag = to_string(nid) + "-" + to_string(seq);
+  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
+  std::cout << now << " microseconds node(" << nid_ << ") Update New Seq: " << state_tag << std::endl;
 }
 
 // print the vector clock every 5 seconds

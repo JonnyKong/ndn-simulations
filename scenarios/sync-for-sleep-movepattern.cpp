@@ -91,8 +91,7 @@ void PrintCollision(YansWifiPhyHelper* wifiPhyHelper)
 // std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
 // std::uniform_real_distribution<> dt_dist(0, kInterestDT);
 
-static const int node_num = 40;
-static const int generate_data_time = 900;
+static const int generate_data_time = 400;
 static const int sim_time = generate_data_time * 3;
 static const int x_range = 800;
 static const int y_range = 800;
@@ -177,15 +176,16 @@ main (int argc, char *argv[])
   double loss_rate = 0.0;
   int range = -1;
   int run = 0;
+  int mobile_node_num;
   // parameters for app
-  bool useHeartbeat = true;
-  bool useFastResync = true;
-  uint64_t heartbeatTimer = 10;
-  uint64_t detectPartitionTimer = 40;
+  bool useHeartbeat = false;
   bool useHeartbeatFlood = false;
   bool useBeacon = false;
   bool useBeaconSuppression = false;
+  bool useRetx = false;
+  bool useBeaconFlood = false;
   CommandLine cmd;
+  cmd.AddValue("mobileNodeNum", "mobileNodeNum", mobile_node_num);
   cmd.AddValue("constantPause", "if the pause_time is constant", constant_pause);
   cmd.AddValue("wifiRange", "the wifi range", range);
   cmd.AddValue("pauseTime", "pause time", pause_time);
@@ -193,14 +193,14 @@ main (int argc, char *argv[])
   cmd.AddValue("run", "run number", run);
 
   cmd.AddValue("useHeartbeat", "useHeartbeat", useHeartbeat);
-  cmd.AddValue("useFastResync", "useFastResync", useFastResync);
-  cmd.AddValue("heartbeatTimer", "heartbeatTimer", heartbeatTimer);
-  cmd.AddValue("detectPartitionTimer", "detectPartitionTimer", detectPartitionTimer);
   cmd.AddValue("useHeartbeatFlood", "useHeartbeatFlood", useHeartbeatFlood);
   cmd.AddValue("useBeacon", "useBeacon", useBeacon);
   cmd.AddValue("useBeaconSuppression", "useBeaconSuppression", useBeaconSuppression);
+  cmd.AddValue("useRetx", "useRetx", useRetx);
+  cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
   cmd.Parse (argc,argv);
   assert(range != -1);
+  int node_num = mobile_node_num + 24;
   RngSeedManager::SetRun (run);
 
   //////////////////////
@@ -237,7 +237,7 @@ main (int argc, char *argv[])
 
   // 2. Install Mobility model
   // installMobility(nodes, constant_pause, pause_time);
-  auto traceFile = "scenario1.ns_movements";
+  auto traceFile = "trace/scenario-" + to_string(mobile_node_num) + ".ns_movements";
   Ns2MobilityHelper ns2 = Ns2MobilityHelper (traceFile);
   ns2.Install ();
 
@@ -262,11 +262,10 @@ main (int argc, char *argv[])
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
     syncForSleepAppHelper.SetAttribute("UseHeartbeat", BooleanValue(useHeartbeat));
-    syncForSleepAppHelper.SetAttribute("UseFastResync", BooleanValue(useFastResync));
-    syncForSleepAppHelper.SetAttribute("HeartbeatTimer", UintegerValue(heartbeatTimer));
-    syncForSleepAppHelper.SetAttribute("DetectPartitionTimer", UintegerValue(detectPartitionTimer));
     syncForSleepAppHelper.SetAttribute("UseHeartbeatFlood", BooleanValue(useHeartbeatFlood));
     syncForSleepAppHelper.SetAttribute("UseBeacon", BooleanValue(useBeacon));
+    syncForSleepAppHelper.SetAttribute("UseRetx", BooleanValue(useRetx));
+    syncForSleepAppHelper.SetAttribute("UseBeaconFlood", BooleanValue(useBeaconFlood));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 
@@ -274,9 +273,10 @@ main (int argc, char *argv[])
     StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
-    // FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/bundledData", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/beacon", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn/beaconFlood", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
@@ -292,7 +292,7 @@ main (int argc, char *argv[])
 
   // Simulator::Schedule(Seconds(sim_time), &PrintCollision, &wifiPhyHelper);
 
-  // std::string animFile = "ad-hoc-animation.xml";
+  // std::string animFile = "ad-hoc-animation－60.xml";
   // AnimationInterface anim (animFile);
   // anim.SetMobilityPollInterval (Seconds (1));
 

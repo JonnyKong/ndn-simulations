@@ -71,7 +71,7 @@ class Node {
    */
   Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
        const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-       bool useHeartbeat, bool useFastResync, uint64_t heartbeatTimer, uint64_t detectPartitionTimer, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression);
+       bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood);
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -117,7 +117,7 @@ class Node {
 
   VersionVector version_vector_;
   VersionVector heartbeat_vector_;
-  std::unordered_map<NodeID, EventId> detect_partition_timer;
+  std::unordered_map<NodeID, EventId> partition_group;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   std::unordered_map<NodeID, ReceiveWindow> recv_window;
   DataCb data_cb_;
@@ -143,28 +143,22 @@ class Node {
   EventId wt_notify;
   // Name pending_bundled_interest;
   std::unordered_map<Name, int> pending_bundled_interest;
+  // std::unordered_map<Name, std::>
   EventId inst_dt;
   std::unordered_map<Name, EventId> wt_list;
   bool in_dt;
 
-  // retx and sync timer
-  EventId heartbeat_scheduler;
-  EventId adjust_heartbeat_scheduler;
-  HistoryInfo history_info;
   Name latest_data;
 
   // heartbeat
   bool kHeartbeat;
-  time::seconds kHeartbeatTimer;
-  time::seconds kDetectPartitionTimer;
-  // fast resync
-  bool kFastResync;
   bool kHeartbeatFlood;
+  void OnHeartbeat(const Interest& heartbeat);
+  inline void SendHeartbeat();
+  EventId heartbeat_event;
   
   // functions for sync-responder
-  void OnIncomingSyncInterest(const Interest& interest);
   void OnSyncNotify(const Interest& interest);
-  void FastExchangeMissingData(const Name& sync_notify_name);
   void FetchMissingData();
   void OnSyncNotifyRetxTimeout();
   void OnSyncNotifyBeaconTimeout();
@@ -182,11 +176,7 @@ class Node {
   inline void PrintNDNTraffic();
   inline void OnSyncNotifyData(const Data& data);
   inline void logDataStore(const Name& name);
-  inline void AdjustHeartbeatTimer();
-
-  inline void SendHeartbeat();
-  inline void UpdateHeartbeat();
-  // inline void OnIncomingPacketNotify(const Interest& interest);
+  inline void logStateStore(const NodeID& nid, int64_t seq);
 
   // for fast recovery
   inline void SendBundledDataInterest(const NodeID& recv_id, VersionVector mv);
@@ -209,6 +199,18 @@ class Node {
   std::unordered_map<NodeID, EventId> one_hop;
   EventId beacon_event;
 
+  // retx
+  bool kRetx;
+  EventId retx_event;
+  inline void RetxSyncNotify();
+
+  // beacon flood
+  bool kBeaconFlood;
+  VersionVector beacon_vector_;
+  inline void SendBeaconFlood();
+  void OnBeaconFlood(const Interest& beacon);
+  std::unordered_map<NodeID, EventId> connected_group;
+  EventId beacon_flood_event;
 };
 
 }  // namespace vsync

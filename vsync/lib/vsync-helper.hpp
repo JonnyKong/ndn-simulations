@@ -88,14 +88,7 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 // TBD 
 // actually, the [state-vector] is no needed to be carried because the carried data contains the vv.
 // but lixia said we maybe should remove the vv from data.
-inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, std::string encoded_hv) {
-  // name = /[syncNotify_prefix]/[nid]/[state-vector]/[heartbeat-vector]
-  Name n(kSyncNotifyPrefix);
-  n.appendNumber(nid).append(encoded_vv).append(encoded_hv);
-  return n;
-}
-
-inline Name MakeSyncNotifyName2(const NodeID& nid, std::string encoded_vv, int64_t timestamp) {
+inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, int64_t timestamp) {
   // name = /[syncNotify_prefix]/[nid]/[state-vector]/[heartbeat-vector]
   Name n(kSyncNotifyPrefix);
   n.appendNumber(nid).append(encoded_vv).appendNumber(timestamp);
@@ -116,9 +109,21 @@ inline Name MakeBundledDataName(const NodeID& nid, std::string missing_data_vect
   return n;
 }
 
-inline Name MakeBeaconName(uint64_t seq) {
+inline Name MakeBeaconName(uint64_t nid) {
   Name n(kBeaconPrefix);
-  n.appendNumber(seq).appendNumber(0).appendNumber(0);
+  n.appendNumber(nid).appendNumber(0).appendNumber(0);
+  return n;
+}
+
+inline Name MakeHeartbeatName(const NodeID& nid, std::string encoded_hv, std::string tag) {
+  Name n(kHeartbeatPrefix);
+  n.appendNumber(nid).append(encoded_hv).appendNumber(0);
+  return n;
+}
+
+inline Name MakeBeaconFloodName(uint64_t sender, uint64_t initializer, uint64_t seq) {
+  Name n(kBeaconFloodPrefix);
+  n.appendNumber(sender).appendNumber(initializer).appendNumber(seq);
   return n;
 }
 
@@ -139,7 +144,23 @@ inline uint64_t ExtractSequence(const Name& n) {
 }
 
 inline std::string ExtractEncodedHV(const Name& n) {
+  return n.get(-2).toUri();
+}
+
+inline std::string ExtractTag(const Name& n) {
   return n.get(-1).toUri();
+}
+
+inline uint64_t ExtractBeaconSender(const Name& n) {
+  return n.get(-3).toNumber();
+}
+
+inline uint64_t ExtractBeaconInitializer(const Name& n) {
+  return n.get(-2).toNumber();
+}
+
+inline uint64_t ExtractBeaconSeq(const Name& n) {
+  return n.get(-1).toNumber();
 }
 
 }  // namespace vsync

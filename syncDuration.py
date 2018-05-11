@@ -9,7 +9,7 @@ import re
 import sys
 
 data_store = {}
-node_num = 40
+state_store = {}
 
 class DataInfo:
     def __init__(self, birth):
@@ -34,6 +34,7 @@ def cdf_plot(data, name, number, c):
 
 # out_file_name = sys.argv[1]
 syncDuration = []
+stateSyncDuration = []
 out_notify_interest = []
 out_data_interest = []
 out_bundled_interest = []
@@ -47,11 +48,13 @@ retx_notify_interest = []
 retx_data_interest = []
 retx_bundled_interest = []
 file_name = sys.argv[1]
+node_num = int(sys.argv[2]) + 24
 
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
 for line in file:
     if line.find("microseconds") != -1:
+      if line.find("Store New Data") != -1:
         elements = line.split(' ')
         time = elements[0]
         data_name = elements[-1]
@@ -68,6 +71,23 @@ for line in file:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
             syncDuration.append(cur_sync_duration)
+      elif line.find("Update New Seq") != -1:
+        elements = line.split(' ')
+        time = elements[0]
+        state_name = elements[-1]
+        if state_name not in state_store:
+            state_info = DataInfo(int(time))
+            state_store[state_name] = state_info
+        else:
+            state_store[state_name].Owner += 1
+            state_store[state_name].LastTime = int(time)
+        state_info = state_store[state_name]
+        if state_info.Owner > node_num:
+            raise AssertionError()
+        elif state_info.Owner == node_num:
+            cur_sync_duration = state_info.LastTime - state_info.GenerationTime
+            cur_sync_duration = float(cur_sync_duration) / 1000000.0
+            stateSyncDuration.append(cur_sync_duration)
     if line.find("NFD:") != -1:
       if line.find("m_outNotifyInterest") != -1:
         elements = line.split(' ')
@@ -160,3 +180,4 @@ print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
 print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
+print("state sync duration = " + str(np.mean(stateSyncDuration)))
