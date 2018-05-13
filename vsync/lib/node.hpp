@@ -52,11 +52,6 @@ class Node {
     std::string what_;
   };
 
-  struct HistoryInfo {
-    std::vector<int> update_node_count;
-    int cur_update_node_count = 0;
-  };
-
   /**
    * @brief 
    *
@@ -136,19 +131,19 @@ class Node {
   uint64_t retx_notify_interest;
   uint64_t retx_bundled_interest;
 
-  std::unordered_map<Name, int> pending_interest;
+  // for data inteerst
+  std::queue<std::queue<Name>> pending_interest;
+  EventId wt_data_interest;
+  EventId dt_data_interest;
+  int left_retx_count;
+  int vv_update = 0;
+  Name waiting_data;
+  // for notify interest
   Name pending_sync_notify;
   Name waiting_sync_notify;
   int notify_time;
   EventId wt_notify;
-  // Name pending_bundled_interest;
-  std::unordered_map<Name, int> pending_bundled_interest;
-  // std::unordered_map<Name, std::>
-  EventId inst_dt;
-  std::unordered_map<Name, EventId> wt_list;
-  bool in_dt;
-
-  Name latest_data;
+  EventId dt_notify;
 
   // heartbeat
   bool kHeartbeat;
@@ -157,24 +152,19 @@ class Node {
   inline void SendHeartbeat();
   EventId heartbeat_event;
   
-  // functions for sync-responder
+  // functions for sync notify
   void OnSyncNotify(const Interest& interest);
-  void FetchMissingData();
-  void OnSyncNotifyRetxTimeout();
-  void OnSyncNotifyBeaconTimeout();
-  void OnDetectPartitionTimeout(NodeID node_id);
+  void OnNotifyDTTimeout();
+  void OnNotifyWTTimeout();
+  void onNotifyACK(const Data& ack);
+
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
-  void OnDTTimeout();
-  void OnWTTimeout(const Name& name, int cur_transmission_time);
   void OnRemoteData(const Data& data);
-  void onNotifyACK(const Data& ack);
 
   // helper functions
   inline void StartSimulation();
-  inline void PrintVectorClock();
   inline void PrintNDNTraffic();
-  inline void OnSyncNotifyData(const Data& data);
   inline void logDataStore(const Name& name);
   inline void logStateStore(const NodeID& nid, int64_t seq);
 

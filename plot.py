@@ -13,7 +13,7 @@ loss = [0.0, 0.01, 0.05, 0.1, 0.3, 0.5]
 wifi_range = [50, 60, 70, 80, 90, 100, 120, 140, 160]
 heartbeat = [3, 5, 10, 15, 20, 25, 30, 40]
 node_num = [10, 15, 20, 25, 30]
-log_line = 16
+log_line = 18
 
 def rotate(list):
   result = []
@@ -42,9 +42,11 @@ def get_cdf(filename, list, type):
   delay = []
   state_delay = []
   out_notify_interest = []
+  out_beacon = []
   out_data_interest = []
   out_bundled_interest = []
   out_data = []
+  out_ack = []
   out_bundled_data = []
   collision = []
   cache_hit = []
@@ -63,28 +65,32 @@ def get_cdf(filename, list, type):
     elif idx % log_line == 3:
       out_notify_interest.append(float(line.split(" ")[-1]))
     elif idx % log_line == 4:
-      out_data_interest.append(float(line.split(" ")[-1]))
+      out_beacon.append(float(line.split(" ")[-1]))
     elif idx % log_line == 5:
-      out_bundled_interest.append(float(line.split(" ")[-1]))
+      out_data_interest.append(float(line.split(" ")[-1]))
     elif idx % log_line == 6:
-      out_data.append(float(line.split(" ")[-1]))
+      out_bundled_interest.append(float(line.split(" ")[-1]))
     elif idx % log_line == 7:
-      out_bundled_data.append(float(line.split(" ")[-1]))
+      out_data.append(float(line.split(" ")[-1]))
     elif idx % log_line == 8:
-      cur_collision += float(line.split(" ")[-1])
+      out_ack.append(float(line.split(" ")[-1]))
     elif idx % log_line == 9:
+      out_bundled_data.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 10:
+      cur_collision += float(line.split(" ")[-1])
+    elif idx % log_line == 11:
       cur_collision += float(line.split(" ")[-1])
       collision.append(cur_collision)
       cur_collision = 0
-    elif idx % log_line == 11:
-      cache_hit.append(float(line.split(" ")[-1]))
     elif idx % log_line == 12:
-      retx_notify_interest.append(float(line.split(" ")[-1]))
-    elif idx % log_line == 13:
-      retx_data_interest.append(float(line.split(" ")[-1]))
+      cache_hit.append(float(line.split(" ")[-1]))
     elif idx % log_line == 14:
-      retx_bundled_interest.append(float(line.split(" ")[-1]))
+      retx_notify_interest.append(float(line.split(" ")[-1]))
     elif idx % log_line == 15:
+      retx_data_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 16:
+      retx_bundled_interest.append(float(line.split(" ")[-1]))
+    elif idx % log_line == 17:
       state_delay.append(float(line.split(" ")[-1]))
     idx += 1
 
@@ -115,6 +121,7 @@ def get_cdf(filename, list, type):
   plt.show()
   '''
 
+  '''
   plt.plot(list, out_data_interest, alpha=0.5, color='orange', label="#(Out Data Interest)", linewidth=2.0)
   plt.plot(list, out_data, alpha=0.5, color='royalblue', label="#(Out Data)", linewidth=2.0)
   plt.plot(list, retx_data_interest, '--', alpha=0.5, color='orange', label="#(Retx Data Interest)", linewidth=2.0)
@@ -124,7 +131,6 @@ def get_cdf(filename, list, type):
   plt.legend(bbox_to_anchor=(0.1, 0.8), loc=2, borderaxespad=0.)
   plt.show() 
 
-  '''
   plt.plot(list, out_notify_interest, alpha=0.5, color='red', linewidth=2.0)
   plt.plot(list, retx_notify_interest, '--', alpha=0.5, color='red', linewidth=2.0)
   plt.xlabel(type)
@@ -156,7 +162,7 @@ def get_cdf(filename, list, type):
   out_interest = [i + j for i, j in zip(out_notify_interest, out_data_interest)]
   out_interest = [i + j for i, j in zip(out_interest, out_bundled_interest)]
   out_total_data = [i + j for i, j in zip(out_data, out_bundled_data)]
-  return state_delay, delay, collision, out_interest, out_notify_interest, out_data_interest, out_bundled_interest, out_total_data, out_data, out_bundled_data
+  return state_delay, delay, collision, out_interest, out_notify_interest, out_data_interest, out_bundled_interest, out_total_data, out_data, out_bundled_data, out_beacon, out_ack
 
 def get_cdf_fast_resync():
   file_name = "adhoc-result/syncDuration-fastresync.txt"
@@ -413,10 +419,10 @@ if __name__ == "__main__":
   # plot_statics()
   x = wifi_range
   x_label = "Wifi Range"
-  beacon_state_delay, beacon_delay, beacon_collision, beacon_total_interest, beacon_notify_interest, beacon_data_interest, beacon_bundled_interest, beacon_total_data, beacon_data, beacon_bundled_data = get_cdf("adhoc-result-new-pattern/syncDuration-range-beacon.txt", x, x_label)
+  beacon_state_delay, beacon_delay, beacon_collision, beacon_total_interest, beacon_notify_interest, beacon_data_interest, beacon_bundled_interest, beacon_total_data, beacon_data, beacon_bundled_data, beacon_beacon, beacon_ack = get_cdf("adhoc-result-new-pattern/syncDuration-range-beacon-30.txt", x, x_label)
   # heartbeat_state_delay, heartbeat_delay, heartbeat_collision, heartbeat_total_interest, heartbeat_notify_interest, heartbeat_data_interest, heartbeat_bundled_interest, heartbeat_total_data, heartbeat_data, heartbeat_bundled_data = get_cdf("adhoc-result-new-pattern/syncDuration-node-retx.txt", wifi_range, "Wifi Range")
   #beaconflood_state_delay, beaconflood_delay, beaconflood_collision, beaconflood_total_interest, beaconflood_notify_interest, beaconflood_data_interest, beaconflood_bundled_interest, beaconflood_total_data, beaconflood_data, beaconflood_bundled_data = get_cdf("adhoc-result2/syncDuration-range-retx-5.txt", wifi_range, "Wifi Range")
-  retx_state_delay, retx_delay, retx_collision, retx_total_interest, retx_notify_interest, retx_data_interest, retx_bundled_interest, retx_total_data, retx_data, retx_bundled_data = get_cdf("adhoc-result-new-pattern/syncDuration-range-retx.txt", x, x_label)
+  retx_state_delay, retx_delay, retx_collision, retx_total_interest, retx_notify_interest, retx_data_interest, retx_bundled_interest, retx_total_data, retx_data, retx_bundled_data, retx_beacon, retx_ack = get_cdf("adhoc-result-new-pattern/syncDuration-range-retx-30.txt", x, x_label)
 
   plt.plot(x, beacon_state_delay, alpha=0.5, color='red', linewidth=2.0, label='Beacon')
   # plt.plot(x, heartbeat_state_delay, alpha=0.5, color='green', linewidth=2.0, label='Heartbeat')

@@ -36,9 +36,11 @@ def cdf_plot(data, name, number, c):
 syncDuration = []
 stateSyncDuration = []
 out_notify_interest = []
+out_beacon = []
 out_data_interest = []
 out_bundled_interest = []
 out_data = []
+out_ack = []
 out_bundled_data = []
 collision_rx = []
 collision_tx = []
@@ -93,6 +95,10 @@ for line in file:
         elements = line.split(' ')
         cur_out_notify_interest = elements[4][:-1]
         out_notify_interest.append(float(cur_out_notify_interest))
+      if line.find("m_outBeacon") != -1:
+        elements = line.split(' ')
+        cur_out_beacon = elements[4][:-1]
+        out_beacon.append(float(cur_out_beacon))
       elif line.find("m_outDataInterest") != -1:
         elements = line.split(' ')
         cur_out_data_interest = elements[4][:-1]
@@ -105,6 +111,10 @@ for line in file:
         elements = line.split(' ')
         cur_out_data = elements[4][:-1]
         out_data.append(float(cur_out_data))
+      elif line.find("m_outAck") != -1:
+        elements = line.split(' ')
+        cur_out_ack = elements[4][:-1]
+        out_ack.append(float(cur_out_ack))
       elif line.find("m_outBundledData") != -1:
         elements = line.split(' ')
         cur_out_bundled_data = elements[4][:-1]
@@ -169,9 +179,11 @@ print(str(syncDuration))
 syncDuration = np.array(syncDuration)
 print("sync delay = " + str(np.mean(syncDuration)))
 print("out notify interest = " + str(np.sum(np.array(out_notify_interest))))
+print("out beacon = " + str(np.sum(np.array(out_beacon))))
 print("out data interest = " + str(np.sum(np.array(out_data_interest))))
 print("out bundled interest = " + str(np.sum(np.array(out_bundled_interest))))
 print("out data = " + str(np.sum(np.array(out_data))))
+print("out ack = " + str(np.sum(np.array(out_ack))))
 print("out bundled data = " + str(np.sum(np.array(out_bundled_data))))
 print("collision rx = " + str(np.mean(np.array(collision_rx))))
 print("collision tx = " + str(np.mean(np.array(collision_tx))))
