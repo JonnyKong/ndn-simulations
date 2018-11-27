@@ -269,8 +269,8 @@ main (int argc, char *argv[])
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 
-    StackHelper::setNodeID(idx, object);
-    StackHelper::setLossRate(loss_rate, object);
+    // StackHelper::setNodeID(idx, object);
+    // StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());

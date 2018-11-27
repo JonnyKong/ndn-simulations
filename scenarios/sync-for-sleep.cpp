@@ -248,7 +248,7 @@ main (int argc, char *argv[])
     app.Start(Seconds(2));
     // app.Stop(Seconds (210.0 + idx));
 
-    StackHelper::setNodeID(idx, object);
+    // StackHelper::setNodeID(idx, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     // FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());

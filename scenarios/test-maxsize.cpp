@@ -166,7 +166,7 @@ main (int argc, char *argv[])
     app.Start(Seconds(2));
     // app.Stop(Seconds (210.0 + idx));
 
-    StackHelper::setNodeID(idx, object);
+    // StackHelper::setNodeID(idx, object);
     FibHelper::AddRoute(object, "/test", std::numeric_limits<int32_t>::max());
     idx++;
   }
