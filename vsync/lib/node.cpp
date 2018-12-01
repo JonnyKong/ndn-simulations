@@ -119,19 +119,19 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
         throw Error("Failed to register BeaconInterest prefix: " + reason);
       });
 
-  face_.setInterestFilter(
-      Name(kHeartbeatPrefix), std::bind(&Node::OnHeartbeat, this, _2),
-      [this](const Name&, const std::string& reason) {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register HeartbeatInterest prefix: " << reason); 
-        throw Error("Failed to register HeartbeatInterest prefix: " + reason);
-      });  
+  // face_.setInterestFilter(
+  //     Name(kHeartbeatPrefix), std::bind(&Node::OnHeartbeat, this, _2),
+  //     [this](const Name&, const std::string& reason) {
+  //       VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register HeartbeatInterest prefix: " << reason); 
+  //       throw Error("Failed to register HeartbeatInterest prefix: " + reason);
+  //     });  
 
-  face_.setInterestFilter(
-      Name(kBeaconFloodPrefix), std::bind(&Node::OnBeaconFlood, this, _2),
-      [this](const Name&, const std::string& reason) {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register BeaconFloodInterest prefix: " << reason); 
-        throw Error("Failed to register BeaconFloodInterest prefix: " + reason);
-      });
+  // face_.setInterestFilter(
+  //     Name(kBeaconFloodPrefix), std::bind(&Node::OnBeaconFlood, this, _2),
+  //     [this](const Name&, const std::string& reason) {
+  //       VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register BeaconFloodInterest prefix: " << reason); 
+  //       throw Error("Failed to register BeaconFloodInterest prefix: " + reason);
+  //     });
 
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
   // scheduler_.scheduleEvent(time::seconds(kSimulationRecordingTime), [this] { PrintNDNTraffic(); });
@@ -193,122 +193,128 @@ void Node::OnBeacon(const Interest& beacon) {
   }
 }
 
-void Node::SendBeaconFlood() {
-  beacon_vector_[nid_]++;
-  auto n = MakeBeaconFloodName(nid_, nid_, beacon_vector_[nid_]);
-  // VSYNC_LOG_TRACE ( "node(" << nid_ << ") SEND a new beaconflood interest: " << n.toUri() );
+// void Node::SendBeaconFlood() {
+//   beacon_vector_[nid_]++;
+//   auto n = MakeBeaconFloodName(nid_, nid_, beacon_vector_[nid_]);
+//   // VSYNC_LOG_TRACE ( "node(" << nid_ << ") SEND a new beaconflood interest: " << n.toUri() );
 
-  Interest i(n, time::milliseconds(1));
-  face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-  int next_beacon = beacon_dist(rengine_);
-  beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
-}
+//   Interest i(n, time::milliseconds(1));
+//   face_.expressInterest(i, [](const Interest&, const Data&) {},
+//                         [](const Interest&, const lp::Nack&) {},
+//                         [](const Interest&) {});
+//   int next_beacon = beacon_dist(rengine_);
+//   beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
+// }
 
-void Node::OnBeaconFlood(const Interest& beacon) {
-  auto n = beacon.getName();
-  // VSYNC_LOG_TRACE ( "node(" << nid_ << ") RECV a new beaconflood interest");
-  auto sender = ExtractBeaconSender(n);
-  auto initializer = ExtractBeaconInitializer(n);
-  auto seq = ExtractBeaconSeq(n);
-  if (beacon_vector_[initializer] >= seq) return;
+// void Node::OnBeaconFlood(const Interest& beacon) {
+//   auto n = beacon.getName();
+//   // VSYNC_LOG_TRACE ( "node(" << nid_ << ") RECV a new beaconflood interest");
+//   auto sender = ExtractBeaconSender(n);
+//   auto initializer = ExtractBeaconInitializer(n);
+//   auto seq = ExtractBeaconSeq(n);
+//   if (beacon_vector_[initializer] >= seq) return;
 
-  if (connected_group.find(sender) == connected_group.end()) {
-    // fast resync, send notify Interest
-    std::string connected_list = to_string(sender);
-    for (auto entry: connected_group) connected_list += ", " + to_string(entry.first);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new connected node: " << sender << ", the current connected list: " << connected_list);
+//   if (connected_group.find(sender) == connected_group.end()) {
+//     // fast resync, send notify Interest
+//     std::string connected_list = to_string(sender);
+//     for (auto entry: connected_group) connected_list += ", " + to_string(entry.first);
+//     VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new connected node: " << sender << ", the current connected list: " << connected_list);
     
-    SendSyncNotify();
-  }
+//     SendSyncNotify();
+//   }
 
-  beacon_vector_[initializer] = seq;
-  scheduler_.cancelEvent(connected_group[sender]);
-  scheduler_.cancelEvent(connected_group[initializer]);
-  connected_group[sender] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, sender] {
-    connected_group.erase(sender);
-  });
-  connected_group[initializer] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, initializer] {
-    connected_group.erase(initializer);
-  });
+//   beacon_vector_[initializer] = seq;
+//   scheduler_.cancelEvent(connected_group[sender]);
+//   scheduler_.cancelEvent(connected_group[initializer]);
+//   connected_group[sender] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, sender] {
+//     connected_group.erase(sender);
+//   });
+//   connected_group[initializer] = scheduler_.scheduleEvent(kBeaconFloodLifetime, [this, initializer] {
+//     connected_group.erase(initializer);
+//   });
 
-  // flood the current beacon
-  auto flood_beacon_name = MakeBeaconFloodName(nid_, initializer, seq);
-  int delay = dt_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this, flood_beacon_name] {
-    Interest i(flood_beacon_name, time::milliseconds(1));
-    face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-  });
-}
+//   // flood the current beacon
+//   auto flood_beacon_name = MakeBeaconFloodName(nid_, initializer, seq);
+//   int delay = dt_dist(rengine_);
+//   scheduler_.scheduleEvent(time::microseconds(delay), [this, flood_beacon_name] {
+//     Interest i(flood_beacon_name, time::milliseconds(1));
+//     face_.expressInterest(i, [](const Interest&, const Data&) {},
+//                         [](const Interest&, const lp::Nack&) {},
+//                         [](const Interest&) {});
+//   });
+// }
 
-void Node::SendHeartbeat() {
-  // SendSyncNotify();
-  // heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
-  heartbeat_vector_[nid_]++;
-  std::string encoded_hv = EncodeVVToName(heartbeat_vector_);
-  std::string tag = to_string(nid_) + "-" + to_string(heartbeat_vector_[nid_]);
-  auto n = MakeHeartbeatName(nid_, encoded_hv, tag);
-  Interest i(n, time::milliseconds(1));
-  face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-  int next_heartbeat = heartbeat_dist(rengine_);
-  heartbeat_event = scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
-}
+// void Node::SendHeartbeat() {
+//   // SendSyncNotify();
+//   // heartbeat_scheduler = scheduler_.scheduleEvent(kHeartbeatTimer, [this] { SendHeartbeat(); });
+//   heartbeat_vector_[nid_]++;
+//   std::string encoded_hv = EncodeVVToName(heartbeat_vector_);
+//   std::string tag = to_string(nid_) + "-" + to_string(heartbeat_vector_[nid_]);
+//   auto n = MakeHeartbeatName(nid_, encoded_hv, tag);
+//   Interest i(n, time::milliseconds(1));
+//   face_.expressInterest(i, [](const Interest&, const Data&) {},
+//                         [](const Interest&, const lp::Nack&) {},
+//                         [](const Interest&) {});
+//   int next_heartbeat = heartbeat_dist(rengine_);
+//   heartbeat_event = scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
+// }
 
-void Node::OnHeartbeat(const Interest& heartbeat) {
-  // ignore the heartbeat whose tag is old
-  auto n = heartbeat.getName();
-  auto node_id = ExtractNodeID(n);
-  /*
-  std::string tag = ExtractTag(n);
-  size_t dash = tag.find("-");
-  auto tag_id = std::stoull(tag.substr(0, dash));
-  uint64_t tag_seq = std::stoull(tag.substr(dash + 1));
-  if (heartbeat_vector_[tag_id] >= tag_seq) return;
-  */
+// void Node::OnHeartbeat(const Interest& heartbeat) {
+//   // ignore the heartbeat whose tag is old
+//   auto n = heartbeat.getName();
+//   auto node_id = ExtractNodeID(n);
+//   /*
+//   std::string tag = ExtractTag(n);
+//   size_t dash = tag.find("-");
+//   auto tag_id = std::stoull(tag.substr(0, dash));
+//   uint64_t tag_seq = std::stoull(tag.substr(dash + 1));
+//   if (heartbeat_vector_[tag_id] >= tag_seq) return;
+//   */
 
-  if (partition_group.find(node_id) == partition_group.end()) {
-    std::string partition_list = to_string(node_id);
-    for (auto entry: partition_group) partition_list += ", " + to_string(entry.first);
-    // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new partition-group node: " << node_id << ", the current partition list: " << partition_list);
-    SendSyncNotify();
-  }
-  // update the partition_group info
-  auto other_hv = DecodeVVFromName(ExtractEncodedHV(n));
-  for (auto entry: other_hv) {
-    auto entry_id = entry.first;
-    auto entry_seq = entry.second;
-    if (heartbeat_vector_.find(entry_id) == heartbeat_vector_.end() || heartbeat_vector_[entry_id] < entry_seq) {
-      heartbeat_vector_[entry_id] = entry_seq;
-      scheduler_.cancelEvent(partition_group[entry_id]);
-      partition_group[entry_id] = scheduler_.scheduleEvent(kHeartbeatLifetime, [this, entry_id] {
-        partition_group.erase(entry_id);
-      });
-    }
-  }
+//   if (partition_group.find(node_id) == partition_group.end()) {
+//     std::string partition_list = to_string(node_id);
+//     for (auto entry: partition_group) partition_list += ", " + to_string(entry.first);
+//     // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new partition-group node: " << node_id << ", the current partition list: " << partition_list);
+//     SendSyncNotify();
+//   }
+//   // update the partition_group info
+//   auto other_hv = DecodeVVFromName(ExtractEncodedHV(n));
+//   for (auto entry: other_hv) {
+//     auto entry_id = entry.first;
+//     auto entry_seq = entry.second;
+//     if (heartbeat_vector_.find(entry_id) == heartbeat_vector_.end() || heartbeat_vector_[entry_id] < entry_seq) {
+//       heartbeat_vector_[entry_id] = entry_seq;
+//       scheduler_.cancelEvent(partition_group[entry_id]);
+//       partition_group[entry_id] = scheduler_.scheduleEvent(kHeartbeatLifetime, [this, entry_id] {
+//         partition_group.erase(entry_id);
+//       });
+//     }
+//   }
 
-  /*
-  if (kHeartbeatFlood) {
-    if (update == true) {
-      // need to forward the current heartbeat.
-      scheduler_.cancelEvent(heartbeat_event);
-      auto tag = ExtractTag(n);
-      heartbeat_vector_[nid_]++;
+//   /*
+//   if (kHeartbeatFlood) {
+//     if (update == true) {
+//       // need to forward the current heartbeat.
+//       scheduler_.cancelEvent(heartbeat_event);
+//       auto tag = ExtractTag(n);
+//       heartbeat_vector_[nid_]++;
 
-    }
-  }
-  */
-}
+//     }
+//   }
+//   */
+// }
 
+/**
+ * Keep scheduling SendSyncNotify() events.
+ */
 void Node::RetxSyncNotify() {
   SendSyncNotify();
   retx_event = scheduler_.scheduleEvent(kRetxTimer, [this] { RetxSyncNotify(); });
 }
 
+/**
+ * Send an interest for getting NDN traffic.
+ */
 void Node::PrintNDNTraffic() {
   Interest i(kGetNDNTraffic, time::milliseconds(5));
   face_.expressInterest(i, [](const Interest&, const Data&) {},
@@ -316,13 +322,17 @@ void Node::PrintNDNTraffic() {
                         [](const Interest&) {});
 }
 
+/**
+ * Init necessary event scheduling, and then schedule the first publishData()
+ *  event.
+ */
 void Node::StartSimulation() {
   // scheduler_.scheduleEvent(time::milliseconds(3000), [this] { PrintVectorClock(); });
   // scheduler_.scheduleEvent(kDetectIsolationTimer, [this] { DetectIsolation(); });
-  if (kHeartbeat == true) {
-    int next_heartbeat = heartbeat_dist(rengine_);
-    scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
-  }
+  // if (kHeartbeat == true) {
+  //   int next_heartbeat = heartbeat_dist(rengine_);
+  //   scheduler_.scheduleEvent(time::microseconds(next_heartbeat), [this] { SendHeartbeat(); });
+  // }
   if (kBeacon == true) {
     int next_beacon = beacon_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeacon(); });
@@ -330,10 +340,10 @@ void Node::StartSimulation() {
   if (kRetx == true) {
     retx_event = scheduler_.scheduleEvent(kRetxTimer, [this] { RetxSyncNotify(); });
   }
-  if (kBeaconFlood == true) {
-    int next_beacon = beacon_dist(rengine_);
-    beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
-  }
+  // if (kBeaconFlood == true) {
+  //   int next_beacon = beacon_dist(rengine_);
+  //   beacon_flood_event = scheduler_.scheduleEvent(time::microseconds(next_beacon), [this] { SendBeaconFlood(); });
+  // }
 
   std::string content = std::string(100, '*');
   last = ns3::Simulator::Now().GetMicroSeconds();
@@ -341,6 +351,11 @@ void Node::StartSimulation() {
                            [this, content] { PublishData(content); });
 }
 
+/**
+ * Create data packet of given content, and insert into data_store_ and update
+ *  version vector. Send sync notify.
+ * Schedule next PublishData() event. 
+ */
 void Node::PublishData(const std::string& content, uint32_t type) {
   if (generate_data == false) return;
   data_num++;
@@ -386,6 +401,11 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 /* pipeline for Notify Interest                                 */
 /****************************************************************/
 
+/**
+ * Put version vector in name and send out with delay timer. This function sends
+ *  the entire vector.
+ * Set timeout callback.
+ */
 void Node::SendSyncNotify() {
   std::string encoded_vv = EncodeVVToName(version_vector_);
   // auto data_block = data_store_[latest_data]->wireEncode();
@@ -404,6 +424,10 @@ void Node::SendSyncNotify() {
   dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnNotifyDTTimeout(); });
 }
 
+/**
+ * Callback for sending sync interest with delay timer.
+ * Async mutual recursion with OnNotifyWTTimeout().
+ */
 void Node::OnNotifyDTTimeout() {
   Interest i(pending_sync_notify, kSendOutInterestLifetime);
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Notify Interest: i.name=" << pending_sync_notify.toUri());
@@ -417,6 +441,10 @@ void Node::OnNotifyDTTimeout() {
   wt_notify = scheduler_.scheduleEvent(kInterestWT, [this] { OnNotifyWTTimeout(); });
 }
 
+/**
+ * Callback for sync reply timeout. Just send again with random delay timer.
+ * Async mutual recursion with OnNotifyDTTimeout().
+ */
 void Node::OnNotifyWTTimeout() {
   notify_time--;
   waiting_sync_notify = Name("/");
@@ -426,8 +454,13 @@ void Node::OnNotifyWTTimeout() {
   dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), [this] { OnNotifyDTTimeout(); });
 }
 
+/**
+ * Callback for receiving sync reply. Resolve all vector differences, and append 
+ *  missing data names to a queue, then add this queue to pending_interest array.
+ */
 void Node::onNotifyACK(const Data& ack) {
   const auto& n = ack.getName();
+  /* If reply is for outstanding sync notify, cancel timeout timer */
   if (n.compare(waiting_sync_notify) == 0) {
     scheduler_.cancelEvent(wt_notify);
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV NotifyACK: " << ack.getName().toUri());
@@ -469,6 +502,13 @@ void Node::onNotifyACK(const Data& ack) {
 /****************************************************************************/
 /* pipeline for Data Interest                                               */
 /****************************************************************************/
+/**
+ * Listen for sync notify interests. When receiving a sync interest, compare
+ *  the received vector with my own vector, and send out immediatelyonly the 
+ *  differences (i.e. nodes or sync numbers that I have but he doesn't).
+ * After sending out vector differences, also check if I'm missing any data. If
+ *  there is, fetch these data interests.
+ */
 void Node::OnSyncNotify(const Interest& interest) {
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest" );
   const auto& n = interest.getName();
@@ -540,6 +580,10 @@ void Node::OnSyncNotify(const Interest& interest) {
   */
 }
 
+/**
+ * Send interest for missing data, with random delay timer. 
+ * Also set a timeout, if data is not received.
+ */
 void Node::SendDataInterest() {
   if (pending_interest.empty()) {
     return;
@@ -596,6 +640,11 @@ void Node::SendDataInterest() {
   });
 }
 
+/**
+ * Callback for when requested data returns. If I don't have this data, save it
+ *  in data_store_. 
+ * Cancel timeout event.
+ */
 void Node::OnRemoteData(const Data& data) {
   const auto& n = data.getName();
   assert(n.compare(waiting_data) == 0);
@@ -625,6 +674,10 @@ void Node::OnRemoteData(const Data& data) {
   SendDataInterest();
 }
 
+/**
+ * Listen for interest for data. If I have data with same name in data_store_, 
+ *  reply with this data packet.
+ */
 void Node::OnDataInterest(const Interest& interest) {
   // no forwarding now!
   const auto& n = interest.getName();
@@ -640,6 +693,10 @@ void Node::OnDataInterest(const Interest& interest) {
   }
 }
 
+/**
+ * Callback for when requested bundled data returns. 
+ * Cancel timeout event.
+ */
 void Node::OnBundledData(const Data& data) {
   const auto& n = data.getName();
   assert(n.compare(waiting_data) == 0);

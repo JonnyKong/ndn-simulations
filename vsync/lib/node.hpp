@@ -146,10 +146,10 @@ class Node {
   EventId dt_notify;
 
   // heartbeat
-  bool kHeartbeat;
-  bool kHeartbeatFlood;
-  void OnHeartbeat(const Interest& heartbeat);
-  inline void SendHeartbeat();
+  // bool kHeartbeat;
+  // bool kHeartbeatFlood;
+  // void OnHeartbeat(const Interest& heartbeat);
+  // inline void SendHeartbeat();
   EventId heartbeat_event;
   
   // functions for sync notify
@@ -195,10 +195,10 @@ class Node {
   inline void RetxSyncNotify();
 
   // beacon flood
-  bool kBeaconFlood;
+  // bool kBeaconFlood;
   VersionVector beacon_vector_;
   inline void SendBeaconFlood();
-  void OnBeaconFlood(const Interest& beacon);
+  // void OnBeaconFlood(const Interest& beacon);
   std::unordered_map<NodeID, EventId> connected_group;
   EventId beacon_flood_event;
 };
