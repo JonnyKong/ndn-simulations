@@ -178,12 +178,12 @@ main (int argc, char *argv[])
   int run = 0;
   int mobile_node_num;
   // parameters for app
-  bool useHeartbeat = false;
-  bool useHeartbeatFlood = false;
+  // bool useHeartbeat = false;
+  // bool useHeartbeatFlood = false;
   bool useBeacon = false;
-  bool useBeaconSuppression = false;
+  // bool useBeaconSuppression = false;
   bool useRetx = false;
-  bool useBeaconFlood = false;
+  // bool useBeaconFlood = false;
   CommandLine cmd;
   cmd.AddValue("mobileNodeNum", "mobileNodeNum", mobile_node_num);
   cmd.AddValue("constantPause", "if the pause_time is constant", constant_pause);
@@ -192,12 +192,12 @@ main (int argc, char *argv[])
   cmd.AddValue("lossRate", "loss rate", loss_rate);
   cmd.AddValue("run", "run number", run);
 
-  cmd.AddValue("useHeartbeat", "useHeartbeat", useHeartbeat);
-  cmd.AddValue("useHeartbeatFlood", "useHeartbeatFlood", useHeartbeatFlood);
+  // cmd.AddValue("useHeartbeat", "useHeartbeat", useHeartbeat);
+  // cmd.AddValue("useHeartbeatFlood", "useHeartbeatFlood", useHeartbeatFlood);
   cmd.AddValue("useBeacon", "useBeacon", useBeacon);
-  cmd.AddValue("useBeaconSuppression", "useBeaconSuppression", useBeaconSuppression);
+  // cmd.AddValue("useBeaconSuppression", "useBeaconSuppression", useBeaconSuppression);
   cmd.AddValue("useRetx", "useRetx", useRetx);
-  cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
+  // cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
   cmd.Parse (argc,argv);
   assert(range != -1);
   int node_num = mobile_node_num + 24;
@@ -261,11 +261,11 @@ main (int argc, char *argv[])
     AppHelper syncForSleepAppHelper("SyncForSleepApp");
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    syncForSleepAppHelper.SetAttribute("UseHeartbeat", BooleanValue(useHeartbeat));
-    syncForSleepAppHelper.SetAttribute("UseHeartbeatFlood", BooleanValue(useHeartbeatFlood));
+    // syncForSleepAppHelper.SetAttribute("UseHeartbeat", BooleanValue(useHeartbeat));
+    // syncForSleepAppHelper.SetAttribute("UseHeartbeatFlood", BooleanValue(useHeartbeatFlood));
     syncForSleepAppHelper.SetAttribute("UseBeacon", BooleanValue(useBeacon));
     syncForSleepAppHelper.SetAttribute("UseRetx", BooleanValue(useRetx));
-    syncForSleepAppHelper.SetAttribute("UseBeaconFlood", BooleanValue(useBeaconFlood));
+    // syncForSleepAppHelper.SetAttribute("UseBeaconFlood", BooleanValue(useBeaconFlood));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 

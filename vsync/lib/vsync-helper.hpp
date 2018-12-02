@@ -115,17 +115,17 @@ inline Name MakeBeaconName(uint64_t nid) {
   return n;
 }
 
-inline Name MakeHeartbeatName(const NodeID& nid, std::string encoded_hv, std::string tag) {
-  Name n(kHeartbeatPrefix);
-  n.appendNumber(nid).append(encoded_hv).appendNumber(0);
-  return n;
-}
+// inline Name MakeHeartbeatName(const NodeID& nid, std::string encoded_hv, std::string tag) {
+//   Name n(kHeartbeatPrefix);
+//   n.appendNumber(nid).append(encoded_hv).appendNumber(0);
+//   return n;
+// }
 
-inline Name MakeBeaconFloodName(uint64_t sender, uint64_t initializer, uint64_t seq) {
-  Name n(kBeaconFloodPrefix);
-  n.appendNumber(sender).appendNumber(initializer).appendNumber(seq);
-  return n;
-}
+// inline Name MakeBeaconFloodName(uint64_t sender, uint64_t initializer, uint64_t seq) {
+//   Name n(kBeaconFloodPrefix);
+//   n.appendNumber(sender).appendNumber(initializer).appendNumber(seq);
+//   return n;
+// }
 
 inline uint64_t ExtractNodeID(const Name& n) {
   return n.get(-3).toNumber();

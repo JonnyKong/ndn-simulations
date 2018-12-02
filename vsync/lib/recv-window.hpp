@@ -31,15 +31,15 @@ class ReceiveWindow {
    * @return  An interval set of sequence numbers containing all the missing
    *          data.
    */
-  SeqNumIntervalSet CheckForMissingData(const uint64_t seq) {
-    // Ignore sequence number 0.
-    if (seq == 0) return {};
+  // SeqNumIntervalSet CheckForMissingData(const uint64_t seq) {
+  //   // Ignore sequence number 0.
+  //   if (seq == 0) return {};
 
-    SeqNumIntervalSet r;
-    r.insert(SeqNumInterval::closed(1, seq));
-    r -= win;
-    return r;
-  }
+  //   SeqNumIntervalSet r;
+  //   r.insert(SeqNumInterval::closed(1, seq));
+  //   r -= win;
+  //   return r;
+  // }
 
   /**
    * @brief Given the last data info in @p ldi, checks for missing data in
@@ -77,14 +77,17 @@ class ReceiveWindow {
     return {r, true};
   }*/
 
-  bool HasAllData() const {
-    return win.iterative_size() == 1;
-  }
+  // bool HasAllData() const {
+  //   return win.iterative_size() == 1;
+  // }
 
-  bool HasAllDataBefore(uint64_t seq) const {
-    return win.iterative_size() >= 1 && win.begin()->upper() >= seq;
-  }
+  // bool HasAllDataBefore(uint64_t seq) const {
+  //   return win.iterative_size() >= 1 && win.begin()->upper() >= seq;
+  // }
 
+  /**
+   * Similar to TCP recv window.
+   */
   uint64_t LastAckedData() const {
     if (win.empty())
       return 0;
@@ -92,24 +95,24 @@ class ReceiveWindow {
       return win.begin()->upper();
   }
 
-  uint64_t LastRecvData() const {
-    if (win.empty())
-      return 0;
-    else {
-      auto it = win.end();
-      it--;
-      return it->upper();
-    }
-  }
+  // uint64_t LastRecvData() const {
+  //   if (win.empty())
+  //     return 0;
+  //   else {
+  //     auto it = win.end();
+  //     it--;
+  //     return it->upper();
+  //   }
+  // }
 
-  bool HasData(uint64_t seq) {
-    auto it = win.begin();
-    while (it != win.end()) {
-      if (seq >= it->lower() && seq <= it->upper()) return true;
-      it++;
-    }
-    return false;
-  }
+  // bool HasData(uint64_t seq) {
+  //   auto it = win.begin();
+  //   while (it != win.end()) {
+  //     if (seq >= it->lower() && seq <= it->upper()) return true;
+  //     it++;
+  //   }
+  //   return false;
+  // }
 
   SeqNumIntervalSet getWin() {
     return win;

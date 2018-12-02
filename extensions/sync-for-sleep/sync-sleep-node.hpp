@@ -17,15 +17,29 @@ static const std::string snapshotFileName = "snapshot.txt";
 class SimpleNode {
  public:
 
-  SimpleNode(const NodeID& nid, const Name& prefix, Node::GetCurrentPos getCurrentPos,
-    bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood)
+  SimpleNode(const NodeID& nid, 
+             const Name& prefix, 
+             Node::GetCurrentPos getCurrentPos,
+            //  bool useHeartbeat, 
+            //  bool useHeartbeatFlood, 
+             bool useBeacon, 
+            //  bool useBeaconSuppression, 
+            //  bool useBeaconFlood,
+             bool useRetx)
       : scheduler_(face_.getIoService()),
         nid_(nid),
-        node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
-              std::bind(&SimpleNode::OnData, this, _1), getCurrentPos,
-              useHeartbeat, useHeartbeatFlood, useBeacon, useBeaconSuppression, useRetx, useBeaconFlood)
-        {
-        }
+        // node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
+        //       std::bind(&SimpleNode::OnData, this, _1), getCurrentPos,
+        //       useHeartbeat, useHeartbeatFlood, useBeacon, useBeaconSuppression, useRetx, useBeaconFlood)
+        node_(face_, 
+              scheduler_, 
+              ns3::ndn::StackHelper::getKeyChain(), 
+              nid,
+              prefix, 
+              std::bind(&SimpleNode::OnData, this, _1), 
+              getCurrentPos,
+              useBeacon,
+              useRetx) {}
 
   void Start() {
   }

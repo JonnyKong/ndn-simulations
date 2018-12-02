@@ -25,7 +25,7 @@ static int kInterestDT = 5000;
 static time::milliseconds kInterestWT = time::milliseconds(100);
 static time::seconds kSyncDataTimer = time::seconds(10);
 static time::milliseconds kSendOutInterestLifetime = time::milliseconds(100);
-static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
+// static time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 
 /*
 static const int kSimulationRecordingTime = 180;
@@ -42,18 +42,29 @@ static int kSyncNotifyMax = 3;
 
 // normal: 1s - 2s, lifetime = 4s
 std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
+std::uniform_int_distribution<> ack_dist(100000, 200000);
 static time::seconds kBeaconLifetime = time::seconds(6);
-std::uniform_int_distribution<> heartbeat_dist(2000000, 3000000);
-static time::seconds kHeartbeatLifetime = time::seconds(6);
+// std::uniform_int_distribution<> heartbeat_dist(2000000, 3000000);
+// static time::seconds kHeartbeatLifetime = time::seconds(6);
 static time::seconds kRetxTimer = time::seconds(2);
-static time::seconds kBeaconFloodLifetime = time::seconds(6);
+// static time::seconds kBeaconFloodLifetime = time::seconds(6);
 
 static int kMaxDataContent = 4000;
 static const int kMissingDataThreshold = 10;
 
-Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
-           const NodeID& nid, const Name& prefix, Node::DataCb on_data, Node::GetCurrentPos getCurrentPos,
-           bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood)
+Node::Node(Face& face, 
+           Scheduler& scheduler, 
+           KeyChain& key_chain,
+           const NodeID& nid, 
+           const Name& prefix, 
+           Node::DataCb on_data, 
+           Node::GetCurrentPos getCurrentPos,
+          //  bool useHeartbeat, 
+          //  bool useHeartbeatFlood, 
+           bool useBeacon, 
+          //  bool useBeaconSuppression, 
+          //  bool useBeaconFlood,
+           bool useRetx) 
            : face_(face),
              key_chain_(key_chain),
              nid_(nid),
@@ -71,7 +82,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   // pending_bundled_interest = Name("/");
   // initialize the version_vector_ and heartbeat_vector_
   version_vector_[nid_] = 0;
-  heartbeat_vector_[nid_] = 0;
+  // heartbeat_vector_[nid_] = 0;
   // initialize the data_store_: put Name("/") into data_store_, because sometimes when we send syncNotify because of heartbearts
   // there are no data in the data_store_. So we put an emtry data to Name("/")
   auto n = Name("/");
@@ -84,12 +95,12 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
   retx_data_interest = 0;
   retx_bundled_interest = 0;
 
-  kHeartbeat = useHeartbeat;
-  kHeartbeatFlood = useHeartbeatFlood;
+  // kHeartbeat = useHeartbeat;
+  // kHeartbeatFlood = useHeartbeatFlood;
   kBeacon = useBeacon;
-  kBeaconSuppression = useBeaconSuppression;
+  // kBeaconSuppression = useBeaconSuppression;
   kRetx = useRetx;
-  kBeaconFlood = useBeaconFlood;
+  // kBeaconFlood = useBeaconFlood;
 
   face_.setInterestFilter(
       Name(kSyncNotifyPrefix), std::bind(&Node::OnSyncNotify, this, _2),
@@ -146,7 +157,7 @@ Node::Node(Face& face, Scheduler& scheduler, KeyChain& key_chain,
     std::cout << "node(" << nid_ << ") retx_notify_interest = " << retx_notify_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_data_interest = " << retx_data_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_bundled_interest = " << retx_bundled_interest << std::endl;
-    PrintNDNTraffic();
+    // PrintNDNTraffic();
   });
 
   scheduler_.scheduleEvent(time::seconds(1196), [this] {
@@ -315,12 +326,12 @@ void Node::RetxSyncNotify() {
 /**
  * Send an interest for getting NDN traffic.
  */
-void Node::PrintNDNTraffic() {
-  Interest i(kGetNDNTraffic, time::milliseconds(5));
-  face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-}
+// void Node::PrintNDNTraffic() {
+//   Interest i(kGetNDNTraffic, time::milliseconds(5));
+//   face_.expressInterest(i, [](const Interest&, const Data&) {},
+//                         [](const Interest&, const lp::Nack&) {},
+//                         [](const Interest&) {});
+// }
 
 /**
  * Init necessary event scheduling, and then schedule the first publishData()
@@ -395,6 +406,9 @@ void Node::PublishData(const std::string& content, uint32_t type) {
     // scheduler_.scheduleEvent(time::seconds(5), [this] { SendSyncNotify(); });
     // scheduler_.scheduleEvent(time::seconds(10), [this] { SendSyncNotify(); });
   }
+
+  /* In case an ACK is scheduled to send, send the updated vector */
+
 }
 
 /****************************************************************/
@@ -498,6 +512,13 @@ void Node::onNotifyACK(const Data& ack) {
   }
 }
 
+/**
+ * Thunk for sending ack. 
+ */
+void Node::sendAck() {
+  face_.put(*ack);
+}
+
 
 /****************************************************************************/
 /* pipeline for Data Interest                                               */
@@ -517,7 +538,8 @@ void Node::OnSyncNotify(const Interest& interest) {
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
 
   // send back ack
-  std::shared_ptr<Data> ack = std::make_shared<Data>(n);
+  // std::shared_ptr<Data> ack = std::make_shared<Data>(n);
+  ack = std::make_shared<Data>(n);
   VersionVector difference;
   for (auto entry: version_vector_) {
     auto node_id = entry.first;
@@ -530,15 +552,29 @@ void Node::OnSyncNotify(const Interest& interest) {
   ack->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
                   content_proto_str.size());
   key_chain_.sign(*ack, signingWithSha256());
-  face_.put(*ack);
+  // face_.put(*ack);
 
-  // fetch missing data
+  if (!difference.empty()) {
+    /* If local vector contains newer state, send ACK immediately */
+    sendAck();
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately" );
+  } else {
+    /* If local vector outdated or equal, send ACK after some delay */
+    int next_ack = ack_dist(rengine_);
+    dt_ack = scheduler_.scheduleEvent(time::microseconds(next_ack), [this] {
+      sendAck();
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay" );
+    });
+  }
+
+  /* Pipeline for missing data fetch and vector merge */
   std::queue<Name> q;
   int missing_data = 0;
   VersionVector mv;
   for (auto entry: other_vv) {
     auto entry_id = entry.first;
     auto entry_seq = entry.second;
+    /* Merge state vector */
     if (version_vector_.find(entry_id) == version_vector_.end() || version_vector_[entry_id] < entry_seq) {
       auto start_seq = version_vector_.find(entry_id) == version_vector_.end() ? 1: version_vector_[entry_id] + 1;
       mv[entry_id] = start_seq;
@@ -601,6 +637,7 @@ void Node::SendDataInterest() {
   // find a queue too start to send out interests
   if (!pending_interest.front().empty() && pending_interest.front().front().compare(0, 2, kSyncDataPrefix) == 0) {
     while (!pending_interest.front().empty()) {
+      /* Remove falsy pending interests */
       if (data_store_.find(pending_interest.front().front()) != data_store_.end()) {
         pending_interest.front().pop();
       }
@@ -688,8 +725,15 @@ void Node::OnDataInterest(const Interest& interest) {
 
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
+    /* If I have this data, send it */
     face_.put(*iter->second);
     VSYNC_LOG_TRACE( "node(" << nid_ << ") sends the data name = " << iter->second->getName());
+  } else {
+    /* Otherwise add to my PIT, but don't have to send another interest */
+    face_.addToPit(interest, std::bind(&Node::OnRemoteData, this, _2),
+                   [](const Interest&, const lp::Nack&) {},
+                   [](const Interest&) {});
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
   }
 }
 

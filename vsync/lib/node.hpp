@@ -64,9 +64,18 @@ class Node {
    * @param gsize      the group size (the size of the vector clock)
    * @param on_data    Callback for notifying new data to the application
    */
-  Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
-       const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-       bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood);
+  // Node(Face& face, Scheduler& scheduler, KeyChain& key_chain, const NodeID& nid,
+  //      const Name& prefix, DataCb on_data, GetCurrentPos getCurrentPos,
+  //      bool useHeartbeat, bool useHeartbeatFlood, bool useBeacon, bool useBeaconSuppression, bool useRetx, bool useBeaconFlood);
+  Node(Face& face, 
+       Scheduler& scheduler, 
+       KeyChain& key_chain, 
+       const NodeID& nid,
+       const Name& prefix, 
+       DataCb on_data, 
+       GetCurrentPos getCurrentPos,
+       bool useBeacon, 
+       bool useRetx);
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -150,13 +159,16 @@ class Node {
   // bool kHeartbeatFlood;
   // void OnHeartbeat(const Interest& heartbeat);
   // inline void SendHeartbeat();
-  EventId heartbeat_event;
+  // EventId heartbeat_event;
   
   // functions for sync notify
   void OnSyncNotify(const Interest& interest);
   void OnNotifyDTTimeout();
   void OnNotifyWTTimeout();
   void onNotifyACK(const Data& ack);
+  EventId dt_ack;               /* Delay timer for sending ACK */
+  std::shared_ptr<Data> ack;    /* ACK packet to be sent */
+  void sendAck();
 
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
@@ -164,7 +176,7 @@ class Node {
 
   // helper functions
   inline void StartSimulation();
-  inline void PrintNDNTraffic();
+  // inline void PrintNDNTraffic();
   inline void logDataStore(const Name& name);
   inline void logStateStore(const NodeID& nid, int64_t seq);
 
@@ -172,14 +184,6 @@ class Node {
   inline void SendBundledDataInterest(const NodeID& recv_id, VersionVector mv);
   inline void OnBundledDataInterest(const Interest& interest);
   inline void OnBundledData(const Data& data);
-
-  std::random_device rdevice_;
-  std::mt19937 rengine_;
-
-  // detect the average time to meet a new node
-  int count = 0;
-  int64_t last;
-  double total_time = 0;
 
   // beacon
   inline void SendBeacon();
@@ -189,6 +193,14 @@ class Node {
   std::unordered_map<NodeID, EventId> one_hop;
   EventId beacon_event;
 
+  std::random_device rdevice_;
+  std::mt19937 rengine_;
+
+  // detect the average time to meet a new node
+  int count = 0;
+  int64_t last;
+  double total_time = 0;
+
   // retx
   bool kRetx;
   EventId retx_event;
@@ -197,10 +209,10 @@ class Node {
   // beacon flood
   // bool kBeaconFlood;
   VersionVector beacon_vector_;
-  inline void SendBeaconFlood();
+  // inline void SendBeaconFlood();
   // void OnBeaconFlood(const Interest& beacon);
-  std::unordered_map<NodeID, EventId> connected_group;
-  EventId beacon_flood_event;
+  // std::unordered_map<NodeID, EventId> connected_group;
+  // EventId beacon_flood_event;
 };
 
 }  // namespace vsync

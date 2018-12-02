@@ -31,18 +31,18 @@ public:
                     MakeUintegerAccessor(&SyncForSleepApp::nid_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
                     MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker())
-      .AddAttribute("UseHeartbeat", "if use heartbeat", BooleanValue(true),
-                    MakeBooleanAccessor(&SyncForSleepApp::useHeartbeat_), MakeBooleanChecker())
-      .AddAttribute("UseHeartbeatFlood", "if use heartbeat flood", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useHeartbeatFlood_), MakeBooleanChecker())
+      // .AddAttribute("UseHeartbeat", "if use heartbeat", BooleanValue(true),
+      //               MakeBooleanAccessor(&SyncForSleepApp::useHeartbeat_), MakeBooleanChecker())
+      // .AddAttribute("UseHeartbeatFlood", "if use heartbeat flood", BooleanValue(false),
+      //               MakeBooleanAccessor(&SyncForSleepApp::useHeartbeatFlood_), MakeBooleanChecker())
       .AddAttribute("UseBeacon", "if use beacon", BooleanValue(false),
                     MakeBooleanAccessor(&SyncForSleepApp::useBeacon_), MakeBooleanChecker())
       .AddAttribute("UseBeaconSuppression", "if use suppression for beacon", BooleanValue(false),
                     MakeBooleanAccessor(&SyncForSleepApp::useBeaconSuppression_), MakeBooleanChecker())
       .AddAttribute("UseRetx", "if use retx for sync notify", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useRetx_), MakeBooleanChecker())
-      .AddAttribute("UseBeaconFlood", "if beacon flood", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useBeaconFlood_), MakeBooleanChecker());
+                    MakeBooleanAccessor(&SyncForSleepApp::useRetx_), MakeBooleanChecker());
+      // .AddAttribute("UseBeaconFlood", "if beacon flood", BooleanValue(false),
+      //               MakeBooleanAccessor(&SyncForSleepApp::useBeaconFlood_), MakeBooleanChecker());
 
       
 
@@ -61,8 +61,17 @@ protected:
   virtual void
   StartApplication()
   {
-    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(nid_, prefix_, std::bind(&SyncForSleepApp::GetCurrentPosition, this),
-      useHeartbeat_, useHeartbeatFlood_, useBeacon_, useBeaconSuppression_, useRetx_, useBeaconFlood_));
+    m_instance.reset(new vsync::sync_for_sleep::SimpleNode(
+      nid_, 
+      prefix_, 
+      std::bind(&SyncForSleepApp::GetCurrentPosition, this),
+      // useHeartbeat_, 
+      // useHeartbeatFlood_, 
+      useBeacon_, 
+      // useBeaconSuppression_, 
+      // useBeaconFlood_,
+      useRetx_
+    ));
     m_instance->Start();
   }
 
@@ -77,12 +86,12 @@ private:
   std::unique_ptr<vsync::sync_for_sleep::SimpleNode> m_instance;
   vsync::NodeID nid_;
   Name prefix_;
-  bool useHeartbeat_;
-  bool useHeartbeatFlood_;
+  // bool useHeartbeat_;
+  // bool useHeartbeatFlood_;
   bool useBeacon_;
   bool useBeaconSuppression_;
   bool useRetx_;
-  bool useBeaconFlood_;
+  // bool useBeaconFlood_;
 };
 
 } // namespace ndn
