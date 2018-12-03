@@ -49,6 +49,12 @@ static time::seconds kBeaconLifetime = time::seconds(6);
 static time::seconds kRetxTimer = time::seconds(2);
 // static time::seconds kBeaconFloodLifetime = time::seconds(6);
 
+/* Distribution for multi-hop */
+std::uniform_int_distribution<> mhop_dist(0, 10000);
+static int pMultihopForwardSyncInterest1 = 3000;
+static int pMultihopForwardSyncInterest2 = 7000;
+static int pMultihopForwardDataInterest = 5000;
+
 static int kMaxDataContent = 4000;
 static const int kMissingDataThreshold = 10;
 
@@ -483,6 +489,12 @@ void Node::onNotifyACK(const Data& ack) {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate NotifyACK: " << ack.getName().toUri());
   }
 
+  /* Do a broadcast for multi-hop */
+  int delay = dt_dist(rengine_);
+  scheduler_.scheduleEvent(time::microseconds(delay), [this, ack] {
+    face_.put(ack);
+  });
+
   // process the difference in ack
   const auto& content = ack.getContent();
   proto::AckContent content_proto;
@@ -525,8 +537,9 @@ void Node::sendAck() {
 /****************************************************************************/
 /**
  * Listen for sync notify interests. When receiving a sync interest, compare
- *  the received vector with my own vector, and send out immediatelyonly the 
+ *  the received vector with my own vector, and send out immediately only the 
  *  differences (i.e. nodes or sync numbers that I have but he doesn't).
+ * Opportunistiscally forward sync interest.
  * After sending out vector differences, also check if I'm missing any data. If
  *  there is, fetch these data interests.
  */
@@ -554,6 +567,7 @@ void Node::OnSyncNotify(const Interest& interest) {
   key_chain_.sign(*ack, signingWithSha256());
   // face_.put(*ack);
 
+  /* Send ACK */
   if (!difference.empty()) {
     /* If local vector contains newer state, send ACK immediately */
     sendAck();
@@ -564,6 +578,28 @@ void Node::OnSyncNotify(const Interest& interest) {
     dt_ack = scheduler_.scheduleEvent(time::microseconds(next_ack), [this] {
       sendAck();
       VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay" );
+    });
+  }
+
+  /**
+   * Forward sync interest probabilistically for multi-hop.
+   * Default: Forward with probability p1.
+   * Overhear interest with same name:  Forward with probability p2. (p1 < p2)
+   */
+  int p = mhop_dist(rengine_);
+  bool forward = true;
+  if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
+    forward = false;
+  } else if (p > pMultihopForwardSyncInterest2) {
+    forward = false;
+  }
+  /* Forward interest (with random delay) */
+  if (forward) {
+    int delay = dt_dist(rengine_);
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {
+      face_.expressInterest(interest, std::bind(&Node::onNotifyACK, this, _2),
+                            [](const Interest&, const lp::Nack&) {},
+                            [](const Interest&) {});
     });
   }
 
@@ -709,6 +745,12 @@ void Node::OnRemoteData(const Data& data) {
   scheduler_.cancelEvent(wt_data_interest);
   left_retx_count = kInterestTransmissionTime;
   SendDataInterest();
+  
+  /* Broadcast the received data for multi-hop */
+  int delay = dt_dist(rengine_);
+  scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
+    face_.put(data);
+  });
 }
 
 /**
@@ -729,10 +771,17 @@ void Node::OnDataInterest(const Interest& interest) {
     face_.put(*iter->second);
     VSYNC_LOG_TRACE( "node(" << nid_ << ") sends the data name = " << iter->second->getName());
   } else {
-    /* Otherwise add to my PIT, but don't have to send another interest */
-    face_.addToPit(interest, std::bind(&Node::OnRemoteData, this, _2),
-                   [](const Interest&, const lp::Nack&) {},
-                   [](const Interest&) {});
+    /* Otherwise add to my PIT, but send probabilistically */
+    int p = mhop_dist(rengine_);
+    if (p < pMultihopForwardDataInterest) {
+      face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
+                            [](const Interest&, const lp::Nack&) {},
+                            [](const Interest&) {});
+    } else {
+      face_.addToPit(interest, std::bind(&Node::OnRemoteData, this, _2),
+                    [](const Interest&, const lp::Nack&) {},
+                    [](const Interest&) {});
+    }
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
   }
 }

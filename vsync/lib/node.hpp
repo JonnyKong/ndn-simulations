@@ -140,7 +140,7 @@ class Node {
   uint64_t retx_notify_interest;
   uint64_t retx_bundled_interest;
 
-  // for data inteerst
+  // for data interest
   std::queue<std::queue<Name>> pending_interest;
   EventId wt_data_interest;
   EventId dt_data_interest;
