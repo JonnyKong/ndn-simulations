@@ -31,9 +31,22 @@
 #include <ndn-cxx/lp/tags.hpp>
 #include "face/null-face.hpp"
 #include <boost/random/uniform_int_distribution.hpp>
+#include "core/random.hpp"
 
 namespace nfd {
 
+static inline double
+getRandomNumber(double start, double end)
+{
+  std::uniform_real_distribution<double> dist(start, end);
+  return dist(getGlobalRng());
+}
+
+static int kDataOut = 5000;
+static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
+static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
+static const Name kBundledDataPrefix = Name("/ndn/bundledData");
+static const Name kBeaconPrefix = Name("/ndn/beacon");
 NFD_LOG_INIT("Forwarder");
 
 Forwarder::Forwarder()
@@ -67,6 +80,18 @@ Forwarder::Forwarder()
   });
 
   isSleep = false;
+  in_data_dt = false;
+  m_loss_rate = 0.0;
+
+  m_outData = 0;
+  m_outAck = 0;
+  m_outBundledData = 0;
+  m_outNotifyInterest = 0;
+  m_outBeacon = 0;
+  m_outBundledInterest = 0;
+  m_outDataInterest = 0;
+  m_cacheHit = 0;
+  m_cacheHitSpecial = 0;
 }
 
 Forwarder::~Forwarder() = default;
@@ -87,39 +112,66 @@ Forwarder::startProcessInterest(Face& face, const Interest& interest)
     return;
   }
 
-  // check for the sleeping command, no need to go beyond the pipeline
-  bool sleepingCommand = scope_prefix::LOCALHOST.isPrefixOf(interest.getName()) &&
-                         interest.getName().get(-2).toUri() == "sleeping";
-  if (sleepingCommand) {
-    NFD_LOG_DEBUG("onIncomingInterest is a sleepingCommand!");
-    auto command = interest.getName().get(-1).toUri();
-    if (command == "go-to-sleep") {
-      isSleep = true;
-    }
-    else if (command == "wake-up") {
-      isSleep = false;
-    }
-    else {
-      NFD_LOG_DEBUG("Invalid sleeping commands!");
-      // (drop)
-    }
+  const Name getSyncTraffic = Name("/ndn/getNDNTraffic");
+  if (interest.getName().compare(0, 2, getSyncTraffic) == 0) {
+    // print the traffic info
+    std::cout << "NFD: node(" << m_id << ") m_outNotifyInterest = " << m_outNotifyInterest << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_outDataInterest = " << m_outDataInterest << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_outBundledInterest = " << m_outBundledInterest << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_outBeacon = " << m_outBeacon << std::endl;
+
+    std::cout << "NFD: node(" << m_id << ") m_outData = " << m_outData << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_outAck = " << m_outAck << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_outBundledData = " << m_outBundledData << std::endl;
+
+    std::cout << "NFD: node(" << m_id << ") m_cacheHit = " << m_cacheHit << std::endl;
+    std::cout << "NFD: node(" << m_id << ") m_cacheHitSpecial = " << m_cacheHitSpecial << std::endl;
     return;
   }
 
-  if (!isSleep) {
-    this->onIncomingInterest(face, interest);
+  /*
+  // for heartbeat
+  const Name heartbeat = Name("/ndn/heartbeat");
+  if ((interest.getName().compare(0, 2, data_interest) == 0 ||
+      interest.getName().compare(0, 2, sync_notify) == 0 ||
+      interest.getName().compare(0, 2, heartbeat) == 0) &&
+      face.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL)
+  {
+    auto n = Name("/ndn/incomingPacketNotify");
+    Interest i = Interest(n);
+    auto& entry = m_fib.findLongestPrefixMatch(n);
+    const fib::NextHopList& nexthops = entry.getNextHops();
+    BOOST_ASSERT(nexthops.size() == 1);
+    Face& appFace = nexthops.begin()->getFace();
+    appFace.sendInterest(i);
   }
+  */
+
+  this->onIncomingInterest(face, interest);
 }
 
 void
 Forwarder::startProcessData(Face& face, const Data& data)
 {
-  if (!isSleep) {
-    // check fields used by forwarding are well-formed
-    // (none needed)
+  // check fields used by forwarding are well-formed
+  // (none needed)
 
-    this->onIncomingData(face, data);
+  /*
+  // for heartbeat
+  if ((data.getName().compare(0, 2, sync_data) == 0) &&
+      face.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL)
+  {
+    auto n = Name("/ndn/incomingPacketNotify");
+    Interest i = Interest(n);
+    auto& entry = m_fib.findLongestPrefixMatch(n);
+    const fib::NextHopList& nexthops = entry.getNextHops();
+    BOOST_ASSERT(nexthops.size() == 1);
+    Face& appFace = nexthops.begin()->getFace();
+    appFace.sendInterest(i);
   }
+  */
+
+  this->onIncomingData(face, data);
 }
 
 void
@@ -185,6 +237,19 @@ Forwarder::onIncomingInterest(Face& inFace, const Interest& interest)
   // cancel unsatisfy & straggler timer
   this->cancelUnsatisfyAndStragglerTimer(*pitEntry);
 
+  if (interest.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+    if (interest.getInterestLifetime() == time::milliseconds(54)) {
+      // insert in-record
+      pitEntry->insertOrUpdateInRecord(const_cast<Face&>(inFace), interest);
+
+      // set PIT unsatisfy timer
+      this->setUnsatisfyTimer(pitEntry);
+      // should recover
+      // std::cout << "node(" << m_id << ") the current node only adds the pit entry, not sending the interests = " << interest.getName() << std::endl;
+      return;
+    }
+  }
+
   const pit::InRecordCollection& inRecords = pitEntry->getInRecords();
   bool isPending = inRecords.begin() != inRecords.end();
   if (!isPending) {
@@ -199,11 +264,13 @@ Forwarder::onIncomingInterest(Face& inFace, const Interest& interest)
         this->onContentStoreHit(inFace, pitEntry, interest, *match);
       }
       else {
+        NFD_LOG_DEBUG("entering onContentMiss()");
         this->onContentStoreMiss(inFace, pitEntry, interest);
       }
     }
   }
   else {
+    NFD_LOG_DEBUG("entering onContentMiss()");
     this->onContentStoreMiss(inFace, pitEntry, interest);
   }
 }
@@ -279,6 +346,14 @@ Forwarder::onContentStoreHit(const Face& inFace, const shared_ptr<pit::Entry>& p
 
   // goto outgoing Data pipeline
   this->onOutgoingData(data, *const_pointer_cast<Face>(inFace.shared_from_this()));
+
+  // do statistics
+  if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+    m_cacheHit++;
+    if (inFace.getScope() == ndn::nfd::FACE_SCOPE_LOCAL) {
+      m_cacheHitSpecial++;
+    }
+  }
 }
 
 void
@@ -289,6 +364,29 @@ Forwarder::onOutgoingInterest(const shared_ptr<pit::Entry>& pitEntry, Face& outF
 
   // insert out-record
   pitEntry->insertOrUpdateOutRecord(outFace, interest);
+
+  // record related sync interests
+  if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
+    if (interest.getName().compare(0, 2, kSyncDataPrefix) == 0) m_outDataInterest++;
+    else if (interest.getName().compare(0, 2, kBundledDataPrefix) == 0) m_outBundledInterest++;
+    else if (interest.getName().compare(0, 2, kSyncNotifyPrefix) == 0) m_outNotifyInterest++;
+    else if (interest.getName().compare(0, 2, kBeaconPrefix) == 0) m_outBeacon++;
+  }
+
+  // simulate packet loss at the sender side
+  if ((interest.getName().compare(0, 2, kSyncNotifyPrefix) == 0 ||
+      interest.getName().compare(0, 2, kSyncDataPrefix) == 0 ||
+      interest.getName().compare(0, 2, kBundledDataPrefix) == 0 ||
+      interest.getName().compare(0, 2, kBeaconPrefix) == 0) &&
+      outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
+      m_loss_rate != 0.0)
+  {
+    uint64_t number = getRandomNumber(0, 100);
+    double bound = m_loss_rate * 100;
+    if (number >= 0 && number < bound) {
+      return;
+    }
+  }
 
   // send Interest
   outFace.sendInterest(interest);
@@ -339,6 +437,7 @@ Forwarder::onInterestFinalize(const shared_ptr<pit::Entry>& pitEntry, bool isSat
   // PIT delete
   this->cancelUnsatisfyAndStragglerTimer(*pitEntry);
   m_pit.erase(pitEntry.get());
+  // NFD_LOG_DEBUG("onInterestFinalize finish!");
 }
 
 void
@@ -358,6 +457,32 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
     // (drop)
     return;
   }
+  /*
+  std::shared_ptr<sd::Entry> sdEntry = m_sd.find(data.getName());
+  if (sdEntry != nullptr) {
+    std::cout << "receive data from other nodes! Cancel the scheduling data!" << std::endl;
+    scheduler::cancel(sdEntry->m_scheduleDataTimer);
+    m_sd.erase(sdEntry.get());
+    return;
+  }
+  */
+  // do suppression for ack only
+  if (data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
+    auto entry = m_pending_ack.find(data.getName());
+    if (entry != m_pending_ack.end()) {
+      // std::cout << "node(" << m_id << ") receive same ack from other nodes! Cancel the scheduling ack!" << std::endl;
+      m_pending_ack.erase(data.getName());
+    }
+  }
+  // do suppression for sync data
+  /*
+  if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+    auto entry = m_pending_data.find(data.getName());
+    if (entry != m_pending_data.end()) {
+      m_pending_data.erase(data.getName());
+    }
+  }
+  */
 
   // PIT match
   pit::DataMatchResult pitMatches = m_pit.findAllDataMatches(data);
@@ -380,7 +505,6 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
   // foreach PitEntry
   auto now = time::steady_clock::now();
   for (const shared_ptr<pit::Entry>& pitEntry : pitMatches) {
-    NFD_LOG_DEBUG("onIncomingData matching=" << pitEntry->getName());
 
     // cancel unsatisfy & straggler timer
     this->cancelUnsatisfyAndStragglerTimer(*pitEntry);
@@ -410,6 +534,12 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
 
   // foreach pending downstream
   for (Face* pendingDownstream : pendingDownstreams) {
+    // if is vsyncData which means in ad hoc networks, we need to send out the data even if outFace == inFace
+    if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+      this->onOutgoingData(data, *pendingDownstream);
+      continue;
+    }
+    
     if (pendingDownstream == &inFace) {
       continue;
     }
@@ -439,11 +569,20 @@ Forwarder::onDataUnsolicited(Face& inFace, const Data& data)
 void
 Forwarder::onOutgoingData(const Data& data, Face& outFace)
 {
+  if (data.getName().compare(0, 2, kSyncDataPrefix) == 0 ||
+    data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
+    // go to another pipeline
+    if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
+      onOutgoingVsyncData(data, outFace);
+      return;
+    }
+  }
   if (outFace.getId() == face::INVALID_FACEID) {
     NFD_LOG_WARN("onOutgoingData face=invalid data=" << data.getName());
     return;
   }
   NFD_LOG_DEBUG("onOutgoingData face=" << outFace.getId() << " data=" << data.getName());
+
 
   // /localhost scope control
   bool isViolatingLocalhost = outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
@@ -456,10 +595,126 @@ Forwarder::onOutgoingData(const Data& data, Face& outFace)
   }
 
   // TODO traffic manager
+  if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
+    if (data.getName().compare(0, 2, kBundledDataPrefix) == 0) m_outBundledData++;
+  }
+
+  // simulate packet loss at the sender side
+  if ((data.getName().compare(0, 2, kSyncDataPrefix) == 0 ||
+       data.getName().compare(0, 2, kBundledDataPrefix) == 0) &&
+      outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
+      m_loss_rate != 0.0)
+  { 
+    uint64_t number = getRandomNumber(0, 100);
+    double bound = m_loss_rate * 100;
+    if (number >= 0 && number < bound) {
+      return;
+    }
+  }
 
   // send Data
   outFace.sendData(data);
   ++m_counters.nOutData;
+}
+
+void Forwarder::onOutgoingVsyncData(const Data& data, Face& outFace) {
+  const Name& n = data.getName();
+  if (m_pending_data.find(n) != m_pending_data.end()) return;
+  if (m_pending_ack.find(n) != m_pending_ack.end()) return;
+  if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+    m_pending_data[n] = std::pair<std::shared_ptr<const Data>, std::shared_ptr<Face>>(data.shared_from_this(), outFace.shared_from_this()); 
+  }
+  else m_pending_ack[n] = std::pair<std::shared_ptr<const Data>, std::shared_ptr<Face>>(data.shared_from_this(), outFace.shared_from_this());
+  if (in_data_dt) return;
+  else {
+    in_data_dt = true;
+    uint64_t t_dataout = getRandomNumber(0, kDataOut);
+    data_dt = scheduler::schedule(time::microseconds(t_dataout), bind(&Forwarder::onVsyncDataDTTimeout, this));
+  }
+  /*
+  shared_ptr<sd::Entry> sdEntry = m_sd.insert(data);
+  BOOST_ASSERT(sdEntry != nullptr);
+  uint64_t t_dataout = getRandomNumber(0, kDataOut);
+  sdEntry->m_scheduleDataTimer = scheduler::schedule(time::milliseconds(t_dataout), 
+    bind(&Forwarder::onVsyncDataSchedulerTimeout, this, cref(data), ref(outFace), sdEntry));
+  */
+  /*
+  shared_ptr<sd::Entry> sdEntry = m_sd.insert(data);
+  BOOST_ASSERT(sdEntry != nullptr);
+  uint64_t t_dataout = getRandomNumber(0, kDataOut);
+  vsyncDataScheduler = scheduler::schedule(time::milliseconds(t_dataout),
+    bind(&Forwarder::onVsyncDataSchedulerTimeout, this, cref(data), ref(outFace), sdEntry));
+    */
+}
+
+void Forwarder::onVsyncDataDTTimeout() {
+  // the pending_ack has higher priority than pending_data
+  NFD_LOG_DEBUG("onVsyncDataDTTimeout");
+  if (m_pending_data.empty() && m_pending_ack.empty()) {
+    in_data_dt = false;
+    return;
+  }
+
+  std::shared_ptr<Face> outFace;
+  std::shared_ptr<const Data> outData;
+  Name n;
+  bool sending_ack = false;
+  if (!m_pending_ack.empty()) {
+    outFace = m_pending_ack.begin()->second.second;
+    outData = m_pending_ack.begin()->second.first;
+    n = m_pending_ack.begin()->first;
+    sending_ack = true;
+    m_outAck++;
+  }
+  else {
+    outFace = m_pending_data.begin()->second.second;
+    outData = m_pending_data.begin()->second.first;
+    n = m_pending_data.begin()->first;
+    m_outData++;
+  }
+
+  // std::cout << "node(" << m_id << ") data DT time out, the current pending data list size = " << m_pending_data.size() << ", now sending data name = " << n.toUri() << "to face = " << outFace->getId() << std::endl;
+  if (outFace->getId() == face::INVALID_FACEID) {
+    NFD_LOG_WARN("onOutgoingData face=invalid data=" << n);
+    return;
+  }
+
+  // /localhost scope control
+  bool isViolatingLocalhost = outFace->getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
+                              scope_prefix::LOCALHOST.isPrefixOf(n);
+  if (isViolatingLocalhost) {
+    NFD_LOG_DEBUG("onOutgoingData face=" << outFace->getId() <<
+                  " data=" << n << " violates /localhost");
+    // (drop)
+    return;
+  }
+
+  // simulate packet loss at the sender side
+  bool packet_loss = false;
+  if (outFace->getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL && m_loss_rate != 0.0)
+  { 
+    uint64_t number = getRandomNumber(0, 100);
+    double bound = m_loss_rate * 100;
+    if (number >= 0 && number < bound) {
+      packet_loss = true;
+    }
+  }
+  if (!packet_loss) {
+    NFD_LOG_DEBUG("onOutgoingVsyncData face=" << outFace->getId() << " data=" << n);
+    outFace->sendData(*outData);
+  }
+
+  if (sending_ack) {
+    if (m_pending_ack.find(n) != m_pending_ack.end()) m_pending_ack.erase(n);
+  }
+  else m_pending_data.erase(n);
+
+  if (m_pending_data.empty() && m_pending_ack.empty()) {
+    in_data_dt = false;
+    return;
+  }
+  uint64_t t_dataout = getRandomNumber(0, kDataOut);
+  data_dt = scheduler::schedule(time::microseconds(t_dataout), bind(&Forwarder::onVsyncDataDTTimeout, this));
 }
 
 void

@@ -134,7 +134,7 @@ for line in file:
     if line.find("retx_bundled_interest") != -1:
       retx_bundled_interest.append(float(line.split(' ')[-1]))
 
-# cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
+cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
 # print the unsynced data
 '''
@@ -185,8 +185,8 @@ print("out bundled interest = " + str(np.sum(np.array(out_bundled_interest))))
 print("out data = " + str(np.sum(np.array(out_data))))
 print("out ack = " + str(np.sum(np.array(out_ack))))
 print("out bundled data = " + str(np.sum(np.array(out_bundled_data))))
-print("collision rx = " + str(np.mean(np.array(collision_rx))))
-print("collision tx = " + str(np.mean(np.array(collision_tx))))
+# print("collision rx = " + str(np.mean(np.array(collision_rx))))
+# print("collision tx = " + str(np.mean(np.array(collision_tx))))
 print("cache hit = " + str(np.sum(np.array(cache_hit))))
 print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
 print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))

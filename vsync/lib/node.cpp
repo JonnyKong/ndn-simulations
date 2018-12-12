@@ -163,7 +163,7 @@ Node::Node(Face& face,
     std::cout << "node(" << nid_ << ") retx_notify_interest = " << retx_notify_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_data_interest = " << retx_data_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_bundled_interest = " << retx_bundled_interest << std::endl;
-    // PrintNDNTraffic();
+    PrintNDNTraffic();
   });
 
   scheduler_.scheduleEvent(time::seconds(1196), [this] {
@@ -332,12 +332,12 @@ void Node::RetxSyncNotify() {
 /**
  * Send an interest for getting NDN traffic.
  */
-// void Node::PrintNDNTraffic() {
-//   Interest i(kGetNDNTraffic, time::milliseconds(5));
-//   face_.expressInterest(i, [](const Interest&, const Data&) {},
-//                         [](const Interest&, const lp::Nack&) {},
-//                         [](const Interest&) {});
-// }
+void Node::PrintNDNTraffic() {
+  Interest i(kGetNDNTraffic, time::milliseconds(5));
+  face_.expressInterest(i, [](const Interest&, const Data&) {},
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+}
 
 /**
  * Init necessary event scheduling, and then schedule the first publishData()
@@ -753,6 +753,41 @@ void Node::OnRemoteData(const Data& data) {
   });
 }
 
+void Node::OnRemoteData1(const Data& data) {
+  const auto& n = data.getName();
+  assert(n.compare(waiting_data) == 0);
+  assert(data_store_.find(n) == data_store_.end());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv suppressed data: name=" << n.toUri());
+
+  auto node_id = ExtractNodeID(n);
+  auto node_seq = ExtractSequence(n);
+  if (data_store_.find(n) == data_store_.end()) {
+    // update the version_vector, data_store_ and recv_window
+    data_store_[n] = data.shared_from_this();
+    logDataStore(n);
+    recv_window[node_id].Insert(node_seq);
+    auto last_ack = recv_window[node_id].LastAckedData();
+    assert(last_ack != 0);
+    if (last_ack != version_vector_[node_id]) {
+      vv_update++;
+      for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
+        logStateStore(node_id, seq);
+      }
+    }
+    version_vector_[node_id] = last_ack;
+  }
+  // cancel the wt timer
+  scheduler_.cancelEvent(wt_data_interest);
+  left_retx_count = kInterestTransmissionTime;
+  SendDataInterest();
+  
+  /* Broadcast the received data for multi-hop */
+  int delay = dt_dist(rengine_);
+  scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
+    face_.put(data);
+  });
+}
+
 /**
  * Listen for interest for data. If I have data with same name in data_store_, 
  *  reply with this data packet.
@@ -778,9 +813,12 @@ void Node::OnDataInterest(const Interest& interest) {
                             [](const Interest&, const lp::Nack&) {},
                             [](const Interest&) {});
     } else {
-      face_.addToPit(interest, std::bind(&Node::OnRemoteData, this, _2),
+      face_.addToPit(interest, std::bind(&Node::OnRemoteData1, this, _2),
                     [](const Interest&, const lp::Nack&) {},
                     [](const Interest&) {});
+      // face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
+      //                       [](const Interest&, const lp::Nack&) {},
+      //                       [](const Interest&) {});
     }
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
   }

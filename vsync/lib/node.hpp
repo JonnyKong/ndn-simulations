@@ -173,10 +173,11 @@ class Node {
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnRemoteData(const Data& data);
+  void OnRemoteData1(const Data& data);
 
   // helper functions
   inline void StartSimulation();
-  // inline void PrintNDNTraffic();
+  inline void PrintNDNTraffic();
   inline void logDataStore(const Name& name);
   inline void logStateStore(const NodeID& nid, int64_t seq);
 

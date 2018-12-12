@@ -34,6 +34,8 @@
 #include "table/fib.hpp"
 #include "table/pit.hpp"
 #include "table/cs.hpp"
+#include "table/vst.hpp"
+#include "table/sd.hpp"
 #include "table/measurements.hpp"
 #include "table/strategy-choice.hpp"
 #include "table/dead-nonce-list.hpp"
@@ -192,6 +194,17 @@ public: // allow enabling ndnSIM content store (will be removed in the future)
     isSleep = false;
   }
 
+  void 
+  setNodeID(uint64_t nodeID) {
+    m_id = nodeID;
+  }
+
+  void
+  setLossRate(double loss_rate) {
+    std::cout << "set m_loss_rate as " << loss_rate << std::endl; 
+    m_loss_rate = loss_rate;
+  }
+
 public:
   /** \brief trigger before PIT entry is satisfied
    *  \sa Strategy::beforeSatisfyInterest
@@ -218,6 +231,14 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE: // pipelines
   */
   VIRTUAL_WITH_TESTS void
   onContentStoreMiss(const Face& inFace, const shared_ptr<pit::Entry>& pitEntry, const Interest& interest);
+
+  VIRTUAL_WITH_TESTS void
+  onVsyncDataListContentMiss(const Face& inFace, const shared_ptr<pit::Entry>& pitEntry, const Interest& interest);
+
+  VIRTUAL_WITH_TESTS void
+  onVstSchedulerTimeout(const Face& inFace, const shared_ptr<pit::Entry>& pitEntry,
+                        const shared_ptr<vst::Entry>& vstEntry, const Interest& interest,
+                        std::set<Face*> pendingUpstreams);
 
   /** \brief Content Store hit pipeline
   */
@@ -262,6 +283,15 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE: // pipelines
    */
   VIRTUAL_WITH_TESTS void
   onOutgoingData(const Data& data, Face& outFace);
+
+  VIRTUAL_WITH_TESTS void
+  onOutgoingVsyncData(const Data& data, Face& outFace);
+
+  VIRTUAL_WITH_TESTS void
+  onVsyncDataSchedulerTimeout(const Data& data, Face& outFace, shared_ptr<sd::Entry> sdEntry);
+
+  VIRTUAL_WITH_TESTS void
+  onVsyncDataDTTimeout();
 
   /** \brief incoming Nack pipeline
    */
@@ -321,6 +351,26 @@ private:
   DeadNonceList      m_deadNonceList;
   NetworkRegionTable m_networkRegionTable;
   shared_ptr<Face>   m_csFace;
+  Vst                m_vst;
+  Sd                 m_sd;
+  uint64_t           m_id;
+
+  uint64_t           m_outData;
+  uint64_t           m_outAck;
+  uint64_t           m_outBundledData;
+  uint64_t           m_outNotifyInterest;
+  uint64_t           m_outBeacon;
+  uint64_t           m_outBundledInterest;
+  uint64_t           m_outDataInterest;
+  uint64_t           m_cacheHit;
+  uint64_t           m_cacheHitSpecial;
+  std::unordered_map<Name, std::pair<std::shared_ptr<const Data>, std::shared_ptr<Face>>> m_pending_data;
+  std::unordered_map<Name, std::pair<std::shared_ptr<const Data>, std::shared_ptr<Face>>> m_pending_ack;
+  bool               in_data_dt;
+
+  scheduler::EventId data_dt;
+
+  double m_loss_rate;
 
   ns3::Ptr<ns3::ndn::ContentStore> m_csFromNdnSim;
 

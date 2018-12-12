@@ -253,7 +253,7 @@ main (int argc, char *argv[])
   // install SyncApp
   uint64_t idx = 0;
   for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
-    Ptr<Node> object = *i;
+    Ptr<Node> object = *i;    /* This is NS3::Node, not ndn::Node */
     Ptr<MobilityModel> position = object->GetObject<MobilityModel>();
     Vector pos = position->GetPosition();
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
@@ -269,8 +269,8 @@ main (int argc, char *argv[])
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 
-    // StackHelper::setNodeID(idx, object);
-    // StackHelper::setLossRate(loss_rate, object);
+    StackHelper::setNodeID(idx, object);
+    StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
