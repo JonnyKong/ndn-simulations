@@ -3,7 +3,7 @@ import os.path
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import math
 import re
 import sys
@@ -17,20 +17,20 @@ class DataInfo:
         self.LastTime = birth
         self.Owner = 1
 
-def cdf_plot(data, name, number, c):
-  """
-  data: dataset
-  name: name on legend
-  number: how many pieces are split between min and max
-  """
-  ecdf = sm.distributions.ECDF(data)
-  x = np.linspace(min(data), max(data), number)
-  y = ecdf(x)
+# def cdf_plot(data, name, number, c):
+#   """
+#   data: dataset
+#   name: name on legend
+#   number: how many pieces are split between min and max
+#   """
+#   ecdf = sm.distributions.ECDF(data)
+#   x = np.linspace(min(data), max(data), number)
+#   y = ecdf(x)
 
-  #plt.step(x, y, label=name)
-  plt.scatter(x, y, alpha=0.5, label=name, color=c)
-  #plt.xlim(0, 5)
-  plt.show()
+#   #plt.step(x, y, label=name)
+#   plt.scatter(x, y, alpha=0.5, label=name, color=c)
+#   #plt.xlim(0, 5)
+#   plt.show()
 
 # out_file_name = sys.argv[1]
 syncDuration = []
@@ -134,7 +134,7 @@ for line in file:
     if line.find("retx_bundled_interest") != -1:
       retx_bundled_interest.append(float(line.split(' ')[-1]))
 
-cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
+# cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
 # print the unsynced data
 '''

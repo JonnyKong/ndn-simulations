@@ -813,12 +813,12 @@ void Node::OnDataInterest(const Interest& interest) {
                             [](const Interest&, const lp::Nack&) {},
                             [](const Interest&) {});
     } else {
-      face_.addToPit(interest, std::bind(&Node::OnRemoteData1, this, _2),
-                    [](const Interest&, const lp::Nack&) {},
-                    [](const Interest&) {});
-      // face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
-      //                       [](const Interest&, const lp::Nack&) {},
-      //                       [](const Interest&) {});
+      // face_.addToPit(interest, std::bind(&Node::OnRemoteData1, this, _2),
+      //               [](const Interest&, const lp::Nack&) {},
+      //               [](const Interest&) {});
+      face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
+                            [](const Interest&, const lp::Nack&) {},
+                            [](const Interest&) {});
     }
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
   }
