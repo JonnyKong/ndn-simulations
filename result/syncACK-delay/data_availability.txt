@@ -1,6 +1,0 @@
-    1. 0-packet-loss-data-availability:1.0
-    2. 1-packet-loss-data-availability:1.0
-    3. 5-packet-loss-data-availability：0.999992704964
-    4. 10--packet-loss-data-availability：0.999967596621
-
-    (one ack: 1267365.01, two ack: 1258178.78)

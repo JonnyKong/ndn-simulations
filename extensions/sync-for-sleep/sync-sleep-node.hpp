@@ -36,10 +36,7 @@ class SimpleNode {
               ns3::ndn::StackHelper::getKeyChain(), 
               nid,
               prefix, 
-              std::bind(&SimpleNode::OnData, this, _1), 
-              getCurrentPos,
-              useBeacon,
-              useRetx) {}
+              std::bind(&SimpleNode::OnData, this, _1)) {}
 
   void Start() {
   }
