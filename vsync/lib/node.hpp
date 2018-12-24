@@ -30,6 +30,7 @@ private:
   Name prefix_;           /* Configured by application */
   Face& face_;
   KeyChain& key_chain_;
+  std::mt19937 rengine_;
 
   /* Node states */
   VersionVector version_vector_;
@@ -37,10 +38,13 @@ private:
   bool generate_data;       /* If false, PubishData() returns immediately */
   Name pending_sync_notify; /* Sync interest name sent or will be sent */
   Name waiting_sync_notify; /* Sync interest name sent but not yet ACKed */
+  std::shared_ptr<Data> ack;/* ACK packet to be sent */
   unsigned int notify_time; /* No. of retx left for same sync interest */
+  bool vv_updated;          /* Whether state have updated since last sync interest sent */
 
   /* Node statistics */
   unsigned int data_num;    /* Number of data this node generated */
+  unsigned int retx_notify_interest;  /* No of retx for sync interest */
 
   /* Helper functions */
   void StartSimulation();
@@ -54,6 +58,10 @@ private:
   void OnSyncInterest(const Interest &interest);
   void SendSyncAck();
   void onSyncAck(const Data &data);
+  EventId wt_notify;      /* Send sync interest wait timer */
+  EventId dt_notify;      /* Send sync interest delay timer */
+  void OnNotifyDTTimeout();
+  void OnNotifyWTTimeout();
 
   /* 2. Data packet processing */
   void SendDataInterest();

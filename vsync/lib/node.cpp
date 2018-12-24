@@ -13,15 +13,33 @@ namespace vsync {
 /* Constants */
 /* No. of times same sync interest will be sent */
 static int kSyncInterestMax = 3;
+/* Lifetime of sync interests */
+static time::milliseconds kSendOutInterestLifetime = time::milliseconds(100);
+/* Timeout for sync interests */
+static time::milliseconds kInterestWT = time::milliseconds(100);
+/* Distributions for multi-hop */
+std::uniform_int_distribution<> mhop_dist(0, 10000);
+static int pMultihopForwardSyncInterest1 = 3000;
+static int pMultihopForwardSyncInterest2 = 7000;
+static int pMultihopForwardDataInterest = 5000;
+
+
+/* RNGs */
+/* Delay for sending everything to avoid collision */
+std::uniform_int_distribution<> dt_dist(0, 5000);
+/* Delay for sending ACK when local vector is not newer */
+std::uniform_int_distribution<> ack_dist(50000, 100000);
+
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, Keychain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data) : 
            face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
-           prefix_(prefix), data_cb_(std::move(on_data)) {
+           prefix_(prefix), data_cb_(std::move(on_data)), rengine_(rdevice_()) {
   
   /* Initialize statistics */
   data_num = 0;
+  retx_notify_interest = 0;
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -53,6 +71,7 @@ Node::Node(Face &face, Scheduler &scheduler, Keychain &key_chain, const NodeID &
   generate_data = true;     
   pending_sync_notify = Name("/");
   waiting_sync_notify = Name("/");
+  vv_updated = true;
 
   /* Initiate event scheduling */
   /* 2s: Start simulation */
@@ -156,12 +175,66 @@ void Node::SendSyncInterest() {
   auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
 
   pending_sync_notify = sync_notify_interest_name;
-  notify_time = kSyncNotifyMax;
+  notify_time = kSyncInterestMax;     /* Reset retx counter */
+  vv_updated = false;                 
   
+  scheduler_.cancelEvent(dt_notify);
+  scheduler_.cancelEvent(wt_notify);
+  int delay = dt_dist(rengine_);
+  dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), 
+                                       [this] { OnNotifyDTTimeout(); });
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest" );
+  const auto& n = interest.getName();
+  NodeID node_id = ExtractNodeID(n);
+  auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
 
+  /* Prepare ACK packet */
+  ack = std::make_shared<Data>(n);
+  VersionVector difference;
+  for (auto entry: version_vector_) {
+    auto node_id = entry.first;
+    auto seq = entry.second;
+    if (other_vv.find(node_id) == other_vv.end() || other_vv[node_id] < seq) {
+      difference[node_id] = seq;
+    }
+  }
+  proto::AckContent content_proto;
+  EncodeVV(difference, content_proto.mutable_vv());
+  const std::string& content_proto_str = content_proto.SerializeAsString();
+  ack->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
+                  content_proto_str.size());
+  key_chain_.sign(*ack, signingWithSha256());
+
+  /* Send ACK */
+  if (!difference.empty()) {
+    /* If local vector contains newer state, send ACK immediately */
+    int delay = dt_dist(rengine_);
+    scheduler_.scheduleEvent(time::microseconds(delay), 
+                             [this] { face_.put(*ack); });
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately" );
+  } else {
+    /* If local vector outdated or equal, send ACK after some delay */
+    int next_ack = ack_dist(rengine_);
+    scheduler_.scheduleEvent(time::microseconds(delay), 
+                             [this] { face_.put(*ack); });
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay" );
+  }
+
+  /**
+   * Forward sync interest probabilistically for multi-hop.
+   * Default: Forward with probability p1.
+   * Overhear interest with same name:  Forward with probability p2. (p1 < p2)
+   */
+  int p = mhop_dist(rengine_);
+  bool forward = true;
+  if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
+    forward = false;
+  } else if (p > pMultihopForwardSyncInterest2) {
+    forward = false;
+  }
 }
 
 void Node::SendSyncAck() {
@@ -170,6 +243,36 @@ void Node::SendSyncAck() {
 
 void Node::onSyncAck(const Data &data) {
 
+}
+
+void Node::OnNotifyDTTimeout() {
+  Interest i(pending_sync_notify, kSendOutInterestLifetime);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Notify Interest: i.name=" << pending_sync_notify.toUri());
+  face_.expressInterest(i, std::bind(&Node::onNotifyACK, this, _2),
+                        [](const Interest&, const lp::Nack&) {},
+                        [](const Interest&) {});
+  
+  if (notify_time < kSyncNotifyMax) { 
+    /* This is a retx (scheduled by Node::OnNotifyWTTimeout()) */
+    retx_notify_interest++;
+  }
+  waiting_sync_notify = pending_sync_notify;
+  scheduler_.cancelEvent(wt_notify);
+  wt_notify = scheduler_.scheduleEvent(kInterestWT, 
+                                       [this] { OnNotifyWTTimeout(); });
+}
+
+void Node::OnNotifyWTTimeout() {
+  waiting_sync_notify = Name("/");
+  notify_time--;
+  if (notify_time == 0) {
+    /* Stop retx attempt for this sync interest */
+    return;
+  }
+  /* Schedule next retx with random delay */
+  int delay = dt_dist(rengine_);
+  dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), 
+                                       [this] { OnNotifyDTTimeout(); });
 }
 
 
