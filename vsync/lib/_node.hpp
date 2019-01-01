@@ -72,10 +72,11 @@ class Node {
        KeyChain& key_chain, 
        const NodeID& nid,
        const Name& prefix, 
-       DataCb on_data, 
-       GetCurrentPos getCurrentPos,
-       bool useBeacon, 
-       bool useRetx);
+       DataCb on_data
+      //  GetCurrentPos getCurrentPos,
+      //  bool useBeacon, 
+      //  bool useRetx
+  );
 
   const NodeID& GetNodeID() const { return nid_; };
 
@@ -83,17 +84,17 @@ class Node {
 
   void SendSyncNotify();
 
-  std::vector<uint64_t> GetDataSnapshots() {
-    return data_snapshots;
-  }
+  // std::vector<uint64_t> GetDataSnapshots() {
+  //   return data_snapshots;
+  // }
 
-  std::vector<VersionVector> GetVVSnapshots() {
-    return vv_snapshots;
-  }
+  // std::vector<VersionVector> GetVVSnapshots() {
+  //   return vv_snapshots;
+  // }
 
-  std::vector<std::unordered_map<NodeID, ReceiveWindow>> GetRWSnapshots() {
-    return rw_snapshots;
-  }
+  // std::vector<std::unordered_map<NodeID, ReceiveWindow>> GetRWSnapshots() {
+  //   return rw_snapshots;
+  // }
 
   uint64_t GetCollisionNum() {
     return collision_num;
@@ -173,7 +174,7 @@ class Node {
   inline void SendDataInterest();
   void OnDataInterest(const Interest& interest);
   void OnRemoteData(const Data& data);
-  // void OnRemoteData1(const Data& data);
+  void OnRemoteData1(const Data& data);
 
   // helper functions
   inline void StartSimulation();

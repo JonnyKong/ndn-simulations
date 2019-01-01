@@ -63,21 +63,22 @@ Node::Node(Face& face,
            KeyChain& key_chain,
            const NodeID& nid, 
            const Name& prefix, 
-           Node::DataCb on_data, 
-           Node::GetCurrentPos getCurrentPos,
+           Node::DataCb on_data 
+          //  Node::GetCurrentPos getCurrentPos,
           //  bool useHeartbeat, 
           //  bool useHeartbeatFlood, 
-           bool useBeacon, 
+          //  bool useBeacon, 
           //  bool useBeaconSuppression, 
           //  bool useBeaconFlood,
-           bool useRetx) 
+          //  bool useRetx
+           ) 
            : face_(face),
              key_chain_(key_chain),
              nid_(nid),
              prefix_(prefix),
              scheduler_(scheduler),
              data_cb_(std::move(on_data)),
-             get_current_pos_(getCurrentPos),
+            //  get_current_pos_([]() -> double { return 0.0; }),
              rengine_(rdevice_()) {
   collision_num = 0;
   suppression_num = 0;
@@ -103,9 +104,11 @@ Node::Node(Face& face,
 
   // kHeartbeat = useHeartbeat;
   // kHeartbeatFlood = useHeartbeatFlood;
-  kBeacon = useBeacon;
+  // kBeacon = useBeacon;
+  kBeacon = true;
   // kBeaconSuppression = useBeaconSuppression;
-  kRetx = useRetx;
+  // kRetx = useRetx;
+  kRetx = true;
   // kBeaconFlood = useBeaconFlood;
 
   face_.setInterestFilter(
@@ -193,7 +196,7 @@ void Node::OnBeacon(const Interest& beacon) {
     // fast resync, send notify Interest
     std::string one_hop_list = to_string(node_id);
     for (auto entry: one_hop) one_hop_list += ", " + to_string(entry.first);
-    // VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: " << node_id << ", the current one-hop list: " << one_hop_list);
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: " << node_id << ", the current one-hop list: " << one_hop_list);
     SendSyncNotify();
   }
   // update the one_hop info
@@ -363,7 +366,7 @@ void Node::StartSimulation() {
   // }
 
   std::string content = std::string(100, '*');
-  last = ns3::Simulator::Now().GetMicroSeconds();
+  // last = ns3::Simulator::Now().GetMicroSeconds();
   scheduler_.scheduleEvent(time::milliseconds(10 * nid_),
                            [this, content] { PublishData(content); });
 }
@@ -412,6 +415,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
     // scheduler_.scheduleEvent(time::seconds(5), [this] { SendSyncNotify(); });
     // scheduler_.scheduleEvent(time::seconds(10), [this] { SendSyncNotify(); });
   }
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Publishes Data, Will Send Sync Notify");
 
   /* In case an ACK is scheduled to send, send the updated vector */
 
@@ -571,13 +575,13 @@ void Node::OnSyncNotify(const Interest& interest) {
   if (!difference.empty()) {
     /* If local vector contains newer state, send ACK immediately */
     sendAck();
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately" );
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately because local vector contains newer state" );
   } else {
     /* If local vector outdated or equal, send ACK after some delay */
     int next_ack = ack_dist(rengine_);
     dt_ack = scheduler_.scheduleEvent(time::microseconds(next_ack), [this] {
       sendAck();
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay" );
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay because local vector outdated or equal" );
     });
   }
 
@@ -721,6 +725,10 @@ void Node::SendDataInterest() {
 void Node::OnRemoteData(const Data& data) {
   const auto& n = data.getName();
   assert(n.compare(waiting_data) == 0);
+  if (n.compare(waiting_data)) {
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Assertion Failed"); 
+    abort(); 
+  }
   assert(data_store_.find(n) == data_store_.end());
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data: name=" << n.toUri());
 
@@ -753,40 +761,44 @@ void Node::OnRemoteData(const Data& data) {
   });
 }
 
-// void Node::OnRemoteData1(const Data& data) {
-//   const auto& n = data.getName();
-//   assert(n.compare(waiting_data) == 0);
-//   assert(data_store_.find(n) == data_store_.end());
-//   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv suppressed data: name=" << n.toUri());
+void Node::OnRemoteData1(const Data& data) {  
+  const auto& n = data.getName();
+  assert(n.compare(waiting_data) == 0);
+  if (n.compare(waiting_data)) {
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Assertion Failed"); 
+    abort(); 
+  }
+  assert(data_store_.find(n) == data_store_.end());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv suppressed data: name=" << n.toUri());
 
-//   auto node_id = ExtractNodeID(n);
-//   auto node_seq = ExtractSequence(n);
-//   if (data_store_.find(n) == data_store_.end()) {
-//     // update the version_vector, data_store_ and recv_window
-//     data_store_[n] = data.shared_from_this();
-//     logDataStore(n);
-//     recv_window[node_id].Insert(node_seq);
-//     auto last_ack = recv_window[node_id].LastAckedData();
-//     assert(last_ack != 0);
-//     if (last_ack != version_vector_[node_id]) {
-//       vv_update++;
-//       for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
-//         logStateStore(node_id, seq);
-//       }
-//     }
-//     version_vector_[node_id] = last_ack;
-//   }
-//   // cancel the wt timer
-//   scheduler_.cancelEvent(wt_data_interest);
-//   left_retx_count = kInterestTransmissionTime;
-//   SendDataInterest();
+  auto node_id = ExtractNodeID(n);
+  auto node_seq = ExtractSequence(n);
+  if (data_store_.find(n) == data_store_.end()) {
+    // update the version_vector, data_store_ and recv_window
+    data_store_[n] = data.shared_from_this();
+    logDataStore(n);
+    recv_window[node_id].Insert(node_seq);
+    auto last_ack = recv_window[node_id].LastAckedData();
+    assert(last_ack != 0);
+    if (last_ack != version_vector_[node_id]) {
+      vv_update++;
+      for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
+        logStateStore(node_id, seq);  /* Inferred state store */
+      }
+    }
+    version_vector_[node_id] = last_ack;
+  }
+  // cancel the wt timer
+  scheduler_.cancelEvent(wt_data_interest);
+  left_retx_count = kInterestTransmissionTime;
+  SendDataInterest();
   
-//   /* Broadcast the received data for multi-hop */
-//   int delay = dt_dist(rengine_);
-//   scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
-//     face_.put(data);
-//   });
-// }
+  /* Broadcast the received data for multi-hop */
+  int delay = dt_dist(rengine_);
+  scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
+    face_.put(data);
+  });
+}
 
 /**
  * Listen for interest for data. If I have data with same name in data_store_, 
@@ -809,20 +821,29 @@ void Node::OnDataInterest(const Interest& interest) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
-      face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
-                            [](const Interest&, const lp::Nack&) {},
-                            [](const Interest&) {});
+      int delay = dt_dist(rengine_);
+      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest, n] {  
+        face_.expressInterest(interest, std::bind(&Node::OnRemoteData1, this, _2),
+                              [](const Interest&, const lp::Nack&) {},
+                              [](const Interest&) {});
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward Data Interest: i.name=" << n.toUri());
+      });
+      // face_.expressInterest(interest, std::bind(&Node::OnRemoteData1, this, _2),
+      //                       [](const Interest&, const lp::Nack&) {},
+      //                       [](const Interest&) {});
     } else {
       // face_.addToPit(interest, std::bind(&Node::OnRemoteData, this, _2),
       //               [](const Interest&, const lp::Nack&) {},
       //               [](const Interest&) {});
       Interest interest_suppress(interest);
-      interest_suppress.setInterestLifetime(kAddToPitInterestLifetime);
-      face_.expressInterest(interest, std::bind(&Node::OnRemoteData, this, _2),
+      // interest_suppress.setInterestLifetime(kAddToPitInterestLifetime);
+      interest_suppress.setInterestLifetime(interest.getInterestLifetime());
+      face_.expressInterest(interest_suppress, 
+                            std::bind(&Node::OnRemoteData1, this, _2),
                             [](const Interest&, const lp::Nack&) {},
                             [](const Interest&) {});
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Data Interest: i.name=" << n.toUri());
     }
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
   }
 }
 
@@ -833,6 +854,10 @@ void Node::OnDataInterest(const Interest& interest) {
 void Node::OnBundledData(const Data& data) {
   const auto& n = data.getName();
   assert(n.compare(waiting_data) == 0);
+  if (n.compare(waiting_data)) {
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Assertion Failed");  
+    abort();
+  }
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv bundled data: name=" << n.toUri());
 
   const auto& content = data.getContent();

@@ -45,6 +45,7 @@ private:
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, ReceiveWindow> recv_window;  /* Record received data for logging */
+  std::unordered_map<NodeID, EventId> one_hop;  /* Nodes within one-hop distance */
 
   /* Node statistics */
   unsigned int data_num;              /* Number of data this node generated */
@@ -81,10 +82,13 @@ private:
   void SendBundledDataReply();
   void onBundledDataReply(const Data &data);
 
-  /* 4. Beacons */
+  /* 4. Pro-active events (beacons and sync interest retx) */
+  void RetxSyncInterest();
   void SendBeacon();
   void onBeacon(const Interest &beacon);
 };
 
 } // namespace vsync
 } // namespace ndn
+
+#endif  // NDN_VSYNC_NODE_HPP_
