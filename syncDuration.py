@@ -1,7 +1,7 @@
 import os
 import os.path
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import statsmodels.api as sm
 # import matplotlib.pyplot as plt
 import math
@@ -19,7 +19,7 @@ class DataInfo:
 
 # def cdf_plot(data, name, number, c):
 #   """
-#   data: dataset
+#   data: dataset   
 #   name: name on legend
 #   number: how many pieces are split between min and max
 #   """
@@ -68,6 +68,7 @@ for line in file:
             data_store[data_name].LastTime = int(time)
         data_info = data_store[data_name]
         if data_info.Owner > node_num:
+            print data_name
             raise AssertionError()
         elif data_info.Owner == node_num:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
@@ -193,3 +194,8 @@ print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
 print("state sync duration = " + str(np.mean(stateSyncDuration)))
+
+print("number of data available = " + str(syncDuration.size))
+print("number of data produced = " + str(len(data_store)))
+for k, v in data_store.items():
+  print(k + ": " + str(v.Owner))

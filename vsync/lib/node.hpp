@@ -3,6 +3,12 @@
 #ifndef NDN_VSYNC_NODE_HPP_
 #define NDN_VSYNC_NODE_HPP_
 
+#include <functional>
+#include <exception>
+#include <map>
+#include <queue>
+#include <unordered_map>
+
 #include "ndn-common.hpp"
 #include "vsync-common.hpp"
 #include "vsync-helper.hpp"
@@ -16,8 +22,27 @@ public:
   /* Dependence injection: callback for application */
   using DataCb = std::function<void(const VersionVector& vv)>;
 
-  /* Public */
-  Node(Face &face, Scheduler &scheduler, Keychain &key_chain, const NodeID &nid,
+  /* typedef */
+  enum DataType : uint32_t {
+    kUserData = 0,
+    kGeoData  = 1,
+    kSyncReply = 9668,
+    kConfigureInfo = 9669,
+    kVectorClock = 9670,
+  };
+
+  using GetCurrentPos = std::function<double()>;
+
+  class Error : public std::exception {
+   public:
+    Error(const std::string& what) : what_(what) {}
+    virtual const char* what() const noexcept override { return what_.c_str(); }
+   private:
+    std::string what_;
+  };
+
+  /* For user application */
+  Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
        const Name &prefix, DataCb on_data);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
@@ -26,10 +51,13 @@ private:
   /* Node properties */
   Node(const Node&) = delete;
   Node& operator=(const Node&) = delete;
+  Face& face_;
+  Scheduler& scheduler_;
+  KeyChain& key_chain_;
   const NodeID nid_;            /* To be configured by application */
   Name prefix_;                 /* To be configured by application */
-  Face& face_;
-  KeyChain& key_chain_;
+  DataCb data_cb_;              /* Never used in simulation */
+  std::random_device rdevice_;
   std::mt19937 rengine_;
 
   /* Node states */
@@ -48,7 +76,7 @@ private:
   std::unordered_map<NodeID, EventId> one_hop;  /* Nodes within one-hop distance */
 
   /* Node statistics */
-  unsigned int data_num;              /* Number of data this node generated */
+  // unsigned int data_num;              /* Number of data this node generated */
   unsigned int retx_sync_interest;    /* No of retx for sync interest */
   unsigned int retx_data_interest;    /* No of retx for data interest */
   unsigned int retx_bundled_interest; /* No of retx for bundled data interest */
@@ -63,10 +91,10 @@ private:
   /* 1. Sync packet processing */
   void SendSyncInterest();
   void OnSyncInterest(const Interest &interest);
-  void SendSyncAck();
-  void onSyncAck(const Data &data);
-  EventId wt_notify;                   /* Send sync interest wait timer */
-  EventId dt_notify;                   /* Send sync interest delay timer */
+  void SendSyncAck(const Name &n);
+  void OnSyncAck(const Data &ack);
+  EventId wt_notify;        /* Send sync interest wait timer */
+  EventId dt_notify;        /* Send sync interest delay timer */
   void OnNotifyDTTimeout();
   void OnNotifyWTTimeout();
 
@@ -74,18 +102,21 @@ private:
   void SendDataInterest();
   void OnDataInterest(const Interest &interest);
   void SendDataReply();
-  void onDataReply(const Data &data);
+  void OnDataReply(const Data &data);
+  EventId wt_data_interest; /* Event for sending next data interest */
 
   /* 3. Bundled data packet processing */
   void SendBundledDataInterest();
   void OnBundledDataInterest(const Interest &interest);
   void SendBundledDataReply();
-  void onBundledDataReply(const Data &data);
+  void OnBundledDataReply(const Data &data);
 
   /* 4. Pro-active events (beacons and sync interest retx) */
   void RetxSyncInterest();
   void SendBeacon();
-  void onBeacon(const Interest &beacon);
+  void OnBeacon(const Interest &beacon);
+  EventId retx_event;   /* Event for retx next sync intrest */
+  EventId beacon_event; /* Event for retx next beacon */
 };
 
 } // namespace vsync
