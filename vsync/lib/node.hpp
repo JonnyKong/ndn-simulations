@@ -73,7 +73,7 @@ private:
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, ReceiveWindow> recv_window;  /* Record received data for logging */
-  std::unordered_map<NodeID, EventId> one_hop;  /* Nodes within one-hop distance */
+  std::unordered_map<NodeID, EventId> one_hop;    /* Nodes within one-hop distance */
 
   /* Node statistics */
   // unsigned int data_num;              /* Number of data this node generated */

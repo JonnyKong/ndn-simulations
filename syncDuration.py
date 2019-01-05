@@ -197,5 +197,3 @@ print("state sync duration = " + str(np.mean(stateSyncDuration)))
 
 print("number of data available = " + str(syncDuration.size))
 print("number of data produced = " + str(len(data_store)))
-for k, v in data_store.items():
-  print(k + ": " + str(v.Owner))

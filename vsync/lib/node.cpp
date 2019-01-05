@@ -367,10 +367,10 @@ void Node::OnSyncAck(const Data &ack) {
   /* If reply is for outstanding sync notify, cancel timeout timer */
   if (n.compare(waiting_sync_notify) == 0) {
     scheduler_.cancelEvent(wt_notify);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV NotifyACK: " << ack.getName().toUri());
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
   }
   else {
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate NotifyACK: " << ack.getName().toUri());
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate sync ack: " << ack.getName().toUri());
   }
 
   /* Do a broadcast for multi-hop */
@@ -410,7 +410,7 @@ void Node::OnSyncAck(const Data &ack) {
 
 void Node::OnNotifyDTTimeout() {
   Interest i(pending_sync_notify, kSendOutInterestLifetime);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Notify Interest: i.name=" << pending_sync_notify.toUri());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
   face_.expressInterest(i, std::bind(&Node::OnSyncAck, this, _2),
                         [](const Interest&, const lp::Nack&) {},
                         [](const Interest&) {});
@@ -489,7 +489,7 @@ void Node::SendDataInterest() {
   int delay = dt_dist(rengine_);
   scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
     Interest i(n, kSendOutInterestLifetime);
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Data Interest: i.name=" << n.getPrefix(4).toUri());
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data interest: i.name=" << n.getPrefix(4).toUri());
     if (n.compare(0, 2, kSyncDataPrefix) == 0) {
       face_.expressInterest(i, std::bind(&Node::OnDataReply, this, _2),
                           [](const Interest&, const lp::Nack&) {},
@@ -516,12 +516,12 @@ void Node::SendDataInterest() {
 
 void Node::OnDataInterest(const Interest &interest) {
   const auto& n = interest.getName();
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv Data Interest: i.name=" << n.toUri());
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data interest: i.name=" << n.toUri());
 
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
     /* If I have this data, send it */
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") sends the data name = " << iter->second->getName());
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << iter->second->getName());
     int delay = dt_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(delay), [this, iter] {
       face_.put(*iter->second);
@@ -530,7 +530,7 @@ void Node::OnDataInterest(const Interest &interest) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward Interest: i.name=" << n.toUri());
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
       int delay = dt_dist(rengine_);
       scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {  
         face_.expressInterest(interest, std::bind(&Node::OnDataReply, this, _2),
@@ -538,7 +538,7 @@ void Node::OnDataInterest(const Interest &interest) {
                               [](const Interest&) {});
       });
     } else {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress Interest: i.name=" << n.toUri());
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
       Interest interest_suppress(interest);
       interest_suppress.setInterestLifetime(kAddToPitInterestLifetime);
       /* No need to add delay timer because data wasn't actually sent */
@@ -610,7 +610,7 @@ void Node::SendBundledDataInterest() {
 
 void Node::OnBundledDataInterest(const Interest &interest) {
   auto n = interest.getName();
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv Bundled Data Interest: " << n.toUri() );
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv bundled data interest: " << n.toUri() );
 
   auto missing_data = DecodeVVFromName(ExtractEncodedMV(n));
   proto::PackData pack_data_proto;
@@ -622,11 +622,6 @@ void Node::OnBundledDataInterest(const Interest &interest) {
 
     /* Because bundled interest/data are unicast */
     assert(version_vector_.find(node_id) != version_vector_.end());
-    // TODO: Remove
-    if (version_vector_.find(node_id) == version_vector_.end()) {
-      std::cout << "Assertion failed. Aborting ..." << std::endl;
-      abort();
-    }
 
     for (auto seq = start_seq; seq <= version_vector_[node_id]; ++seq) {
       Name data_name = MakeDataName(node_id, seq);
@@ -676,11 +671,6 @@ void Node::SendBundledDataReply() {
 void Node::OnBundledDataReply(const Data &data) {
   const auto& n = data.getName();
   // assert(n.compare(waiting_data) == 0); // TODO
-  // TODO: Remove
-  if (n.compare(waiting_data)) {
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Assertion Failed");  
-    abort();
-  }
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv bundled data: name=" << n.toUri());
 
   const auto& content = data.getContent();
@@ -749,8 +739,6 @@ void Node::OnBundledDataReply(const Data &data) {
 /* 4. Pro-active events (beacons and sync interest retx) */
 void Node::RetxSyncInterest() {
   SendSyncInterest();
-  // retx_event = scheduler_.scheduleEvent(kRetxTimer, 
-  //                                       [this] { RetxSyncInterest(); });
   int delay = retx_dist(rengine_);
   retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
     RetxSyncInterest(); 
