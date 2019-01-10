@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 loss_rate_list=(0.0 0.01 0.05 0.1 0.3 0.5)
 wifi_range_list=(40 60 80 100 120 140 160) 
 
@@ -62,7 +64,7 @@ main() {
     local RESULT_DIR=result/$(date -I)
     rm -rf $RESULT_DIR
 
-    for TIME in {1..10}; do
+    for TIME in {1..2}; do
         mkdir -p ${RESULT_DIR}/${TIME}/raw
         local pids=""
         # for i in "${loss_rate_list[@]}"; do
@@ -78,10 +80,11 @@ main() {
         summarize_wifi_range_result ${RESULT_DIR}/${TIME}
     done
 
-    for TIME in {1..10}; do
+    for TIME in {1..2}; do
         mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
     done
 
+    python calculate_mean.py >> $RESULT_DIR/wifi_range.txt
 }
 
 main

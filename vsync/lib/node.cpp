@@ -396,12 +396,14 @@ void Node::OnSyncAck(const Data &ack) {
     assert(false);
   }
   auto vector_other = DecodeVV(content_proto.vv());
+  bool sendSyncInterest = false;    /* Set if remote vector has newer state */
   for (auto entry : vector_other) {
     std::queue<Name> q;
     auto node_id = entry.first;
     auto node_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < node_seq) {
+      sendSyncInterest = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
@@ -415,6 +417,16 @@ void Node::OnSyncAck(const Data &ack) {
       }
     }
   }
+
+  /**
+   * If remote vector has newer state, send another sync interest immediately,
+   *  because there may be sync reply got stuck in the network due to 
+   *  "one-interest-one-reply policy".
+   */
+   if (sendSyncInterest) {
+     VSYNC_LOG_TRACE( "node(" << nid_ << ") Send another sync interest immediately");
+     SendSyncInterest();
+   }
 }
 
 void Node::OnNotifyDTTimeout() {
