@@ -234,6 +234,7 @@ main (int argc, char *argv[])
   ////////////////
   // 1. Install Wifi
   NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
+  wifi.AssignStreams(wifiNetDevices, 0);  // Fix rng
 
   // 2. Install Mobility model
   // installMobility(nodes, constant_pause, pause_time);

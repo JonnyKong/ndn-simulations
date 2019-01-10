@@ -12,7 +12,6 @@ run_loss_rate() {
         > ${RESULT_DIR}/raw/loss_rate_${LOSS_RATE}.txt 2>&1
     python syncDuration.py ${RESULT_DIR}/raw/loss_rate_${LOSS_RATE}.txt 20 \
         > ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt
-    pids="$pids $!"
 }
 
 run_wifi_range() {
@@ -24,7 +23,6 @@ run_wifi_range() {
         > ${RESULT_DIR}/raw/wifi_range_${WIFI_RANGE}.txt 2>&1
     python syncDuration.py ${RESULT_DIR}/raw/wifi_range_${WIFI_RANGE}.txt 20 \
         > ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt
-    pids="$pids $!"
 }
 
 summarize_wifi_range_result() {
@@ -39,12 +37,15 @@ summarize_wifi_range_result() {
             | grep "out data interest" >> ${RESULT_DIR}/${FILENAME}
     done
 
-    # Transmitted data
+    # Transmitted data (out data + out ack + out bundled data)
     echo "Transmitted data (number of packets):" >> ${RESULT_DIR}/${FILENAME}
     for WIFI_RANGE in "${wifi_range_list[@]}"; do
         echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "out" | awk '{sum+=$NF} END {print sum}' \
+            | grep "out" \
+            | grep "data\|ack\|bundled data" \
+            | grep -v "interest" \
+            | awk '{sum+=$NF} END {print sum}' \
             >> ${RESULT_DIR}/${FILENAME}
     done
 
@@ -57,19 +58,30 @@ summarize_wifi_range_result() {
     done
 }
 
-run() {
+main() {
     local RESULT_DIR=result/$(date -I)
-    pids=""
-    rm -rf $RESULT_DIR && mkdir -p $RESULT_DIR/raw
-    for i in "${loss_rate_list[@]}"; do
-        run_loss_rate $i $RESULT_DIR &
-    done
-    for i in "${wifi_range_list[@]}"; do
-        run_wifi_range $i $RESULT_DIR &
-    done    
-    wait $pids
+    rm -rf $RESULT_DIR
 
-    summarize_wifi_range_result $RESULT_DIR
+    for TIME in {1..10}; do
+        mkdir -p ${RESULT_DIR}/${TIME}/raw
+        local pids=""
+        # for i in "${loss_rate_list[@]}"; do
+        #     run_loss_rate $i $RESULT_DIR &
+        #     pids="$pids $!"
+        # done
+        for i in "${wifi_range_list[@]}"; do
+            run_wifi_range $i ${RESULT_DIR}/${TIME} &
+            pids="$pids $!"
+            sleep 10
+        done    
+        wait $pids
+        summarize_wifi_range_result ${RESULT_DIR}/${TIME}
+    done
+
+    for TIME in {1..10}; do
+        mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
+    done
+
 }
 
-run
+main

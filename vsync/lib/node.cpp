@@ -27,9 +27,9 @@ static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(5
 static const time::milliseconds kInterestWT = time::milliseconds(100);
 /* Distributions for multi-hop */
 std::uniform_int_distribution<> mhop_dist(0, 10000);
-static const int pMultihopForwardSyncInterest1 = 3000;
-static const int pMultihopForwardSyncInterest2 = 7000;
-static const int pMultihopForwardDataInterest = 5000;
+static const int pMultihopForwardSyncInterest1 =  10000;
+static const int pMultihopForwardSyncInterest2 =  10000;
+static const int pMultihopForwardDataInterest =   10000;
 /* Distribution for data generation */
 static const int data_generation_rate_mean = 40000;
 std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
@@ -52,15 +52,19 @@ std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 
 
 /* Options */
-static bool kBeacon = false;  /* Use beacon? */
-static bool kRetx = true;     /* Use sync interest retx? */
+static bool kBeacon =   false;  /* Use beacon? */
+static bool kRetx =     true;   /* Use sync interest retx? */
+static bool kMultihop = true;   /* Use multihop? */ 
 
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data) : 
            face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
-           prefix_(prefix), data_cb_(std::move(on_data)), rengine_(rdevice_()) {
+           prefix_(prefix), data_cb_(std::move(on_data)), 
+          //  rengine_(rdevice_()) 
+          rengine_(0)
+  {
   
   /* Initialize statistics */
   // data_num = 0;
@@ -275,17 +279,19 @@ void Node::OnSyncInterest(const Interest &interest) {
     int delay = dt_dist(rengine_);
     // scheduler_.scheduleEvent(time::microseconds(delay), 
     //                          [this] { face_.put(*ack); });
-    scheduler_.scheduleEvent(time::microseconds(delay),
-                             [this, n] { SendSyncAck(n); });
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately" );
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
+      SendSyncAck(n); 
+    });
   } else {
     /* If local vector outdated or equal, send ACK after some delay */
     int delay = ack_dist(rengine_);
     // scheduler_.scheduleEvent(time::microseconds(delay), 
     //                          [this] { face_.put(*ack); });
-    scheduler_.scheduleEvent(time::microseconds(delay),
-                             [this, n] { SendSyncAck(n); });
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay" );
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay:" << n.toUri() );
+      SendSyncAck(n); 
+    });
   }
 
   /**
@@ -293,20 +299,22 @@ void Node::OnSyncInterest(const Interest &interest) {
    * Default: Forward with probability p1.
    * Overhear interest with same name:  Forward with probability p2. (p1 < p2)
    */
-  int p = mhop_dist(rengine_);
-  bool forward = true;
-  if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
-    forward = false;
-  } else if (p > pMultihopForwardSyncInterest2) {
-    forward = false;
-  }
-  if (forward) {
-    int delay = dt_dist(rengine_);
-    scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {
-      face_.expressInterest(interest, std::bind(&Node::OnSyncAck, this, _2),
-                            [](const Interest&, const lp::Nack&) {},
-                            [](const Interest&) {});
-    });
+  if (kMultihop) {
+    int p = mhop_dist(rengine_);
+    bool forward = true;
+    if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
+      forward = false;
+    } else if (p > pMultihopForwardSyncInterest2) {
+      forward = false;
+    }
+    if (forward) {
+      int delay = dt_dist(rengine_);
+      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {
+        face_.expressInterest(interest, std::bind(&Node::OnSyncAck, this, _2),
+                              [](const Interest&, const lp::Nack&) {},
+                              [](const Interest&) {});
+      });
+    }
   }
 
   /* Pipeline for fetching missing data */
@@ -362,7 +370,6 @@ void Node::SendSyncAck(const Name &n) {
 }
 
 void Node::OnSyncAck(const Data &ack) {
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") pending_interest size: " << pending_interest.size());  // TODO: Remove
   const auto& n = ack.getName();
   /* If reply is for outstanding sync notify, cancel timeout timer */
   if (n.compare(waiting_sync_notify) == 0) {
@@ -373,11 +380,13 @@ void Node::OnSyncAck(const Data &ack) {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate sync ack: " << ack.getName().toUri());
   }
 
-  /* Do a broadcast for multi-hop */
-  int delay = dt_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this, ack] {
-    face_.put(ack);
-  });
+  // /* Do a broadcast for multi-hop */
+  // if (kMultihop) {
+  //   int delay = dt_dist(rengine_);
+  //   scheduler_.scheduleEvent(time::microseconds(delay), [this, ack] {
+  //     face_.put(ack);
+  //   });
+  // }
 
   /* Extract difference */
   const auto& content = ack.getContent();
@@ -521,18 +530,18 @@ void Node::OnDataInterest(const Interest &interest) {
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
     /* If I have this data, send it */
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << iter->second->getName());
     int delay = dt_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(delay), [this, iter] {
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << iter->second->getName());
       face_.put(*iter->second);
     });
-  } else {
+  } else if (kMultihop) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
       int delay = dt_dist(rengine_);
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {  
+      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest, n] {  
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
         face_.expressInterest(interest, std::bind(&Node::OnDataReply, this, _2),
                               [](const Interest&, const lp::Nack&) {},
                               [](const Interest&) {});
@@ -595,10 +604,12 @@ void Node::OnDataReply(const Data &data) {
   SendDataInterest();
 
   /* Broadcast the received data for multi-hop */
-  int delay = dt_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
-    face_.put(data);
-  });
+  if (kMultihop) {
+    int delay = dt_dist(rengine_);
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
+      face_.put(data);
+    });
+  }
 }
 
 
