@@ -3,7 +3,8 @@
 set -e
 
 loss_rate_list=(0.0 0.01 0.05 0.1 0.3 0.5)
-wifi_range_list=(40 60 80 100 120 140 160) 
+# wifi_range_list=(40 60 80 100 120 140 160) 
+wifi_range_list=(100) 
 
 run_loss_rate() {
     local LOSS_RATE=$1
@@ -30,13 +31,55 @@ run_wifi_range() {
 summarize_wifi_range_result() {
     local RESULT_DIR=$1
     local FILENAME=wifi_range.txt
+
+    # Sync interest
+    echo "Sync interest:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "out notify interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Sync ack
+    echo "Sync ack:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "out ack" >> ${RESULT_DIR}/${FILENAME}
+    done
     
-    # Interest for missing data
-    echo "Interest for missing data:" >> ${RESULT_DIR}/${FILENAME}
+    # Data interest
+    echo "Data interest:" >> ${RESULT_DIR}/${FILENAME}
     for WIFI_RANGE in "${wifi_range_list[@]}"; do
         echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "out data interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Data reply
+    echo "Data reply:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "out data" \
+            | grep -v "out data interest" \
+            >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Bundled interest
+    echo "Bundled interest:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "out bundled interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Bundled data
+    echo "Bundled data:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "out bundled data" >> ${RESULT_DIR}/${FILENAME}
     done
 
     # Transmitted data (out data + out ack + out bundled data)
@@ -64,7 +107,7 @@ main() {
     local RESULT_DIR=result/$(date -I)
     rm -rf $RESULT_DIR
 
-    for TIME in {1..2}; do
+    for TIME in {1..1}; do
         mkdir -p ${RESULT_DIR}/${TIME}/raw
         local pids=""
         # for i in "${loss_rate_list[@]}"; do
@@ -80,7 +123,7 @@ main() {
         summarize_wifi_range_result ${RESULT_DIR}/${TIME}
     done
 
-    for TIME in {1..2}; do
+    for TIME in {1..1}; do
         mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
     done
 

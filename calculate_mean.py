@@ -1,7 +1,7 @@
 import datetime
 
 path = "result/" + str(datetime.date.today())
-filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (2)]
+filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (1)]
 
 def main():
     files = [open(file, "r") for file in filenames]

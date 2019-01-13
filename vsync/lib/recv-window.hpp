@@ -20,6 +20,10 @@ class ReceiveWindow {
   using SeqNumInterval = boost::icl::discrete_interval<uint64_t>;
   using SeqNumIntervalSet = boost::icl::interval_set<uint64_t>;
 
+  ReceiveWindow() {
+    win.insert(0);
+  }
+
   void Insert(uint64_t seq) {
     win.insert(SeqNumInterval(seq));
   }

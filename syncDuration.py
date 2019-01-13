@@ -68,6 +68,7 @@ for line in file:
             data_store[data_name].LastTime = int(time)
         data_info = data_store[data_name]
         if data_info.Owner > node_num:
+            print line
             print data_name
             raise AssertionError()
         elif data_info.Owner == node_num:
@@ -86,6 +87,8 @@ for line in file:
             state_store[state_name].LastTime = int(time)
         state_info = state_store[state_name]
         if state_info.Owner > node_num:
+            print line
+            print state_info.Owner
             raise AssertionError()
         elif state_info.Owner == node_num:
             cur_sync_duration = state_info.LastTime - state_info.GenerationTime
@@ -128,7 +131,7 @@ for line in file:
       cache_hit.append(float(line.split(' ')[-1]))
     if line.find("m_cacheHitSpecial") != -1:
       cache_hit_special.append(float(line.split(' ')[-1]))
-    if line.find("retx_notify_interest") != -1:
+    if line.find("retx_sync_interest") != -1:
       retx_notify_interest.append(float(line.split(' ')[-1]))
     if line.find("retx_data_interest") != -1:
       retx_data_interest.append(float(line.split(' ')[-1]))
@@ -194,6 +197,9 @@ print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
 print("state sync duration = " + str(np.mean(stateSyncDuration)))
+
+# for data_name in data_store:
+#     print data_store[data_name].Owner 
 
 print("number of data available = " + str(syncDuration.size))
 print("number of data produced = " + str(len(data_store)))

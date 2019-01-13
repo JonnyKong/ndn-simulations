@@ -24,13 +24,19 @@ public:
 
   /* typedef */
   enum DataType : uint32_t {
-    kUserData = 0,
-    kGeoData  = 1,
-    kSyncReply = 9668,
-    kConfigureInfo = 9669,
-    kVectorClock = 9670,
+    kUserData       = 0,
+    kGeoData        = 1,
+    kSyncReply      = 9668,
+    kConfigureInfo  = 9669,
+    kVectorClock    = 9670
   };
 
+  enum SourceType : uint32_t {
+    kOriginal   = 0,
+    kForwarded  = 1,
+    kSuppressed = 2
+  };
+ 
   using GetCurrentPos = std::function<double()>;
 
   class Error : public std::exception {
@@ -72,8 +78,9 @@ private:
   bool vv_updated;              /* Whether state have updated since last sync interest sent */
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
-  std::unordered_map<NodeID, ReceiveWindow> recv_window;  /* Record received data for logging */
-  std::unordered_map<NodeID, EventId> one_hop;    /* Nodes within one-hop distance */
+  std::unordered_map<NodeID, ReceiveWindow> recv_window;    /* Record received data for logging */
+  std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
+  std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
 
   /* Node statistics */
   // unsigned int data_num;              /* Number of data this node generated */
@@ -102,7 +109,7 @@ private:
   void SendDataInterest();
   void OnDataInterest(const Interest &interest);
   void SendDataReply();
-  void OnDataReply(const Data &data);
+  void OnDataReply(const Data &data, SourceType sourceType);
   EventId wt_data_interest; /* Event for sending next data interest */
 
   /* 3. Bundled data packet processing */
