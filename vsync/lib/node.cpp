@@ -27,14 +27,14 @@ static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(5
 static const time::milliseconds kInterestWT = time::milliseconds(50);
 /* Distributions for multi-hop */
 std::uniform_int_distribution<> mhop_dist(0, 10000);
-static const int pMultihopForwardSyncInterest1 =  10000;
-static const int pMultihopForwardSyncInterest2 =  10000;
+static const int pMultihopForwardSyncInterest1 =  0;
+static const int pMultihopForwardSyncInterest2 =  0;
 static const int pMultihopForwardDataInterest =   5000;
 /* Distribution for data generation */
 static const int data_generation_rate_mean = 40000;
 std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
 /* Threshold for bundled data fetching */
-static const int kMissingDataThreshold = 10;
+static const int kMissingDataThreshold = 0x7fffffff;
 /* MTU */
 static const int kMaxDataContent = 4000;
 
@@ -46,7 +46,7 @@ std::uniform_int_distribution<> dt_dist(0, 5000);
 std::uniform_int_distribution<> ack_dist(5000, 10000);
 /* Delay for sync interest retx */
 // static time::seconds kRetxTimer = time::seconds(2);
-std::uniform_int_distribution<> retx_dist(2000000, 4000000);
+std::uniform_int_distribution<> retx_dist(2000000, 10000000);
 /* Delay for beacon frequency */
 std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 
@@ -54,7 +54,8 @@ std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 /* Options */
 const static bool kBeacon =   false;  /* Use beacon? */
 const static bool kRetx =     true;   /* Use sync interest retx? */
-const static bool kMultihop = true;   /* Use multihop? */ 
+const static bool kMultihopSync = true;  /* Use multihop for sync? */
+const static bool kMultihopData = true;   /* Use multihop for data? */ 
 const static bool kSyncAckSuppression = false;
 
 
@@ -257,7 +258,6 @@ void Node::logStateStore(const NodeID& nid, int64_t seq) {
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  // if (nid_ >= 41 && nid_ <= 43) return; // TODO: Remove
   std::string encoded_vv = EncodeVVToName(version_vector_);
   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
   // Don't know why append time stamp, but easier to keep it than remove
@@ -349,9 +349,14 @@ void Node::OnSyncInterest(const Interest &interest) {
    * Default: Forward with probability p1.
    * Overhear interest with same name:  Forward with probability p2. (p1 < p2)
    */
-  if (kMultihop) {
+  if (kMultihopSync) {
     int p = mhop_dist(rengine_);
     bool forward = true;
+    if (other_vv != version_vector_) {
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") vector different: " << n.toUri() );
+    } else {
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") vector same: " << n.toUri() );
+    }
     if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
       forward = false;
     } else if (p > pMultihopForwardSyncInterest2) {
@@ -359,8 +364,9 @@ void Node::OnSyncInterest(const Interest &interest) {
     }
     if (forward) {
       int delay = dt_dist(rengine_);
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest] {  // TODO
-        face_.expressInterest(interest, std::bind(&Node::OnSyncAck, this, _2),
+      Interest interest_forward(n, kSendOutInterestLifetime);
+      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest_forward] { 
+        face_.expressInterest(interest_forward, std::bind(&Node::OnSyncAck, this, _2),
                               [](const Interest&, const lp::Nack&) {},
                               [](const Interest&) {});
       });
@@ -439,7 +445,7 @@ void Node::OnSyncAck(const Data &ack) {
   }
 
   // /* Do a broadcast for multi-hop */
-  // if (kMultihop) {
+  // if (kMultihopSync {
   //   int delay = dt_dist(rengine_);
   //   scheduler_.scheduleEvent(time::microseconds(delay), [this, ack] {
   //     face_.put(ack);
@@ -607,7 +613,7 @@ void Node::OnDataInterest(const Interest &interest) {
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << iter->second->getName());
       face_.put(*iter->second);
     });
-  } else if (kMultihop) {
+  } else if (kMultihopData) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
@@ -698,7 +704,7 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
   SendDataInterest();
 
   /* Broadcast the received data for multi-hop */
-  if (kMultihop) {
+  if (kMultihopData) {
     int delay = dt_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
       face_.put(data);

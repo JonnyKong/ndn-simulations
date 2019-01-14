@@ -3,8 +3,8 @@
 set -e
 
 loss_rate_list=(0.0 0.01 0.05 0.1 0.3 0.5)
-# wifi_range_list=(40 60 80 100 120 140 160) 
-wifi_range_list=(100) 
+wifi_range_list=(40 60 80 100 120 140 160) 
+# wifi_range_list=(100) 
 
 run_loss_rate() {
     local LOSS_RATE=$1
