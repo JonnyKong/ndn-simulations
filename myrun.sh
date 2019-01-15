@@ -101,6 +101,14 @@ summarize_wifi_range_result() {
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "sync delay" >> ${RESULT_DIR}/${FILENAME}
     done
+
+    # Number of collisions
+    echo "Number of collisions: " >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "number of collision" >> ${RESULT_DIR}/${FILENAME}
+    done
 }
 
 main() {

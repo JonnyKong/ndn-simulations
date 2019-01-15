@@ -16,7 +16,7 @@ namespace vsync {
 
 /* Constants */
 /* No. of times same sync interest will be sent */
-static const int kSyncInterestMax = 3;
+static const int kSyncInterestMax = 1;
 /* No. of times same data interest will be sent */
 static const int kInterestTransmissionTime = 3;
 /* Lifetime */
@@ -53,7 +53,7 @@ std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 
 /* Options */
 const static bool kBeacon =   false;  /* Use beacon? */
-const static bool kRetx =     true;   /* Use sync interest retx? */
+/*const*/ static bool kRetx =     true;   /* Use sync interest retx? */
 const static bool kMultihopSync = true;  /* Use multihop for sync? */
 const static bool kMultihopData = true;   /* Use multihop for data? */ 
 const static bool kSyncAckSuppression = false;
@@ -107,28 +107,6 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   vv_updated = true;
   version_vector_[nid_] = 0;
   
-
-  // // Special // TODO: Remove
-  // if (nid_ >= 41 || nid_ <= 43) generate_data  = false;
-  // if (nid_ == 43) {
-  //   scheduler_.scheduleEvent(time::seconds(10), [this] {
-  //     generate_data = true;
-  //     PublishData(std::string(100, '*'));
-  //     generate_data = false;
-  //   });
-  // }
-  // if (nid_ == 41) {
-  //   scheduler_.scheduleEvent(time::seconds(11), [this] {
-  //     std::queue<Name> q;
-  //     q.push(MakeDataName(43, 1));
-  //     pending_interest.push(q);
-  //     version_vector_[43] = 1; 
-  //     left_retx_count = kInterestTransmissionTime;
-  //     SendDataInterest();
-  //   });
-  // }
-  
-
   /* Initiate event scheduling */
   /* 2s: Start simulation */
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
@@ -306,7 +284,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
       SendSyncAck(n); 
     });
-  } else {
+  } else if (0) {
     /**
      * If local vector outdated or equal, send ACK after some delay. If some
      *  other node replied to this interest during this period, don't send.
@@ -385,7 +363,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       auto start_seq = version_vector_.find(entry_id) == version_vector_.end() ? 
                        1: version_vector_[entry_id] + 1;
       mv[entry_id] = start_seq;
-      for (auto seq = start_seq; seq < entry_seq; ++seq) {
+      for (auto seq = start_seq; seq <= entry_seq; ++seq) {
         auto n = MakeDataName(entry_id, seq);
         missing_data++;
         q.push(n);

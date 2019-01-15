@@ -137,6 +137,8 @@ for line in file:
       retx_data_interest.append(float(line.split(' ')[-1]))
     if line.find("retx_bundled_interest") != -1:
       retx_bundled_interest.append(float(line.split(' ')[-1]))
+    if line.find("PhyRxDropCount") != -1:
+      PhyRxDropCount = int(line.split()[-1])
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
@@ -203,3 +205,4 @@ print("state sync duration = " + str(np.mean(stateSyncDuration)))
 
 print("number of data available = " + str(syncDuration.size))
 print("number of data produced = " + str(len(data_store)))
+print("number of collision = " + str(PhyRxDropCount))

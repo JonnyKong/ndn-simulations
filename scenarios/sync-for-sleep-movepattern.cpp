@@ -301,6 +301,7 @@ main (int argc, char *argv[])
   // L2RateTracer::InstallAll("drop-trace.txt", Seconds(0.5));
   Simulator::Run ();
   Simulator::Destroy ();
+  PrintDrop();
 
   return 0;
 }
