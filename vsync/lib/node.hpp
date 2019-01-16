@@ -75,7 +75,7 @@ private:
   std::shared_ptr<Data> ack;    /* ACK packet to be sent */
   unsigned int notify_time;     /* No. of retx left for same sync interest */
   unsigned int left_retx_count; /* No. of retx left for same data interest */
-  bool vv_updated;              /* Whether state have updated since last sync interest sent */
+  // bool vv_updated;              /* Whether state have updated since last sync interest sent */
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, ReceiveWindow> recv_window;    /* Record received data for logging */

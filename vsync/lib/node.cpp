@@ -104,7 +104,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   generate_data = true;     
   pending_sync_notify = Name("/");
   waiting_sync_notify = Name("/");
-  vv_updated = true;
+  // vv_updated = true;
   version_vector_[nid_] = 0;
   
   /* Initiate event scheduling */
@@ -243,7 +243,7 @@ void Node::SendSyncInterest() {
 
   pending_sync_notify = sync_notify_interest_name;
   notify_time = kSyncInterestMax;     /* Reset retx counter */
-  vv_updated = false;                 
+  // vv_updated = false;                 
   
   scheduler_.cancelEvent(dt_notify);
   scheduler_.cancelEvent(wt_notify);
@@ -269,12 +269,6 @@ void Node::OnSyncInterest(const Interest &interest) {
       difference[node_id] = seq;
     }
   }
-  // proto::AckContent content_proto;
-  // EncodeVV(difference, content_proto.mutable_vv());
-  // const std::string& content_proto_str = content_proto.SerializeAsString();
-  // ack->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
-  //                 content_proto_str.size());
-  // key_chain_.sign(*ack, signingWithSha256());
 
   /* Send ACK */
   if (!difference.empty()) {
@@ -284,7 +278,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
       SendSyncAck(n); 
     });
-  } else if (0) {
+  } else {
     /**
      * If local vector outdated or equal, send ACK after some delay. If some
      *  other node replied to this interest during this period, don't send.
@@ -377,16 +371,24 @@ void Node::OnSyncInterest(const Interest &interest) {
     std::queue<Name> bundle_queue;
     bundle_queue.push(n);
     pending_interest.push(bundle_queue);
+    // TODO: Should bundled data be same as non-bundled?
     if (pending_interest.size() == 1) {
       left_retx_count = kInterestTransmissionTime;
       SendDataInterest();
     }
   } else if (missing_data > 0) {
     pending_interest.push(q);
-    if (pending_interest.size() == 1) {
-      left_retx_count = kInterestTransmissionTime;
-      SendDataInterest();
-    }
+    // if (pending_interest.size() == 1) {
+    //   left_retx_count = kInterestTransmissionTime;
+    //   SendDataInterest();
+    // }
+    int delay = dt_dist(rengine_) * 3;
+    scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+      if (pending_interest.size() == 1) {
+        left_retx_count = kInterestTransmissionTime;
+        SendDataInterest();
+      }
+    });
   }
 }
 
@@ -415,7 +417,7 @@ void Node::OnSyncAck(const Data &ack) {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress: " << ack.getName().toUri());
     return;
   } else if (n.compare(waiting_sync_notify) == 0) {
-  /* If reply is for outstanding sync notify, cancel timeout timer */
+    /* If reply is for outstanding sync notify, cancel timeout timer */
     scheduler_.cancelEvent(wt_notify);
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
   } else {
@@ -521,9 +523,9 @@ void Node::SendDataInterest() {
     }
     /* Reset counter for the next data interest */
     left_retx_count = kInterestTransmissionTime;
-    if (vv_updated) {
-      SendSyncInterest();
-    }
+    // if (vv_updated) {
+    //   SendSyncInterest();
+    // }
     return SendDataInterest();  /* Recursion */
   }
 
@@ -540,9 +542,9 @@ void Node::SendDataInterest() {
   } 
   if (pending_interest.front().empty()) {
     pending_interest.pop();
-    if (vv_updated) {
-      SendSyncInterest();
-    }
+    // if (vv_updated) {
+    //   SendSyncInterest();
+    // }
     left_retx_count = kInterestTransmissionTime;
     return SendDataInterest();  /* Recursion */
   }
@@ -797,7 +799,7 @@ void Node::OnBundledDataReply(const Data &data) {
     auto last_ack = node_rw.LastAckedData();
     // assert(last_ack != 0);
     if (last_ack != version_vector_[node_id]) {
-      vv_updated = true;
+      // vv_updated = true;
       for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
         logStateStore(node_id, seq);
       }
