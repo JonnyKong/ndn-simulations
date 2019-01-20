@@ -167,7 +167,6 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   data_store_[n] = data;
 
   /* Print that both state and data have been stored */
-  recv_window[nid_].Insert(version_vector_[nid_]);
   logDataStore(n);
   logStateStore(nid_, version_vector_[nid_]);
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Publish Data: d.name=" << n.toUri() );
@@ -260,9 +259,11 @@ void Node::OnSyncInterest(const Interest &interest) {
     if (version_vector_.find(node_id) != version_vector_.end() || 
         version_vector_[node_id] < seq_other) {
       otherVectorNew = true;
-      for (auto seq = version_vector_[node_id]; seq < seq_other; ++seq)
+      auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
+                       1: version_vector_[node_id] + 1;
+      for (auto seq = start_seq; seq <= seq_other; ++seq)
         logStateStore(node_id, seq);
-      version_vector_[node_id] = seq_other;
+      // version_vector_[node_id] = seq_other;
     }
   }
 
@@ -319,6 +320,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         missing_data++;
         q.push(n);
       }
+      version_vector_[node_id] == entry_seq;
     }
   }
   if (missing_data > kMissingDataThreshold) {
@@ -386,9 +388,11 @@ void Node::OnSyncAck(const Data &ack) {
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
+        logStateStore(node_id, seq);
         auto n = MakeDataName(node_id, seq);
         q.push(n);
       }
+      version_vector_[node_id] = node_seq;
       pending_interest.push(q);
       if (pending_interest.size() == 1) {
         left_retx_count = kInterestTransmissionTime;
@@ -402,7 +406,7 @@ void Node::OnSyncAck(const Data &ack) {
    *  because there may be sync reply got stuck in the network due to 
    *  "one-interest-one-reply policy".
    */
-  //  if (sendSyncInterest) {
+  //  if (otherVectorNew) {
   //    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send another sync interest immediately");
   //    SendSyncInterest();
   //  }
@@ -543,21 +547,9 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
     assert(0);
   }
 
-  auto node_id = ExtractNodeID(n);
-  auto node_seq = ExtractSequence(n);
-
   /* Save data */
   data_store_[n] = data.shared_from_this();
   logDataStore(n);
-  recv_window[node_id].Insert(node_seq);
-  
-  auto last_ack = recv_window[node_id].LastAckedData();
-  for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
-    logStateStore(node_id, seq);
-  }
-  version_vector_[node_id] = version_vector_[node_id] > last_ack ? 
-                             version_vector_[node_id] : last_ack;
-
 
   // /* Trigger sending data interest */  // TODO: What's this?
   // scheduler_.cancelEvent(wt_data_interest);
@@ -667,25 +659,7 @@ void Node::OnBundledDataReply(const Data &data) {
                      data_content.size());
     key_chain_.sign(*data, signingWithSha256());
     data_store_[data_name] = data;
-    auto data_nid = ExtractNodeID(data_name);
-    auto data_seq = ExtractSequence(data_name);
-    recv_window[data_nid].Insert(data_seq);
     logDataStore(data_name);
-  }
-
-  /* Update vector after receiving actual data */
-  for (auto entry: recv_window) {
-    auto node_id = entry.first;
-    auto node_rw = entry.second;
-    auto last_ack = node_rw.LastAckedData();
-    // assert(last_ack != 0);
-    if (last_ack != version_vector_[node_id]) {
-      for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
-        logStateStore(node_id, seq);
-      }
-      version_vector_[node_id] = version_vector_[node_id] > last_ack ? 
-                                 version_vector_[node_id] : last_ack;
-    }
   }
 
   /* If next_vv tag not empty, send another bundled interest */

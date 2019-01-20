@@ -74,7 +74,6 @@ private:
   unsigned int left_retx_count; /* No. of retx left for same data interest */
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
-  std::unordered_map<NodeID, ReceiveWindow> recv_window;    /* Record received data for logging */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
 
