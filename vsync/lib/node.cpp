@@ -15,8 +15,6 @@ namespace ndn {
 namespace vsync {
 
 /* Constants */
-/* No. of times same sync interest will be sent */
-static const int kSyncInterestMax = 1;
 /* No. of times same data interest will be sent */
 static const int kInterestTransmissionTime = 3;
 /* Lifetime */
@@ -102,9 +100,6 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
 
   /* Initiate node states */
   generate_data = true;     
-  pending_sync_notify = Name("/");
-  waiting_sync_notify = Name("/");
-  // vv_updated = true;
   version_vector_[nid_] = 0;
   
   /* Initiate event scheduling */
@@ -236,20 +231,18 @@ void Node::logStateStore(const NodeID& nid, int64_t seq) {
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  std::string encoded_vv = EncodeVVToName(version_vector_);
-  auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
-  // Don't know why append time stamp, but easier to keep it than remove
-  auto sync_notify_interest_name = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
-
-  pending_sync_notify = sync_notify_interest_name;
-  notify_time = kSyncInterestMax;     /* Reset retx counter */
-  // vv_updated = false;                 
-  
-  scheduler_.cancelEvent(dt_notify);
-  scheduler_.cancelEvent(wt_notify);
   int delay = dt_dist(rengine_);
-  dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), 
-                                       [this] { OnNotifyDTTimeout(); });
+  scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+    std::string encoded_vv = EncodeVVToName(version_vector_);
+    // Don't know why append time stamp, but easier to keep it than remove
+    auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
+    auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
+
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
+    face_.expressInterest(pending_sync_notify, std::bind(&Node::OnSyncAck, this, _2),
+                          [](const Interest&, const lp::Nack&) {},
+                          [](const Interest&) {});
+  });
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
@@ -259,19 +252,45 @@ void Node::OnSyncInterest(const Interest &interest) {
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri() );
 
-  /* Prepare ACK packet */
-  ack = std::make_shared<Data>(n);
-  VersionVector difference;
-  for (auto entry: version_vector_) {
+  /* Merge state vector */
+  bool otherVectorNew = false;
+  for (auto entry : other_vv) {
     auto node_id = entry.first;
-    auto seq = entry.second;
-    if (other_vv.find(node_id) == other_vv.end() || other_vv[node_id] < seq) {
-      difference[node_id] = seq;
+    auto seq_other = entry.second;
+    if (version_vector_.find(node_id) != version_vector_.end() || 
+        version_vector_[node_id] < seq_other) {
+      otherVectorNew = true;
+      for (auto seq = version_vector_[node_id]; seq < seq_other; ++seq)
+        logStateStore(node_id, seq);
+      version_vector_[node_id] = seq_other;
     }
   }
 
-  /* Send ACK */
-  if (!difference.empty()) {
+  /* If incoming state not newer, reset timer to delay sending next sync interest */
+  if (!otherVectorNew) {
+    scheduler_.cancelEvent(retx_event);
+    int delay = retx_dist(rengine_);
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Reset sync interest retx timer" );
+    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
+      RetxSyncInterest(); 
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
+    });
+  }
+
+  /* Do I have newer state? */
+  bool myVectorNew = false;
+  for (auto entry: version_vector_) {
+    auto node_id = entry.first;
+    auto seq = entry.second;
+    if (other_vv.find(node_id) == other_vv.end() || 
+        other_vv[node_id] < seq) {
+      myVectorNew = true;
+      break;
+    }
+  }
+
+  /* Send ACK based on whether I have new state */
+  if (myVectorNew) {
     /* If local vector contains newer state, send ACK immediately */
     int delay = dt_dist(rengine_);
     scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
@@ -279,73 +298,11 @@ void Node::OnSyncInterest(const Interest &interest) {
       SendSyncAck(n); 
     });
   } else {
-    /**
-     * If local vector outdated or equal, send ACK after some delay. If some
-     *  other node replied to this interest during this period, don't send.
-     * To overhead, need to add this name to PIT. If no other node responds,
-     *  reply and cancel PIT entry.
-     */
-    if (kSyncAckSuppression) {
-      /* Check if duplicate */
-      if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
-        VSYNC_LOG_TRACE ("node(" << nid_ << ") receive duplicate sync interest: " << n.toUri() );
-        return;
-      }
-
-      Interest interest_overhear(n, kAddToPitInterestLifetime);
-      face_.expressInterest(interest_overhear, std::bind(&Node::OnSyncAck, this, _2),
-                            [](const Interest&, const lp::Nack&) {},
-                            [](const Interest&) {});
-
-      int delay = ack_dist(rengine_);
-      overheard_sync_interest[n] = scheduler_.scheduleEvent(
-        time::microseconds(delay), [this, n] {
-          /* Remove entry and send ack */
-          overheard_sync_interest.erase(n);
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") finally reply ACK with delay: " << n.toUri() );
-          SendSyncAck(n);
-        }
-      );
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") starting overhear sync interest: " << n.toUri() );
-    } else {
-      int delay = ack_dist(rengine_);
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
-        VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with delay: " << n.toUri() );
-        SendSyncAck(n); 
-      });
-    }
+    // TODO: Should I send sync ack?
   }
 
-  /**
-   * Forward sync interest probabilistically for multi-hop.
-   * Default: Forward with probability p1.
-   * Overhear interest with same name:  Forward with probability p2. (p1 < p2)
-   */
-  if (kMultihopSync) {
-    int p = mhop_dist(rengine_);
-    bool forward = true;
-    if (other_vv != version_vector_) {
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") vector different: " << n.toUri() );
-    } else {
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") vector same: " << n.toUri() );
-    }
-    if (other_vv != version_vector_ && p > pMultihopForwardSyncInterest1) {
-      forward = false;
-    } else if (p > pMultihopForwardSyncInterest2) {
-      forward = false;
-    }
-    if (forward) {
-      int delay = dt_dist(rengine_);
-      Interest interest_forward(n, kSendOutInterestLifetime);
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest_forward] { 
-        face_.expressInterest(interest_forward, std::bind(&Node::OnSyncAck, this, _2),
-                              [](const Interest&, const lp::Nack&) {},
-                              [](const Interest&) {});
-      });
-    }
-  }
 
-  /* Pipeline for fetching missing data */
+  /* Add missing data to pending_interests */
   std::queue<Name> q;
   int missing_data = 0;
   VersionVector mv;     /* For encoding bundled interest */
@@ -364,8 +321,6 @@ void Node::OnSyncInterest(const Interest &interest) {
       }
     }
   }
-  /* Append to pending_interest */
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") missing data number: " << missing_data ); // TODO: Remove
   if (missing_data > kMissingDataThreshold) {
     auto n = MakeBundledDataName(node_id, EncodeVVToName(mv));
     std::queue<Name> bundle_queue;
@@ -378,17 +333,10 @@ void Node::OnSyncInterest(const Interest &interest) {
     }
   } else if (missing_data > 0) {
     pending_interest.push(q);
-    // if (pending_interest.size() == 1) {
-    //   left_retx_count = kInterestTransmissionTime;
-    //   SendDataInterest();
-    // }
-    int delay = dt_dist(rengine_) * 3;
-    scheduler_.scheduleEvent(time::microseconds(delay), [this] {
-      if (pending_interest.size() == 1) {
-        left_retx_count = kInterestTransmissionTime;
-        SendDataInterest();
-      }
-    });
+    if (pending_interest.size() == 1) {
+      left_retx_count = kInterestTransmissionTime;
+      SendDataInterest();
+    }
   }
 }
 
@@ -403,7 +351,6 @@ void Node::SendSyncAck(const Name &n) {
   key_chain_.sign(*ack, signingWithSha256());
 
   // VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK:" << n.toUri() );
-
   face_.put(*ack);
 }
 
@@ -416,23 +363,11 @@ void Node::OnSyncAck(const Data &ack) {
     overheard_sync_interest.erase(n);
     VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress: " << ack.getName().toUri());
     return;
-  } else if (n.compare(waiting_sync_notify) == 0) {
-    /* If reply is for outstanding sync notify, cancel timeout timer */
-    scheduler_.cancelEvent(wt_notify);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
   } else {
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV outdate sync ack: " << ack.getName().toUri());
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
   }
 
-  // /* Do a broadcast for multi-hop */
-  // if (kMultihopSync {
-  //   int delay = dt_dist(rengine_);
-  //   scheduler_.scheduleEvent(time::microseconds(delay), [this, ack] {
-  //     face_.put(ack);
-  //   });
-  // }
-
-  /* Extract difference */
+  /* Extract difference and add to pending_interest */
   const auto& content = ack.getContent();
   proto::AckContent content_proto;
   if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
@@ -440,14 +375,14 @@ void Node::OnSyncAck(const Data &ack) {
     assert(false);
   }
   auto vector_other = DecodeVV(content_proto.vv());
-  bool sendSyncInterest = false;    /* Set if remote vector has newer state */
+  bool otherVectorNew = false;    /* Set if remote vector has newer state */
   for (auto entry : vector_other) {
     std::queue<Name> q;
     auto node_id = entry.first;
     auto node_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < node_seq) {
-      sendSyncInterest = true;
+      otherVectorNew = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
@@ -473,39 +408,10 @@ void Node::OnSyncAck(const Data &ack) {
   //  }
 }
 
-void Node::OnNotifyDTTimeout() {
-  Interest i(pending_sync_notify, kSendOutInterestLifetime);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
-  face_.expressInterest(i, std::bind(&Node::OnSyncAck, this, _2),
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-  
-  if (notify_time < kSyncInterestMax) { 
-    /* This is a retx (scheduled by Node::OnNotifyWTTimeout()) */
-    retx_sync_interest++;
-  }
-  waiting_sync_notify = pending_sync_notify;
-  scheduler_.cancelEvent(wt_notify);
-  wt_notify = scheduler_.scheduleEvent(kInterestWT, 
-                                       [this] { OnNotifyWTTimeout(); });
-}
-
-void Node::OnNotifyWTTimeout() {
-  waiting_sync_notify = Name("/");
-  notify_time--;
-  if (notify_time == 0) {
-    /* Stop retx attempt for this sync interest */
-    return;
-  }
-  /* Schedule next retx with random delay */
-  int delay = dt_dist(rengine_);
-  dt_notify = scheduler_.scheduleEvent(time::microseconds(delay), 
-                                       [this] { OnNotifyDTTimeout(); });
-}
-
 
 /* 2. Data packet processing */
 void Node::SendDataInterest() {
+  return;
   /* Stop scheduling itself if empty. Will be rescheduled by OnSyncAck() */
   if (pending_interest.empty()) {
     return;
@@ -523,9 +429,6 @@ void Node::SendDataInterest() {
     }
     /* Reset counter for the next data interest */
     left_retx_count = kInterestTransmissionTime;
-    // if (vv_updated) {
-    //   SendSyncInterest();
-    // }
     return SendDataInterest();  /* Recursion */
   }
 
@@ -542,9 +445,6 @@ void Node::SendDataInterest() {
   } 
   if (pending_interest.front().empty()) {
     pending_interest.pop();
-    // if (vv_updated) {
-    //   SendSyncInterest();
-    // }
     left_retx_count = kInterestTransmissionTime;
     return SendDataInterest();  /* Recursion */
   }
@@ -651,25 +551,6 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
   logDataStore(n);
   recv_window[node_id].Insert(node_seq);
   
-  /* Inferred state store: Fetch new data based on data reply instead of sync ack */
-  // auto last_ack = recv_window[node_id].LastAckedData();
-  // assert(last_ack != 0);
-  // if (last_ack != version_vector_[node_id]) {
-  //   vv_updated = true;
-  //   std::queue<Name> q;
-  //   for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
-  //     logStateStore(node_id, seq);
-  //     auto n = MakeDataName(node_id, seq);
-  //     q.push(n);
-  //   }
-  //   assert(last_ack > version_vector_[node_id]);
-  //   version_vector_[node_id] = last_ack;
-  //   pending_interest.push(q);
-  //   if (pending_interest.size() == 1) {
-  //     left_retx_count = kInterestTransmissionTime;
-  //     SendDataInterest();
-  //   }
-  // }
   auto last_ack = recv_window[node_id].LastAckedData();
   for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
     logStateStore(node_id, seq);
@@ -678,10 +559,10 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
                              version_vector_[node_id] : last_ack;
 
 
-  /* Trigger sending data interest */  // TODO: What's this?
-  scheduler_.cancelEvent(wt_data_interest);
-  left_retx_count = kInterestTransmissionTime;
-  SendDataInterest();
+  // /* Trigger sending data interest */  // TODO: What's this?
+  // scheduler_.cancelEvent(wt_data_interest);
+  // left_retx_count = kInterestTransmissionTime;
+  // SendDataInterest();
 
   /* Broadcast the received data for multi-hop */
   if (kMultihopData) {
@@ -799,7 +680,6 @@ void Node::OnBundledDataReply(const Data &data) {
     auto last_ack = node_rw.LastAckedData();
     // assert(last_ack != 0);
     if (last_ack != version_vector_[node_id]) {
-      // vv_updated = true;
       for (auto seq = version_vector_[node_id] + 1; seq <= last_ack; ++seq) {
         logStateStore(node_id, seq);
       }

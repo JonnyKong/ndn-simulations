@@ -70,12 +70,8 @@ private:
   VersionVector version_vector_;
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   bool generate_data;           /* If false, PubishData() returns immediately */
-  Name pending_sync_notify;     /* Sync interest name sent or will be sent */
-  Name waiting_sync_notify;     /* Sync interest name sent but not yet ACKed */
-  std::shared_ptr<Data> ack;    /* ACK packet to be sent */
   unsigned int notify_time;     /* No. of retx left for same sync interest */
   unsigned int left_retx_count; /* No. of retx left for same data interest */
-  // bool vv_updated;              /* Whether state have updated since last sync interest sent */
   std::queue<std::queue<Name>> pending_interest;  /* Queue of unsatisfied interests */
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, ReceiveWindow> recv_window;    /* Record received data for logging */
@@ -100,8 +96,6 @@ private:
   void OnSyncInterest(const Interest &interest);
   void SendSyncAck(const Name &n);
   void OnSyncAck(const Data &ack);
-  EventId wt_notify;        /* Send sync interest wait timer */
-  EventId dt_notify;        /* Send sync interest delay timer */
   void OnNotifyDTTimeout();
   void OnNotifyWTTimeout();
 
