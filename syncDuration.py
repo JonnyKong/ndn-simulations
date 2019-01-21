@@ -182,8 +182,10 @@ print("std outData: " + str(np.std(np.array(out_data))))
 
 print("data availability = " + str(float(len(syncDuration)) / float(len(data_store))))
 print(str(syncDuration))
-syncDuration = np.array(syncDuration)
-print("sync delay = " + str(np.mean(syncDuration)))
+stateSyncDuration = np.array(stateSyncDuration)
+dataSyncDuration = np.array(syncDuration)
+print("state sync delay = " + str(np.mean(stateSyncDuration)))
+print("data sync delay = " + str(np.mean(syncDuration)))
 print("out notify interest = " + str(np.sum(np.array(out_notify_interest))))
 print("out beacon = " + str(np.sum(np.array(out_beacon))))
 print("out data interest = " + str(np.sum(np.array(out_data_interest))))
@@ -198,11 +200,10 @@ print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
 print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
-print("state sync duration = " + str(np.mean(stateSyncDuration)))
 
 # for data_name in data_store:
 #     print data_store[data_name].Owner 
 
-print("number of data available = " + str(syncDuration.size))
+print("number of data available = " + str(dataSyncDuration.size))
 print("number of data produced = " + str(len(data_store)))
 print("number of collision = " + str(PhyRxDropCount))

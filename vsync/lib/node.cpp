@@ -192,8 +192,6 @@ void Node::StartSimulation() {
                            [this, content] { PublishData(content); });
   
   if (kRetx) {
-    // retx_event = scheduler_.scheduleEvent(kRetxTimer, 
-    //                                       [this] { RetxSyncInterest(); });
     int delay = retx_dist(rengine_);
     retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
       RetxSyncInterest(); 
@@ -251,19 +249,44 @@ void Node::OnSyncInterest(const Interest &interest) {
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri() );
 
-  /* Merge state vector */
+  /* Merge state vector, add missing data to pending_interests */
   bool otherVectorNew = false;
+  std::queue<Name> q;
+  int missing_data = 0;
+  VersionVector mv;     /* For encoding bundled interest */
   for (auto entry : other_vv) {
     auto node_id = entry.first;
     auto seq_other = entry.second;
-    if (version_vector_.find(node_id) != version_vector_.end() || 
+    if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < seq_other) {
       otherVectorNew = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
-      for (auto seq = start_seq; seq <= seq_other; ++seq)
+      mv[node_id] = start_seq;
+      for (auto seq = start_seq; seq <= seq_other; ++seq) {
         logStateStore(node_id, seq);
-      // version_vector_[node_id] = seq_other;
+        auto n = MakeDataName(node_id, seq);
+        missing_data++;
+        q.push(n);
+      }
+      version_vector_[node_id] = seq_other;  // Will be set later
+    }
+  }
+  if (missing_data > kMissingDataThreshold) {
+    auto n = MakeBundledDataName(node_id, EncodeVVToName(mv));
+    std::queue<Name> bundle_queue;
+    bundle_queue.push(n);
+    pending_interest.push(bundle_queue);
+    // TODO: Should bundled data be same as non-bundled?
+    if (pending_interest.size() == 1) {
+      left_retx_count = kInterestTransmissionTime;
+      SendDataInterest();
+    }
+  } else if (missing_data > 0) {
+    pending_interest.push(q);
+    if (pending_interest.size() == 1) {
+      left_retx_count = kInterestTransmissionTime;
+      SendDataInterest();
     }
   }
 
@@ -300,45 +323,6 @@ void Node::OnSyncInterest(const Interest &interest) {
     });
   } else {
     // TODO: Should I send sync ack?
-  }
-
-
-  /* Add missing data to pending_interests */
-  std::queue<Name> q;
-  int missing_data = 0;
-  VersionVector mv;     /* For encoding bundled interest */
-  for (auto entry : other_vv) {
-    auto entry_id = entry.first;
-    auto entry_seq = entry.second;
-    if (version_vector_.find(entry_id) == version_vector_.end() ||
-        version_vector_[entry_id] < entry_seq) {
-      auto start_seq = version_vector_.find(entry_id) == version_vector_.end() ? 
-                       1: version_vector_[entry_id] + 1;
-      mv[entry_id] = start_seq;
-      for (auto seq = start_seq; seq <= entry_seq; ++seq) {
-        auto n = MakeDataName(entry_id, seq);
-        missing_data++;
-        q.push(n);
-      }
-      version_vector_[node_id] == entry_seq;
-    }
-  }
-  if (missing_data > kMissingDataThreshold) {
-    auto n = MakeBundledDataName(node_id, EncodeVVToName(mv));
-    std::queue<Name> bundle_queue;
-    bundle_queue.push(n);
-    pending_interest.push(bundle_queue);
-    // TODO: Should bundled data be same as non-bundled?
-    if (pending_interest.size() == 1) {
-      left_retx_count = kInterestTransmissionTime;
-      SendDataInterest();
-    }
-  } else if (missing_data > 0) {
-    pending_interest.push(q);
-    if (pending_interest.size() == 1) {
-      left_retx_count = kInterestTransmissionTime;
-      SendDataInterest();
-    }
   }
 }
 
@@ -415,7 +399,6 @@ void Node::OnSyncAck(const Data &ack) {
 
 /* 2. Data packet processing */
 void Node::SendDataInterest() {
-  return;
   /* Stop scheduling itself if empty. Will be rescheduled by OnSyncAck() */
   if (pending_interest.empty()) {
     return;
@@ -726,7 +709,6 @@ void Node::OnBeacon(const Interest &beacon) {
     });
   }
 }
-
 
 } // namespace vsync
 } // namespace ndn
