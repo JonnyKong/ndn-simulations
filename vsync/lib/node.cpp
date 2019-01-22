@@ -16,13 +16,14 @@ namespace vsync {
 
 /* Constants */
 /* No. of times same data interest will be sent */
-static const int kInterestTransmissionTime = 3;
+static const int kInterestTransmissionTime = 1;
 /* Lifetime */
 static const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static const time::seconds kBeaconLifetime = time::seconds(6);
 static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
 /* Timeout for sync interests */
-static const time::milliseconds kInterestWT = time::milliseconds(50);
+// static const time::milliseconds kInterestWT = time::milliseconds(50);
+static const time::milliseconds kInterestWT = time::milliseconds(200);
 /* Distributions for multi-hop */
 std::uniform_int_distribution<> mhop_dist(0, 10000);
 static const int pMultihopForwardSyncInterest1 =  0;
@@ -408,7 +409,7 @@ void Node::SendDataInterest() {
   if (left_retx_count == 0) {
     /* Remove entire queue, because remaining data are also unlikely to receive reply */
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Drop data interest");
-    // pending_interest.push(pending_interest.front());
+    pending_interest.push(pending_interest.front());
     pending_interest.pop();
     if (pending_interest.empty()) {
       /* Stop scheduling itself */

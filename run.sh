@@ -13,7 +13,7 @@ do
   log_file_name="adhoc-log/syncDuration-movepattern.txt"
   NS_LOG='SyncForSleep' ./waf --run "sync-for-sleep-movepattern --pauseTime=0 --run=$index --mobileNodeNum=20 --lossRate=${loss_rate} --wifiRange=60 --useHeartbeat=false --useBeacon=true --useRetx=false" > ${log_file_name} 2>&1
   result_file_name="adhoc-result-new-pattern/syncDuration-loss-beacon-20.txt"
-  python syncDuration.py ${log_file_name} 20 >> ${result_file_name}
+  python syncDuration.py ${log_file_name} 44 >> ${result_file_name}
   echo "finish simulation $index"
   let "index++"
   done

@@ -201,8 +201,8 @@ print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
 
-# for data_name in data_store:
-#     print data_store[data_name].Owner 
+for data_name in data_store:
+    print data_store[data_name].Owner 
 
 print("number of data available = " + str(dataSyncDuration.size))
 print("number of data produced = " + str(len(data_store)))
