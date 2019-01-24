@@ -51,6 +51,9 @@ retx_data_interest = []
 retx_bundled_interest = []
 file_name = sys.argv[1]
 node_num = int(sys.argv[2]) + 24
+recvDataReply = 0
+recvForwardedDataReply = 0
+recvSuppressedDataReply = 0
 
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
@@ -139,6 +142,12 @@ for line in file:
       retx_bundled_interest.append(float(line.split(' ')[-1]))
     if line.find("PhyRxDropCount") != -1:
       PhyRxDropCount = int(line.split()[-1])
+    if line.find("Recv data reply") != -1:
+      recvDataReply += 1
+    if line.find("Recv forwarded data reply") != -1:
+      recvForwardedDataReply += 1
+    if line.find("Recv suppressed data reply") != -1:
+      recvSuppressedDataReply += 1
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
@@ -206,4 +215,7 @@ for data_name in data_store:
 
 print("number of data available = " + str(dataSyncDuration.size))
 print("number of data produced = " + str(len(data_store)))
+print("recvDataReply = " + str(recvDataReply))
+print("recvForwardedDataReply = " + str(recvForwardedDataReply))
+print("recvSuppressedDataReply = " + str(recvSuppressedDataReply))
 print("number of collision = " + str(PhyRxDropCount))

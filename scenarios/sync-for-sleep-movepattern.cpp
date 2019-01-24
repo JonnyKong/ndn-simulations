@@ -201,6 +201,7 @@ main (int argc, char *argv[])
   cmd.Parse (argc,argv);
   assert(range != -1);
   int node_num = mobile_node_num + 24;
+  if (mobile_node_num <= 5) node_num = mobile_node_num; // TODO: remove
   RngSeedManager::SetRun (run);
 
   //////////////////////

@@ -20,15 +20,13 @@ static const int kInterestTransmissionTime = 1;
 /* Lifetime */
 static const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
 static const time::seconds kBeaconLifetime = time::seconds(6);
-static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(54);
+static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
 /* Timeout for sync interests */
 // static const time::milliseconds kInterestWT = time::milliseconds(50);
 static const time::milliseconds kInterestWT = time::milliseconds(200);
 /* Distributions for multi-hop */
 std::uniform_int_distribution<> mhop_dist(0, 10000);
-static const int pMultihopForwardSyncInterest1 =  0;
-static const int pMultihopForwardSyncInterest2 =  0;
-static const int pMultihopForwardDataInterest =   5000;
+static const int pMultihopForwardDataInterest = 5000;
 /* Distribution for data generation */
 static const int data_generation_rate_mean = 40000;
 std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
@@ -323,7 +321,36 @@ void Node::OnSyncInterest(const Interest &interest) {
       SendSyncAck(n); 
     });
   } else {
-    // TODO: Should I send sync ack?
+    if (kSyncAckSuppression) {
+      if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
+        return;
+      }
+
+      int delay = dt_dist(rengine_);
+      // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+        Interest interest_overhear(n, kAddToPitInterestLifetime);
+        face_.expressInterest(interest_overhear, std::bind(&Node::OnSyncAck, this, _2),
+                              [](const Interest&, const lp::Nack&) {},
+                              [](const Interest&) {});
+      // });
+
+      delay += ack_dist(rengine_);
+      overheard_sync_interest[n] = scheduler_.scheduleEvent(
+        time::microseconds(delay), [this, n] {
+          /* Remove entry and send ack */
+          overheard_sync_interest.erase(n);
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") finally reply ACK with delay: " << n.toUri() );
+          SendSyncAck(n);
+        }
+      );
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") starting overhear sync interest: " << n.toUri() );
+    } else {
+      int delay = ack_dist(rengine_);
+      scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
+        VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
+        SendSyncAck(n); 
+      });
+    }
   }
 }
 
@@ -337,7 +364,7 @@ void Node::SendSyncAck(const Name &n) {
                   content_proto_str.size());
   key_chain_.sign(*ack, signingWithSha256());
 
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK:" << n.toUri() );
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") replying ACK:" << n.toUri() );
   face_.put(*ack);
 }
 
@@ -494,12 +521,14 @@ void Node::OnDataInterest(const Interest &interest) {
                               [](const Interest&) {});
       });
     } else {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
-      Interest interest_suppress(n, kAddToPitInterestLifetime);
-      /* No need to add delay timer because data wasn't actually sent */
-      face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, kSuppressed),
+      int delay = dt_dist(rengine_);
+      // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
+        Interest interest_suppress(n, kAddToPitInterestLifetime);
+        face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, kSuppressed),
                             [](const Interest&, const lp::Nack&) {},
                             [](const Interest&) {});
+      // });
     }
   }
 }
@@ -543,8 +572,9 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
   /* Broadcast the received data for multi-hop */
   if (kMultihopData) {
     int delay = dt_dist(rengine_);
-    scheduler_.scheduleEvent(time::microseconds(delay), [this, data] {
-      face_.put(data);
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+      face_.put(*data_store_[n]);
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Re-broadcast data: name=" << n.toUri());
     });
   }
 }

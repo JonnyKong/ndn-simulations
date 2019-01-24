@@ -2,10 +2,10 @@
 
 set -e
 
-run_times=10
+run_times=1
 loss_rate_list=(0.0 0.01 0.05 0.1 0.3 0.5)
 wifi_range_list=(40 60 80 100 120 140 160) 
-# wifi_range_list=(100) 
+# wifi_range_list=(80) 
 
 run_loss_rate() {   
     local LOSS_RATE=$1
@@ -109,6 +109,30 @@ summarize_wifi_range_result() {
         echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "data sync delay" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Recv data
+    echo "Recvd Data Reply:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "recvDataReply" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Forwarded data
+    echo "Forwarded Data Reply:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "recvForwardedDataReply" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Suppressed data
+    echo "Suppressed Data Reply:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "recvSuppressedDataReply" >> ${RESULT_DIR}/${FILENAME}
     done
 
     # Number of collisions

@@ -1,7 +1,11 @@
 import datetime
 
 path = "result/" + str(datetime.date.today())
-filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (10)]
+filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (1)]
+
+def variance(lst):
+    mean = float(sum(lst)) / len(lst)
+    return float(reduce(lambda x, y: x + y, map(lambda x: (x - mean) ** 2, lst))) / len(lst)
 
 def main():
     files = [open(file, "r") for file in filenames]
@@ -9,7 +13,7 @@ def main():
         if '=' in row[0]:
             condition = ' '.join(row[0].split()[:-1])
             results = [float(result.split()[-1]) for result in row]
-            print(condition + " " + str(sum(results) / len(results)))
+            print(condition + " " + str(sum(results) / len(results)) + " variance: " + str(variance(results)))
         else:
             print row[0].strip()
 
