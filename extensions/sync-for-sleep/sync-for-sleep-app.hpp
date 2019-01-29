@@ -11,7 +11,11 @@
 #include "ns3/wifi-module.h"
 #include "ns3/mobility-module.h"
 
+#include "ns3/ndnSIM/NFD/daemon/table/pit.hpp"
+
 #include "sync-sleep-node.hpp"
+
+using nfd::pit::Pit;
 
 namespace ns3 {
 namespace ndn {
@@ -49,12 +53,19 @@ public:
     return tid;
   }
 
-double
-GetCurrentPosition() {
-  double cur_pos = GetNode()->GetObject<MobilityModel>()->GetPosition().x;
-  //std::cout << "App " << m_appId << " on Node " << GetNode()->GetId() << " connected to " << dest << std::endl;
-  return cur_pos;
-}
+  double
+  GetCurrentPosition() {
+    double cur_pos = GetNode()->GetObject<MobilityModel>()->GetPosition().x;
+    //std::cout << "App " << m_appId << " on Node " << GetNode()->GetId() << " connected to " << dest << std::endl;
+    return cur_pos;
+  }
+
+  Pit &
+  GetCurrentPIT() {
+    Ptr<L3Protocol> protoNode = L3Protocol::getL3Protocol(GetNode());
+    return protoNode->getForwarder()->getPit();
+  }
+
 
 protected:
   // inherited from Application base class.
@@ -65,6 +76,7 @@ protected:
       nid_, 
       prefix_, 
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
+      std::bind(&SyncForSleepApp::GetCurrentPIT, this),
       // useHeartbeat_, 
       // useHeartbeatFlood_, 
       useBeacon_, 

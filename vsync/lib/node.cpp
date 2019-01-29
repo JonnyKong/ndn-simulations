@@ -19,11 +19,15 @@ namespace vsync {
 static const int kInterestTransmissionTime = 1;
 /* Lifetime */
 static const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
+static const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);
 static const time::seconds kBeaconLifetime = time::seconds(6);
 static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
 /* Timeout for sync interests */
 // static const time::milliseconds kInterestWT = time::milliseconds(50);
-static const time::milliseconds kInterestWT = time::milliseconds(200);
+// static const time::milliseconds kInterestWT = time::milliseconds(200);
+std::uniform_int_distribution<> packet_dist(50, 100); /* milliseconds */
+/* Distribution for sending packets */
+
 /* Distributions for multi-hop */
 std::uniform_int_distribution<> mhop_dist(0, 10000);
 static const int pMultihopForwardDataInterest = 5000;
@@ -52,24 +56,25 @@ std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 const static bool kBeacon =   false;  /* Use beacon? */
 /*const*/ static bool kRetx =     true;   /* Use sync interest retx? */
 const static bool kMultihopSync = true;  /* Use multihop for sync? */
-const static bool kMultihopData = true;   /* Use multihop for data? */ 
+const static bool kMultihopData = false;   /* Use multihop for data? */ 
 const static bool kSyncAckSuppression = false;
 
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
-           const Name &prefix, DataCb on_data) : 
-           face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
-           prefix_(prefix), data_cb_(std::move(on_data)), 
-           rengine_(rdevice_()) 
-          // rengine_(0)
+           const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos,
+           GetCurrentPit getCurrentPit) : 
+  face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
+  prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
+  getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit)
   {
   
   /* Initialize statistics */
-  // data_num = 0;
   retx_sync_interest = 0;
   retx_data_interest = 0;
   retx_bundled_interest = 0;
+  received_sync_interest = 0;
+  suppressed_sync_interest = 0;
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -117,17 +122,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     std::cout << "node(" << nid_ << ") retx_sync_interest = " << retx_sync_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_data_interest = " << retx_data_interest << std::endl;
     std::cout << "node(" << nid_ << ") retx_bundled_interest = " << retx_bundled_interest << std::endl;
-    // TODO: Remove
-    int remaining = 0;
-    while(!pending_interest.empty()) {
-      while(!pending_interest.front().empty()) {
-        ++remaining;
-        pending_interest.front().pop();
-      }
-      pending_interest.pop();
-    }
-    std::cout << "node(" << nid_ << ") remaining pending interest = " << remaining << std::endl;
-
+    std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
+    std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
     PrintNDNTraffic();
   });
 
@@ -143,11 +139,11 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
 }
 
 void Node::PublishData(const std::string& content, uint32_t type) {
+
   if (!generate_data) {
     return;
   }
   version_vector_[nid_]++;
-  // data_num++;
 
   /* Make data name */
   auto n = MakeDataName(nid_, version_vector_[nid_]);
@@ -187,8 +183,12 @@ void Node::PublishData(const std::string& content, uint32_t type) {
 void Node::StartSimulation() {
   /* Init the first data publishing */
   std::string content = std::string(100, '*');
-  scheduler_.scheduleEvent(time::milliseconds(10 * nid_),
+  scheduler_.scheduleEvent(time::milliseconds(100 * nid_),
                            [this, content] { PublishData(content); });
+
+  /* Init async interest sending */
+  scheduler_.scheduleEvent(time::milliseconds(10 * nid_),
+                           [this] { AsyncSendPacket(); });
   
   if (kRetx) {
     int delay = retx_dist(rengine_);
@@ -223,35 +223,148 @@ void Node::logStateStore(const NodeID& nid, int64_t seq) {
   std::cout << now << " microseconds node(" << nid_ << ") Update New Seq: " << state_tag << std::endl;
 }
 
+void Node::AsyncSendPacket() {
+  if (pending_sync_interest.size() > 0 || pending_packet.size() > 0) {
+    Name n; 
+    Packet packet;
+    if (pending_sync_interest.size() > 0) {
+      packet = pending_sync_interest.front();
+      pending_sync_interest.pop_front();
+    } else {
+      packet = pending_packet.front();
+      pending_packet.pop_front();
+    }
+    switch (packet.packet_type) {
+
+      case Packet::INTEREST_TYPE:
+        n = (packet.interest)->getName();
+        if (n.compare(0, 2, kSyncDataPrefix) == 0) {            /* Data interest */
+          break;
+          /* Remove falsy data interest */
+          if (data_store_.find(n) != data_store_.end()) {
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Drop falsy data interest: i.name=" << n.toUri() );
+            AsyncSendPacket();
+            return;
+          }
+          /* Check PIT to see if there's outstanding interest with same name */
+          // Pit pit = getCurrentPit_();
+          if (getCurrentPit_().find(*packet.interest) != nullptr) {
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Data interest already in PIT: i.name=" << n.toUri() );
+            /* Only add ORIGINAL packets back to queue */
+            switch (packet.packet_origin) {
+              case Packet::ORIGINAL:
+                /* Add packet back to queue with longer delay to avoid retransmissions */
+                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                  // packet.last_sent = ns3::Simulator::Now().GetMicroSeconds();
+                  pending_packet.push_back(packet);
+                });
+                /* Fall through */
+              default:
+                /* Best effort, don't add to queue. Send next packet immediately */
+                AsyncSendPacket();
+                return;
+            }
+          } else {
+            face_.expressInterest(*packet.interest,
+                                  std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
+                                  [](const Interest&, const lp::Nack&) {},
+                                  [](const Interest&) {});
+            switch (packet.packet_origin) {
+              case Packet::ORIGINAL:
+                VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri() );
+                /* Add packet back to queue with longer delay to avoid retransmissions */
+                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                  pending_packet.push_back(packet);
+                });
+                break;
+              case Packet::FORWARDED:
+                VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri() );
+                /* Best effort, don't add to queue */
+                break;
+              default:
+                assert(0);
+            }
+          }
+        } else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data interest */
+          face_.expressInterest(*packet.interest,
+                                std::bind(&Node::OnBundledDataReply, this, _2),
+                                [](const Interest&, const lp::Nack&) {},
+                                [](const Interest&) {});
+          pending_packet.push_back(packet);
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send bundled data interest: i.name=" << n.toUri() );
+        } else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
+          face_.expressInterest(*packet.interest,
+                                std::bind(&Node::OnSyncAck, this, _2),
+                                [](const Interest&, const lp::Nack&) {},
+                                [](const Interest&) {});
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() );
+        }
+        break;
+
+      case Packet::DATA_TYPE:
+        n = (packet.data)->getName();
+        if (n.compare(0, 2, kSyncDataPrefix) == 0 ||    /* Data */
+            n.compare(0, 2, kBundledDataPrefix) == 0 || /* Bundled data */
+            n.compare(0, 2, kSyncNotifyPrefix) == 0) {  /* Sync ack */
+          face_.put(*packet.data);
+        } else {
+          assert(0);  /* Shouldn't get here */  
+        }
+        break;
+
+      default:
+        assert(0);  /* Shouldn't get here */
+    }
+  }
+  
+  /* Schedule self */
+  int delay = packet_dist(rengine_);
+  scheduler_.scheduleEvent(time::milliseconds(delay), [this] {
+    AsyncSendPacket();
+  });
+}
+
 
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  int delay = dt_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this] {
-    std::string encoded_vv = EncodeVVToName(version_vector_);
-    // Don't know why append time stamp, but easier to keep it than remove
-    auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
-    auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
+  // int delay = dt_dist(rengine_);
+  // scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+  //   std::string encoded_vv = EncodeVVToName(version_vector_);
+  //   // Don't know why append time stamp, but easier to keep it than remove
+  //   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
+  //   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
+    
 
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
-    face_.expressInterest(pending_sync_notify, std::bind(&Node::OnSyncAck, this, _2),
-                          [](const Interest&, const lp::Nack&) {},
-                          [](const Interest&) {});
-  });
+  //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
+  //   face_.expressInterest(pending_sync_notify, std::bind(&Node::OnSyncAck, this, _2),
+  //                         [](const Interest&, const lp::Nack&) {},
+  //                         [](const Interest&) {});
+  // });
+  std::string encoded_vv = EncodeVVToName(version_vector_);
+  auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
+  auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
+  Packet packet;
+  packet.packet_type = Packet::INTEREST_TYPE;
+  packet.interest = std::make_shared<Interest>(pending_sync_notify, kSendOutInterestLifetime);
+  // pending_packet.push_front(packet);
+  pending_sync_interest.clear();
+  pending_sync_interest.push_front(packet);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Added sync interest to queue: i.name=" << pending_sync_notify.toUri());
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
+
   const auto& n = interest.getName();
   NodeID node_id = ExtractNodeID(n);
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri() );
+  received_sync_interest++;
 
-  /* Merge state vector, add missing data to pending_interests */
+  /* Merge state vector, add missing data to pending_packets */
   bool otherVectorNew = false;
-  std::queue<Name> q;
-  int missing_data = 0;
+  std::vector<Packet> missing_data;
   VersionVector mv;     /* For encoding bundled interest */
   for (auto entry : other_vv) {
     auto node_id = entry.first;
@@ -265,39 +378,41 @@ void Node::OnSyncInterest(const Interest &interest) {
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
         logStateStore(node_id, seq);
         auto n = MakeDataName(node_id, seq);
-        missing_data++;
-        q.push(n);
+        Packet packet;
+        packet.packet_type = Packet::INTEREST_TYPE;
+        packet.packet_origin = Packet::ORIGINAL;
+        packet.last_sent = 0;
+        packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+        missing_data.push_back(packet);
       }
       version_vector_[node_id] = seq_other;  // Will be set later
     }
   }
-  if (missing_data > kMissingDataThreshold) {
+  if (missing_data.size() > kMissingDataThreshold) {
     auto n = MakeBundledDataName(node_id, EncodeVVToName(mv));
-    std::queue<Name> bundle_queue;
-    bundle_queue.push(n);
-    pending_interest.push(bundle_queue);
-    // TODO: Should bundled data be same as non-bundled?
-    if (pending_interest.size() == 1) {
-      left_retx_count = kInterestTransmissionTime;
-      SendDataInterest();
-    }
-  } else if (missing_data > 0) {
-    pending_interest.push(q);
-    if (pending_interest.size() == 1) {
-      left_retx_count = kInterestTransmissionTime;
-      SendDataInterest();
-    }
+    Packet packet;
+    packet.packet_type = Packet::INTEREST_TYPE;
+    packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+  } else {
+    for (size_t i = 0; i < missing_data.size(); ++i)
+      pending_packet.push_back(missing_data[i]);
   }
 
   /* If incoming state not newer, reset timer to delay sending next sync interest */
   if (!otherVectorNew) {
-    scheduler_.cancelEvent(retx_event);
-    int delay = retx_dist(rengine_);
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Reset sync interest retx timer" );
-    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
-      RetxSyncInterest(); 
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
-    });
+    // scheduler_.cancelEvent(retx_event);
+    // int delay = retx_dist(rengine_);
+    // VSYNC_LOG_TRACE( "node(" << nid_ << ") Reset sync interest retx timer" );
+    // pending_sync_interest.clear();
+    // retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
+    //   RetxSyncInterest();
+    //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
+    // });
+    suppressed_sync_interest++;
+  }
+  /* Otherwise, flood */
+  else {
+    RetxSyncInterest();
   }
 
   /* Do I have newer state? */
@@ -381,7 +496,7 @@ void Node::OnSyncAck(const Data &ack) {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
   }
 
-  /* Extract difference and add to pending_interest */
+  /* Extract difference and add to pending_packets */
   const auto& content = ack.getContent();
   proto::AckContent content_proto;
   if (!content_proto.ParseFromArray(content.value(), content.value_size())) {
@@ -390,8 +505,8 @@ void Node::OnSyncAck(const Data &ack) {
   }
   auto vector_other = DecodeVV(content_proto.vv());
   bool otherVectorNew = false;    /* Set if remote vector has newer state */
+  std::vector<Packet> missing_data;
   for (auto entry : vector_other) {
-    std::queue<Name> q;
     auto node_id = entry.first;
     auto node_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
@@ -402,14 +517,12 @@ void Node::OnSyncAck(const Data &ack) {
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
         logStateStore(node_id, seq);
         auto n = MakeDataName(node_id, seq);
-        q.push(n);
+        Packet packet;
+        packet.packet_type = Packet::INTEREST_TYPE;
+        packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+        missing_data.push_back(packet);
       }
       version_vector_[node_id] = node_seq;
-      pending_interest.push(q);
-      if (pending_interest.size() == 1) {
-        left_retx_count = kInterestTransmissionTime;
-        SendDataInterest();
-      }
     }
   }
 
@@ -427,73 +540,7 @@ void Node::OnSyncAck(const Data &ack) {
 
 /* 2. Data packet processing */
 void Node::SendDataInterest() {
-  /* Stop scheduling itself if empty. Will be rescheduled by OnSyncAck() */
-  if (pending_interest.empty()) {
-    return;
-  }
-
-  /* Drop non-responding data interest */
-  if (left_retx_count == 0) {
-    /* Remove entire queue, because remaining data are also unlikely to receive reply */
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Drop data interest");
-    pending_interest.push(pending_interest.front());
-    pending_interest.pop();
-    if (pending_interest.empty()) {
-      /* Stop scheduling itself */
-      return;
-    }
-    /* Reset counter for the next data interest */
-    left_retx_count = kInterestTransmissionTime;
-    return SendDataInterest();  /* Recursion */
-  }
-
-  /* Remove falsy pending interests for non-bundled interest */
-  if (!pending_interest.front().empty() && 
-      pending_interest.front().front().compare(0, 2, kSyncDataPrefix) == 0) {
-    while (!pending_interest.front().empty()) {
-      if (data_store_.find(pending_interest.front().front()) != data_store_.end()) {
-        pending_interest.front().pop();
-      } else {
-        break;
-      }
-    }
-  } 
-  if (pending_interest.front().empty()) {
-    pending_interest.pop();
-    left_retx_count = kInterestTransmissionTime;
-    return SendDataInterest();  /* Recursion */
-  }
-
-  /* Send first data interest in the first queue */
-  auto n = pending_interest.front().front();
-  assert(data_store_.find(n) == data_store_.end());
-  int delay = dt_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
-    Interest i(n, kSendOutInterestLifetime);
-    if (n.compare(0, 2, kSyncDataPrefix) == 0) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data interest: i.name=" << n.getPrefix(4).toUri());
-      face_.expressInterest(i, std::bind(&Node::OnDataReply, this, _2, kOriginal),
-                          [](const Interest&, const lp::Nack&) {},
-                          [](const Interest&) {});
-      if (left_retx_count != kInterestTransmissionTime) {
-        retx_data_interest++;
-      }
-    }
-    else if (n.compare(0, 2, kBundledDataPrefix) == 0) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Send bundled data interest: i.name=" << n.getPrefix(4).toUri());
-      face_.expressInterest(i, std::bind(&Node::OnBundledDataReply, this, _2),
-                          [](const Interest&, const lp::Nack&) {},
-                          [](const Interest&) {});
-      if (left_retx_count != kInterestTransmissionTime) {
-        retx_bundled_interest++; 
-      }
-    }
-    left_retx_count--;
-    waiting_data = n;
-    wt_data_interest = scheduler_.scheduleEvent(kInterestWT, [this] { 
-      SendDataInterest(); 
-    });
-  });
+  /* Do nothing */
 }
 
 void Node::OnDataInterest(const Interest &interest) {
@@ -512,20 +559,31 @@ void Node::OnDataInterest(const Interest &interest) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
-      int delay = dt_dist(rengine_);
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, interest, n] {  
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
-        Interest interest_forward(n, kSendOutInterestLifetime);
-        face_.expressInterest(interest_forward, std::bind(&Node::OnDataReply, this, _2, kForwarded),
-                              [](const Interest&, const lp::Nack&) {},
-                              [](const Interest&) {});
-      });
+      // int delay = dt_dist(rengine_);
+      // scheduler_.scheduleEvent(time::microseconds(delay), [this, interest, n] {  
+      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
+      //   Interest interest_forward(n, kSendOutInterestLifetime);
+      //   face_.expressInterest(interest_forward, std::bind(&Node::OnDataReply, this, _2, Packet::FORWARDED),
+      //                         [](const Interest&, const lp::Nack&) {},
+      //                         [](const Interest&) {});
+      // });
+      Packet packet;
+      packet.packet_type = Packet::INTEREST_TYPE;
+      packet.packet_origin = Packet::FORWARDED;
+      packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+
+      if (getCurrentPit_().find(*packet.interest) != nullptr) {
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Data interest already in PIT: i.name=" << n.toUri());  
+      } else {
+        pending_packet.push_front(packet);
+        VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
+      }
     } else {
-      int delay = dt_dist(rengine_);
+      // int delay = dt_dist(rengine_);
       // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
         VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
         Interest interest_suppress(n, kAddToPitInterestLifetime);
-        face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, kSuppressed),
+        face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, Packet::SUPPRESSED),
                             [](const Interest&, const lp::Nack&) {},
                             [](const Interest&) {});
       // });
@@ -538,7 +596,7 @@ void Node::SendDataReply() {
   /* See Node::OnDataInterest() */
 }
 
-void Node::OnDataReply(const Data &data, SourceType sourceType) {
+void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
   const auto& n = data.getName();
   // assert(n.compare(waiting_data) == 0);              // TODO: no longer true
   // assert(data_store_.find(n) == data_store_.end());  // TODO: no longer true
@@ -548,16 +606,18 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
   }
 
   /* Print based on source */
-  if (sourceType == kOriginal) {
-    /* Only 1 outstanding interest from pending_interest queue */
-    // assert(n.compare(waiting_data) == 0);
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data reply: name=" << n.toUri());
-  } else if (sourceType == kForwarded) {
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv forwarded data reply: name=" << n.toUri());
-  } else if (sourceType == kSuppressed) {
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv suppressed data reply: name=" << n.toUri());
-  } else {
-    assert(0);
+  switch(sourceType) {
+    case Packet::ORIGINAL:
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data reply: name=" << n.toUri());
+      break;
+    case Packet::FORWARDED:
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv forwarded data reply: name=" << n.toUri());
+      break;
+    case Packet::SUPPRESSED:
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv suppressed data reply: name=" << n.toUri());
+      break;
+    default:
+      assert(0);
   }
 
   /* Save data */
@@ -584,7 +644,6 @@ void Node::OnDataReply(const Data &data, SourceType sourceType) {
 /* 3. Bundled data packet processing */
 void Node::SendBundledDataInterest() {
   /* Do nothing */
-  /* See Node::SendDataInterest() */
 }
 
 void Node::OnBundledDataInterest(const Interest &interest) {
@@ -680,12 +739,17 @@ void Node::OnBundledDataReply(const Data &data) {
   auto recv_nid = ExtractNodeID(n);
   auto next_vv = DecodeVV(pack_data_proto.nextvv());
   auto next_bundle = MakeBundledDataName(recv_nid, EncodeVVToName(next_vv));
-  assert(pending_interest.front().size() == 1);   /* Is bundled interest */
-  pending_interest.front().pop();
+  // assert(pending_interest.front().size() == 1);   /* Is bundled interest */
+  // pending_interest.front().pop();
+  // TODO: Remove bundled interest from queue
   if (!next_vv.empty()) {
     std::cout << "node(" << nid_ << ") sends next bundled interest: " 
               << next_bundle.toUri() << std::endl;
-    pending_interest.front().push(next_bundle);
+    // pending_interest.front().push(next_bundle);
+    Packet packet;
+    packet.packet_type = Packet::INTEREST_TYPE;
+    packet.interest = std::make_shared<Interest>(next_bundle, kSendOutInterestLifetime);
+    pending_packet.push_front(packet);
   } else {
     std::cout << "node(" << nid_ << ") has no next bundled interest" << std::endl;
   }
@@ -701,6 +765,7 @@ void Node::OnBundledDataReply(const Data &data) {
 void Node::RetxSyncInterest() {
   SendSyncInterest();
   int delay = retx_dist(rengine_);
+  scheduler_.cancelEvent(retx_event);
   retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
     RetxSyncInterest(); 
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );

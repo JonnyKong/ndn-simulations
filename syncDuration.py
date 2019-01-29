@@ -2,11 +2,12 @@ import os
 import os.path
 import numpy as np
 # import pandas as pd
-import statsmodels.api as sm
+# import statsmodels.api as sm
 # import matplotlib.pyplot as plt
 import math
 import re
 import sys
+import json, codecs
 
 data_store = {}
 state_store = {}
@@ -35,6 +36,7 @@ class DataInfo:
 # out_file_name = sys.argv[1]
 syncDuration = []
 stateSyncDuration = []
+stateSyncTimestamp = []
 out_notify_interest = []
 out_beacon = []
 out_data_interest = []
@@ -49,6 +51,8 @@ cache_hit_special = []
 retx_notify_interest = []
 retx_data_interest = []
 retx_bundled_interest = []
+received_sync_interest = []
+suppressed_sync_interest = []
 file_name = sys.argv[1]
 node_num = int(sys.argv[2]) + 24
 recvDataReply = 0
@@ -97,6 +101,7 @@ for line in file:
             cur_sync_duration = state_info.LastTime - state_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
             stateSyncDuration.append(cur_sync_duration)
+        stateSyncTimestamp.append(float(state_info.LastTime - state_info.GenerationTime) / 1000000.0)
     if line.find("NFD:") != -1:
       if line.find("m_outNotifyInterest") != -1:
         elements = line.split(' ')
@@ -140,6 +145,10 @@ for line in file:
       retx_data_interest.append(float(line.split(' ')[-1]))
     if line.find("retx_bundled_interest") != -1:
       retx_bundled_interest.append(float(line.split(' ')[-1]))
+    if line.find("received_sync_interest") != -1:
+      received_sync_interest.append(float(line.split(' ')[-1]))
+    if line.find("suppressed_sync_interest") != -1:
+      suppressed_sync_interest.append(float(line.split(' ')[-1]))
     if line.find("PhyRxDropCount") != -1:
       PhyRxDropCount = int(line.split()[-1])
     if line.find("Recv data reply") != -1:
@@ -219,3 +228,38 @@ print("recvDataReply = " + str(recvDataReply))
 print("recvForwardedDataReply = " + str(recvForwardedDataReply))
 print("recvSuppressedDataReply = " + str(recvSuppressedDataReply))
 print("number of collision = " + str(PhyRxDropCount))
+print("in notify interest = " + str(np.sum(received_sync_interest)))
+print("suppressed notify interest = " + str(np.sum(suppressed_sync_interest)))
+
+
+def cdf(data):
+    data_size=len(data)
+
+    # Set bins edges
+    data_set=sorted(set(data))
+    bins=np.append(data_set, data_set[-1]+1)
+
+    # Use the histogram function to bin the data
+    counts, bin_edges = np.histogram(data, bins=bins, density=False)
+
+    counts=counts.astype(float)/data_size
+
+    # Find the cdf
+    cdf = np.cumsum(counts)
+
+    # # Plot the cdf
+    # plt.plot(bin_edges[0:-1], cdf,linestyle='--', marker="o", color='b')
+    # plt.ylim((0,1))
+    # plt.ylabel("CDF")
+    # plt.grid(True)
+    # plt.show()
+
+    return (bin_edges, cdf)
+
+# Generate CDF plot
+cdf_file="cdf.txt"
+(bin_edges, cdf_result) = cdf(stateSyncTimestamp)
+cdf_string = json.dumps((bin_edges.tolist(), cdf_result.tolist()))
+with open(cdf_file, "a") as f:
+  f.write(cdf_string)
+  f.write("\n")

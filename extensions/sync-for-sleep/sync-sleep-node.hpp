@@ -20,6 +20,7 @@ class SimpleNode {
   SimpleNode(const NodeID& nid, 
              const Name& prefix, 
              Node::GetCurrentPos getCurrentPos,
+             Node::GetCurrentPit getCurrentPit,
             //  bool useHeartbeat, 
             //  bool useHeartbeatFlood, 
              bool useBeacon, 
@@ -36,7 +37,9 @@ class SimpleNode {
               ns3::ndn::StackHelper::getKeyChain(), 
               nid,
               prefix, 
-              std::bind(&SimpleNode::OnData, this, _1)) {}
+              std::bind(&SimpleNode::OnData, this, _1),
+              getCurrentPos,
+              getCurrentPit) {}
 
   void Start() {
   }
