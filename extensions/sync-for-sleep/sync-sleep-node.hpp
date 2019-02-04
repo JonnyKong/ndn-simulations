@@ -1,4 +1,5 @@
 /* -*- Mode:C++; c-file-style:"google"; indent-tabs-mode:nil; -*- */
+#pragma once
 
 #include <functional>
 #include <iostream>
@@ -21,6 +22,7 @@ class SimpleNode {
              const Name& prefix, 
              Node::GetCurrentPos getCurrentPos,
              Node::GetCurrentPit getCurrentPit,
+             Node::GetNumSorroundingNodes getNumSorroundingNodes,
             //  bool useHeartbeat, 
             //  bool useHeartbeatFlood, 
              bool useBeacon, 
@@ -39,7 +41,8 @@ class SimpleNode {
               prefix, 
               std::bind(&SimpleNode::OnData, this, _1),
               getCurrentPos,
-              getCurrentPit) {}
+              getCurrentPit,
+              getNumSorroundingNodes) {}
 
   void Start() {
   }

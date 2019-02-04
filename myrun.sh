@@ -2,10 +2,10 @@
 
 set -e
 
-run_times=5
+run_times=1
 loss_rate_list=(0.0 0.01 0.05 0.1 0.3 0.5)
-wifi_range_list=(60 80 100 120 140 160) 
-# wifi_range_list=(160) 
+wifi_range_list=(60 80 100 120 140 160 400) 
+# wifi_range_list=(80) 
 rm -f cdf.txt
 
 run_loss_rate() {   
@@ -15,7 +15,7 @@ run_loss_rate() {
     NS_LOG='SyncForSleep' ./waf --run "sync-for-sleep-movepattern --pauseTime=0 \
         --run=0 --mobileNodeNum=20 --lossRate=${LOSS_RATE} --wifiRange=60" \
         > ${RESULT_DIR}/raw/loss_rate_${LOSS_RATE}.txt 2>&1
-    python syncDuration.py ${RESULT_DIR}/raw/loss_rate_${LOSS_RATE}.txt 20 \
+    python syncDuration.py ${RESULT_DIR}/raw/loss_rate_${LOSS_RATE}.txt 3 \
         > ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt
 }
 
@@ -158,6 +158,14 @@ summarize_wifi_range_result() {
         echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "suppressed notify interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Rate of collision
+    echo "Collision rate:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${wifi_range_list[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE}  " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "collision rate" >> ${RESULT_DIR}/${FILENAME}
     done
 }
 

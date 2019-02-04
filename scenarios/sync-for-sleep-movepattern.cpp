@@ -8,6 +8,8 @@
 #include "ns3/ndnSIM-module.h"
 #include "ns3/netanim-module.h"
 
+#include "sync-for-sleep/sync-for-sleep-app.hpp"
+
 #include <random>
 #include <map>
 
@@ -161,6 +163,10 @@ void installMobility(NodeContainer& c, bool constant_pause, int pause_time) {
   }
 }
 
+int NumSorroundingNodes() {
+  return 777;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -281,6 +287,13 @@ main (int argc, char *argv[])
     FibHelper::AddRoute(object, "/ndn/beaconFlood", std::numeric_limits<int32_t>::max());
     idx++;
   }
+
+  for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
+    Ptr<Node> object = *i;
+    auto app = DynamicCast<ns3::ndn::SyncForSleepApp>(object -> GetApplication(0));
+    app -> container_ = &nodes;
+    app -> wifi_range = range;
+  }  
 
   // Trace Collisions
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));

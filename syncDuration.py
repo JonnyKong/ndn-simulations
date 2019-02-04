@@ -54,10 +54,15 @@ retx_bundled_interest = []
 received_sync_interest = []
 suppressed_sync_interest = []
 file_name = sys.argv[1]
-node_num = int(sys.argv[2]) + 24
+if int(sys.argv[2]) <= 5:
+  node_num = int(sys.argv[2])
+else:
+  node_num = int(sys.argv[2]) + 24
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
+should_receive_interest = 0
+received_interest = 0
 
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
@@ -157,6 +162,10 @@ for line in file:
       recvForwardedDataReply += 1
     if line.find("Recv suppressed data reply") != -1:
       recvSuppressedDataReply += 1
+    if line.find("should_receive_interest") != -1:
+      should_receive_interest += int(line.split()[-1])
+    if line.find("received_interest") != -1:
+      received_interest += int(line.split()[-1])
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
@@ -219,8 +228,8 @@ print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
 print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
 print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
 
-for data_name in data_store:
-    print data_store[data_name].Owner 
+# for data_name in data_store:
+#     print data_store[data_name].Owner 
 
 print("number of data available = " + str(dataSyncDuration.size))
 print("number of data produced = " + str(len(data_store)))
@@ -230,6 +239,9 @@ print("recvSuppressedDataReply = " + str(recvSuppressedDataReply))
 print("number of collision = " + str(PhyRxDropCount))
 print("in notify interest = " + str(np.sum(received_sync_interest)))
 print("suppressed notify interest = " + str(np.sum(suppressed_sync_interest)))
+print("should receive interest = " + str(should_receive_interest))
+print("received interest = " + str(received_interest))
+print("collision rate = " + str(1 - float(received_interest) / should_receive_interest))
 
 
 def cdf(data):

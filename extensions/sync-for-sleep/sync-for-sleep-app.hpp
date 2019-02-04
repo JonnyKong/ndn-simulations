@@ -1,3 +1,5 @@
+#pragma once
+
 #include "ns3/ndnSIM-module.h"
 #include "ns3/integer.h"
 #include "ns3/string.h"
@@ -47,9 +49,6 @@ public:
                     MakeBooleanAccessor(&SyncForSleepApp::useRetx_), MakeBooleanChecker());
       // .AddAttribute("UseBeaconFlood", "if beacon flood", BooleanValue(false),
       //               MakeBooleanAccessor(&SyncForSleepApp::useBeaconFlood_), MakeBooleanChecker());
-
-      
-
     return tid;
   }
 
@@ -66,6 +65,27 @@ public:
     return protoNode->getForwarder()->getPit();
   }
 
+  // using GetNumSorroundingNodes = std::function<int()>;
+  // GetNumSorroundingNodes GetNumSorroundingNodes_;
+  // ::ndn::vsync::Node::GetNumSorroundingNodes GetNumSorroundingNodes_;
+  // int (SyncForSleepApp::*GetNumSorroundingNodes_)();
+
+  int GetNumSorroundingNodes_() {
+    int num = 0;
+    for (NodeContainer::Iterator i = container_->Begin(); i != container_->End(); ++i) {
+      if (*i == GetNode())
+        continue;
+      double distance = (GetNode() -> GetObject<MobilityModel>())
+                        -> GetDistanceFrom((*i) -> GetObject<MobilityModel>());
+      if (distance <= wifi_range + 1e-3)
+        num += 1;
+    }
+    return num;
+  }
+
+  NodeContainer *container_;  // Point back to container in simulator
+  float wifi_range;           // Wifi range from simulator
+
 
 protected:
   // inherited from Application base class.
@@ -77,11 +97,8 @@ protected:
       prefix_, 
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
-      // useHeartbeat_, 
-      // useHeartbeatFlood_, 
+      std::bind(&SyncForSleepApp::GetNumSorroundingNodes_, this),
       useBeacon_, 
-      // useBeaconSuppression_, 
-      // useBeaconFlood_,
       useRetx_
     ));
     m_instance->Start();
@@ -98,12 +115,9 @@ private:
   std::unique_ptr<vsync::sync_for_sleep::SimpleNode> m_instance;
   vsync::NodeID nid_;
   Name prefix_;
-  // bool useHeartbeat_;
-  // bool useHeartbeatFlood_;
   bool useBeacon_;
   bool useBeaconSuppression_;
   bool useRetx_;
-  // bool useBeaconFlood_;
 };
 
 } // namespace ndn

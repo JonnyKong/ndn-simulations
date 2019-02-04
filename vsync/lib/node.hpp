@@ -47,6 +47,7 @@ public:
  
   using GetCurrentPos = std::function<double()>;
   using GetCurrentPit = std::function<Pit&()>;
+  using GetNumSorroundingNodes = std::function<int()>;
 
   class Error : public std::exception {
    public:
@@ -59,7 +60,7 @@ public:
   /* For user application */
   Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
        const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos, 
-       GetCurrentPit getCurrentPit);
+       GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
@@ -91,6 +92,7 @@ private:
   DataCb data_cb_;              /* Never used in simulation */
   GetCurrentPos getCurrentPos_; 
   GetCurrentPit getCurrentPit_;
+  GetNumSorroundingNodes getNumSorroundingNodes_;
 
   /* Node statistics */
   unsigned int retx_sync_interest;    /* No of retx for sync interest */
@@ -98,6 +100,8 @@ private:
   unsigned int retx_bundled_interest; /* No of retx for bundled data interest */
   unsigned int received_sync_interest;    /* No of sync interest received */
   unsigned int suppressed_sync_interest;  /* No of sync interest suppressed */
+  unsigned int should_receive_interest;   /* No of interest should received receiver side */
+  unsigned int received_interest;     /* No of interest (sync + data) received */
 
   /* Helper functions */
   void StartSimulation();

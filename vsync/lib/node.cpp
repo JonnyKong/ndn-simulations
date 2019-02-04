@@ -63,11 +63,11 @@ const static bool kSyncAckSuppression = false;
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-           GetCurrentPit getCurrentPit) : 
+           GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes) : 
   face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
   prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
-  getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit)
-  {
+  getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit), 
+  getNumSorroundingNodes_(getNumSorroundingNodes) {
   
   /* Initialize statistics */
   retx_sync_interest = 0;
@@ -75,6 +75,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   retx_bundled_interest = 0;
   received_sync_interest = 0;
   suppressed_sync_interest = 0;
+  should_receive_interest = 0;
+  received_interest = 0;
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -124,6 +126,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     std::cout << "node(" << nid_ << ") retx_bundled_interest = " << retx_bundled_interest << std::endl;
     std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
     std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
+    std::cout << "node(" << nid_ << ") should_receive_interest = " << should_receive_interest << std::endl;
+    std::cout << "node(" << nid_ << ") received_interest = " << received_interest << std::endl;
     PrintNDNTraffic();
   });
 
@@ -297,7 +301,10 @@ void Node::AsyncSendPacket() {
                                 std::bind(&Node::OnSyncAck, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() );
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() 
+                           << ", should be received by " << getNumSorroundingNodes_() );
+          // VSYNC_LOG_TRACE ("node(" << nid_ << ") Should receive interest: " << getNumSorroundingNodes_() );
+          should_receive_interest += getNumSorroundingNodes_();
         }
         break;
 
@@ -350,7 +357,7 @@ void Node::SendSyncInterest() {
   // pending_packet.push_front(packet);
   pending_sync_interest.clear();
   pending_sync_interest.push_front(packet);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Added sync interest to queue: i.name=" << pending_sync_notify.toUri());
+  // VSYNC_LOG_TRACE( "node(" << nid_ << ") Added sync interest to queue: i.name=" << pending_sync_notify.toUri());
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
@@ -358,9 +365,8 @@ void Node::OnSyncInterest(const Interest &interest) {
   const auto& n = interest.getName();
   NodeID node_id = ExtractNodeID(n);
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
-
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri() );
   received_sync_interest++;
+  received_interest++;
 
   /* Merge state vector, add missing data to pending_packets */
   bool otherVectorNew = false;
@@ -398,23 +404,6 @@ void Node::OnSyncInterest(const Interest &interest) {
       pending_packet.push_back(missing_data[i]);
   }
 
-  /* If incoming state not newer, reset timer to delay sending next sync interest */
-  if (!otherVectorNew) {
-    // scheduler_.cancelEvent(retx_event);
-    // int delay = retx_dist(rengine_);
-    // VSYNC_LOG_TRACE( "node(" << nid_ << ") Reset sync interest retx timer" );
-    // pending_sync_interest.clear();
-    // retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
-    //   RetxSyncInterest();
-    //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
-    // });
-    suppressed_sync_interest++;
-  }
-  /* Otherwise, flood */
-  else {
-    RetxSyncInterest();
-  }
-
   /* Do I have newer state? */
   bool myVectorNew = false;
   for (auto entry: version_vector_) {
@@ -427,12 +416,34 @@ void Node::OnSyncInterest(const Interest &interest) {
     }
   }
 
+
+  /* If incoming state not newer, reset timer to delay sending next sync interest */
+  if (!otherVectorNew && !myVectorNew) {  /* Case 1: Other vector same  */
+    scheduler_.cancelEvent(retx_event);
+    int delay = retx_dist(rengine_);
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
+                     << ", will reset retx timer" );
+    pending_sync_interest.clear();
+    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
+      RetxSyncInterest();
+    });
+    suppressed_sync_interest++;
+  } else if (!otherVectorNew) {           /* Case 2: Other vector doesn't contain newer state */
+    /* Do nothing */
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
+                     << ", do nothing" );
+  } else {                                /* Case 3: Other vector contain newer state */
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
+                     << ", will do flooding");
+    RetxSyncInterest(); // Flood
+  }
+
   /* Send ACK based on whether I have new state */
   if (myVectorNew) {
     /* If local vector contains newer state, send ACK immediately */
     int delay = dt_dist(rengine_);
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK immediately:" << n.toUri() );
     scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
       SendSyncAck(n); 
     });
   } else {
@@ -461,8 +472,8 @@ void Node::OnSyncInterest(const Interest &interest) {
       VSYNC_LOG_TRACE ("node(" << nid_ << ") starting overhear sync interest: " << n.toUri() );
     } else {
       int delay = ack_dist(rengine_);
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with delay:" << n.toUri() );
       scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
-        VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK immediately:" << n.toUri() );
         SendSyncAck(n); 
       });
     }
@@ -504,14 +515,14 @@ void Node::OnSyncAck(const Data &ack) {
     assert(false);
   }
   auto vector_other = DecodeVV(content_proto.vv());
-  bool otherVectorNew = false;    /* Set if remote vector has newer state */
+  // bool otherVectorNew = false;    /* Set if remote vector has newer state */
   std::vector<Packet> missing_data;
   for (auto entry : vector_other) {
     auto node_id = entry.first;
     auto node_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < node_seq) {
-      otherVectorNew = true;
+      // otherVectorNew = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
@@ -546,6 +557,7 @@ void Node::SendDataInterest() {
 void Node::OnDataInterest(const Interest &interest) {
   const auto& n = interest.getName();
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data interest: i.name=" << n.toUri());
+  received_interest++;
 
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
