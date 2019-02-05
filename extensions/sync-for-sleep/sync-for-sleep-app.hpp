@@ -65,11 +65,6 @@ public:
     return protoNode->getForwarder()->getPit();
   }
 
-  // using GetNumSorroundingNodes = std::function<int()>;
-  // GetNumSorroundingNodes GetNumSorroundingNodes_;
-  // ::ndn::vsync::Node::GetNumSorroundingNodes GetNumSorroundingNodes_;
-  // int (SyncForSleepApp::*GetNumSorroundingNodes_)();
-
   int GetNumSorroundingNodes_() {
     int num = 0;
     for (NodeContainer::Iterator i = container_->Begin(); i != container_->End(); ++i) {

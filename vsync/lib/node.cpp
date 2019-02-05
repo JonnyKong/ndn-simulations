@@ -47,7 +47,10 @@ std::uniform_int_distribution<> dt_dist(0, 5000);
 std::uniform_int_distribution<> ack_dist(5000, 10000);
 /* Delay for sync interest retx */
 // static time::seconds kRetxTimer = time::seconds(2);
-std::uniform_int_distribution<> retx_dist(2000000, 10000000);
+// std::uniform_int_distribution<> retx_dist(2000000, 10000000);
+float retx_timer_base = 18000000;
+std::uniform_int_distribution<> retx_dist(retx_timer_base * 0.9, retx_timer_base * 1.1);
+
 /* Delay for beacon frequency */
 std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 
