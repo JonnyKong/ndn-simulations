@@ -23,9 +23,9 @@ namespace vsync {
 
 typedef struct {
   std::shared_ptr<Interest> interest;
-  std::shared_ptr<Data> data;
+  std::shared_ptr<Data>     data;
 
-  enum PacketType { INTEREST_TYPE, DATA_TYPE } packet_type;
+  enum PacketType { INTEREST_TYPE, DATA_TYPE }        packet_type;
   enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  /* Used in data only */
 
   int64_t last_sent;
@@ -83,7 +83,8 @@ private:
   unsigned int notify_time;     /* No. of retx left for same sync interest */
   unsigned int left_retx_count; /* No. of retx left for same data interest */
   std::deque<Packet> pending_sync_interest; /* Multi-level queue */
-  std::deque<Packet> pending_packet;
+  std::deque<Packet> pending_ack;
+  std::deque<Packet> pending_data_interest;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
@@ -98,7 +99,7 @@ private:
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
   std::uniform_int_distribution<> packet_dist
-    = std::uniform_int_distribution<>(50, 100);   /* milliseconds */
+    = std::uniform_int_distribution<>(2000, 5000);   /* microseconds */
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
@@ -116,7 +117,8 @@ private:
     = std::uniform_int_distribution<>(0, 5000);
   // Delay for sending ACK when local vector is not newer
   std::uniform_int_distribution<> ack_dist
-    = std::uniform_int_distribution<>(5000, 10000);
+    // = std::uniform_int_distribution<>(5000, 10000);
+    = std::uniform_int_distribution<>(20000, 40000);
   // Delay for sync interest retx
   // time::seconds kRetxTimer = time::seconds(2);
   // std::uniform_int_distribution<> retx_dist(2000000, 10000000);
@@ -132,7 +134,7 @@ private:
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
   const bool kMultihopSync = true;        /* Use multihop for sync? */
   const bool kMultihopData = false;       /* Use multihop for data? */ 
-  const bool kSyncAckSuppression = true;
+  const bool kSyncAckSuppression = false;
 
   /* Callbacks */
   DataCb data_cb_;              /* Never used in simulation */
