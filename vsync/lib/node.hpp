@@ -87,6 +87,7 @@ private:
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
+  bool isStatic;                /* Static nodes don't generate data or log store */
 
   /* Callbacks */
   DataCb data_cb_;              /* Never used in simulation */

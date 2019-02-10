@@ -1,7 +1,8 @@
 import datetime
+import sys
 
 path = "result/" + str(datetime.date.today())
-filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (5)]
+filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (int(sys.argv[1]))]
 
 def variance(lst):
     mean = float(sum(lst)) / len(lst)

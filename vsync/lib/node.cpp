@@ -48,7 +48,7 @@ std::uniform_int_distribution<> ack_dist(5000, 10000);
 /* Delay for sync interest retx */
 // static time::seconds kRetxTimer = time::seconds(2);
 // std::uniform_int_distribution<> retx_dist(2000000, 10000000);
-float retx_timer_base = 18000000;
+float retx_timer_base = 8000000;
 std::uniform_int_distribution<> retx_dist(retx_timer_base * 0.9, retx_timer_base * 1.1);
 
 /* Delay for beacon frequency */
@@ -56,10 +56,10 @@ std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
 
 
 /* Options */
-const static bool kBeacon =   false;  /* Use beacon? */
+const static bool kBeacon =       false;  /* Use beacon? */
 /*const*/ static bool kRetx =     true;   /* Use sync interest retx? */
-const static bool kMultihopSync = true;  /* Use multihop for sync? */
-const static bool kMultihopData = false;   /* Use multihop for data? */ 
+const static bool kMultihopSync = true;   /* Use multihop for sync? */
+const static bool kMultihopData = false;  /* Use multihop for data? */ 
 const static bool kSyncAckSuppression = false;
 
 
@@ -108,9 +108,14 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   });
 
   /* Initiate node states */
+  isStatic = false;
   generate_data = true;     
   version_vector_[nid_] = 0;
-  
+  if (nid_ >= 20) {
+    isStatic = true;
+    // generate_data = false;
+  } 
+
   /* Initiate event scheduling */
   /* 2s: Start simulation */
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
@@ -220,11 +225,19 @@ void Node::PrintNDNTraffic() {
 }
 
 void Node::logDataStore(const Name& name) {
+  if (isStatic)
+    return;
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
   std::cout << now << " microseconds node(" << nid_ << ") Store New Data: " << name.toUri() << std::endl;
 }
 
-void Node::logStateStore(const NodeID& nid, int64_t seq) {  
+void Node::logStateStore(const NodeID& nid, int64_t seq) {
+  if (isStatic)
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") is static" ); 
+  else
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") is mobile" );
+  if (isStatic)
+    return;  
   std::string state_tag = to_string(nid) + "-" + to_string(seq);
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
   std::cout << now << " microseconds node(" << nid_ << ") Update New Seq: " << state_tag << std::endl;

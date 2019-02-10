@@ -57,7 +57,8 @@ file_name = sys.argv[1]
 if int(sys.argv[2]) <= 5:
   node_num = int(sys.argv[2])
 else:
-  node_num = int(sys.argv[2]) + 24
+  # node_num = int(sys.argv[2]) + 24
+  node_num = int(sys.argv[2])
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0

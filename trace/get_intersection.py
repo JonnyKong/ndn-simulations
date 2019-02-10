@@ -98,9 +98,9 @@ def plot_cdf(lists):
         lines[i], = plt.plot(base[:-1], cumulative, linestyle='-', color=colors[i])
         i += 1
     plt.legend(lines, [i for i in range(60, 161, 20)])
-    # plt.xlabel("Duration of Contact/s (Mobile Nodes Only)")
+    plt.xlabel("Duration of Contact/s (Mobile Nodes Only)")
     # plt.xlabel("Duration of isolation/s (Mobile Nodes Only)")
-    plt.xlabel("Duration of connecting to a new node/s (All nodes)")
+    # plt.xlabel("Duration of connecting to a new node/s (All nodes)")
     plt.ylabel("CDF")
     plt.grid(True)
     plt.show()
@@ -199,17 +199,17 @@ def get_reconnect(traces, n, wifi_range):
 
 if __name__ == "__main__":
     traces = read_trace(filename)
-    # # Calculate contact duration
-    # durations_all = []
-    # for wifi_range in range(60, 161, 20):
-    #     durations = []
-    #     for i in range(0, 19):
-    #         for j in range(i + 1, 20):
-    #             duration_sample = get_intersections(traces, i, j, wifi_range)
-    #             durations += [(i - j) for (j, i) in duration_sample]
-    #     list.sort(durations)
-    #     durations_all.append(durations)
-    # plot_cdf(durations_all)
+    # Calculate contact duration
+    durations_all = []
+    for wifi_range in range(60, 161, 20):
+        durations = []
+        for i in range(0, 19):
+            for j in range(i + 1, 20):
+                duration_sample = get_intersections(traces, i, j, wifi_range)
+                durations += [(i - j) for (j, i) in duration_sample]
+        list.sort(durations)
+        durations_all.append(durations)
+    plot_cdf(durations_all)
 
     # # Calculate isolation time
     # durations_all = []
@@ -223,13 +223,13 @@ if __name__ == "__main__":
     #     durations_all.append(durations)
     # plot_cdf(durations_all)
 
-    # Calculate reconnect duration
-    durations_all = []
-    for wifi_range in range(60, 161, 20):
-        durations = []
-        for i in range(0, 44):  # All nodes
-            # print(i)
-            duration = get_reconnect(traces, i, wifi_range)
-            durations += duration
-        durations_all.append(durations)
-    plot_cdf(durations_all)
+    # # Calculate reconnect duration
+    # durations_all = []
+    # for wifi_range in range(60, 161, 20):
+    #     durations = []
+    #     for i in range(0, 44):  # All nodes
+    #         # print(i)
+    #         duration = get_reconnect(traces, i, wifi_range)
+    #         durations += duration
+    #     durations_all.append(durations)
+    # plot_cdf(durations_all)
