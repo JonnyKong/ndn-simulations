@@ -14,54 +14,6 @@ VSYNC_LOG_DEFINE(SyncForSleep);
 namespace ndn {
 namespace vsync {
 
-/* Constants */
-/* No. of times same data interest will be sent */
-static const int kInterestTransmissionTime = 1;
-/* Lifetime */
-static const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
-static const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);
-static const time::seconds kBeaconLifetime = time::seconds(6);
-static const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
-/* Timeout for sync interests */
-// static const time::milliseconds kInterestWT = time::milliseconds(50);
-// static const time::milliseconds kInterestWT = time::milliseconds(200);
-std::uniform_int_distribution<> packet_dist(50, 100); /* milliseconds */
-/* Distribution for sending packets */
-
-/* Distributions for multi-hop */
-std::uniform_int_distribution<> mhop_dist(0, 10000);
-static const int pMultihopForwardDataInterest = 5000;
-/* Distribution for data generation */
-static const int data_generation_rate_mean = 40000;
-std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
-/* Threshold for bundled data fetching */
-static const int kMissingDataThreshold = 0x7fffffff;
-/* MTU */
-static const int kMaxDataContent = 4000;
-
-
-/* Delay timers */
-/* Delay for sending everything to avoid collision */
-std::uniform_int_distribution<> dt_dist(0, 5000);
-/* Delay for sending ACK when local vector is not newer */
-std::uniform_int_distribution<> ack_dist(5000, 10000);
-/* Delay for sync interest retx */
-// static time::seconds kRetxTimer = time::seconds(2);
-// std::uniform_int_distribution<> retx_dist(2000000, 10000000);
-float retx_timer_base = 8000000;
-std::uniform_int_distribution<> retx_dist(retx_timer_base * 0.9, retx_timer_base * 1.1);
-
-/* Delay for beacon frequency */
-std::uniform_int_distribution<> beacon_dist(2000000, 3000000);
-
-
-/* Options */
-const static bool kBeacon =       false;  /* Use beacon? */
-/*const*/ static bool kRetx =     true;   /* Use sync interest retx? */
-const static bool kMultihopSync = true;   /* Use multihop for sync? */
-const static bool kMultihopData = false;  /* Use multihop for data? */ 
-const static bool kSyncAckSuppression = false;
-
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
@@ -113,7 +65,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   version_vector_[nid_] = 0;
   if (nid_ >= 20) {
     isStatic = true;
-    // generate_data = false;
+    generate_data = false;
   } 
 
   /* Initiate event scheduling */
@@ -232,10 +184,6 @@ void Node::logDataStore(const Name& name) {
 }
 
 void Node::logStateStore(const NodeID& nid, int64_t seq) {
-  if (isStatic)
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") is static" ); 
-  else
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") is mobile" );
   if (isStatic)
     return;  
   std::string state_tag = to_string(nid) + "-" + to_string(seq);
@@ -454,45 +402,91 @@ void Node::OnSyncInterest(const Interest &interest) {
     RetxSyncInterest(); // Flood
   }
 
-  /* Send ACK based on whether I have new state */
-  if (myVectorNew) {
-    /* If local vector contains newer state, send ACK immediately */
-    int delay = dt_dist(rengine_);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK immediately:" << n.toUri() );
-    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
-      SendSyncAck(n); 
-    });
-  } else {
-    if (kSyncAckSuppression) {
-      if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
-        return;
-      }
+  // /* Send ACK based on whether I have new state */
+  // if (myVectorNew) {
+  //   /* If local vector contains newer state, send ACK immediately */
+  //   int delay = dt_dist(rengine_);
+  //   VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK immediately:" << n.toUri() );
+  //   scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
+  //     SendSyncAck(n); 
+  //   });
+  // } else {
+  //   if (kSyncAckSuppression) {
+  //     if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
+  //       return;
+  //     }
 
+  //     int delay = dt_dist(rengine_);
+  //     // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+  //       Interest interest_overhear(n, kAddToPitInterestLifetime);
+  //       face_.expressInterest(interest_overhear, std::bind(&Node::OnSyncAck, this, _2),
+  //                             [](const Interest&, const lp::Nack&) {},
+  //                             [](const Interest&) {});
+  //     // });
+
+  //     delay += ack_dist(rengine_);
+  //     overheard_sync_interest[n] = scheduler_.scheduleEvent(
+  //       time::microseconds(delay), [this, n] {
+  //         /* Remove entry and send ack */
+  //         overheard_sync_interest.erase(n);
+  //         VSYNC_LOG_TRACE ("node(" << nid_ << ") finally reply ACK with delay: " << n.toUri() );
+  //         SendSyncAck(n);
+  //       }
+  //     );
+  //     VSYNC_LOG_TRACE ("node(" << nid_ << ") starting overhear sync interest: " << n.toUri() );
+  //   } else {
+  //     int delay = ack_dist(rengine_);
+  //     VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with delay:" << n.toUri() );
+  //     scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
+  //       SendSyncAck(n); 
+  //     });
+  //   }
+  // }
+  /**
+   * If suppress ACK, always overhear other ACKs, otherwise always return ACK.
+   * In both cases set ACK delay timer based on whether I have new state.
+   */
+  if (kSyncAckSuppression) {
+    Interest interest_overhear(n, kAddToPitInterestLifetime);
+    face_.expressInterest(interest_overhear, std::bind(&Node::OnSyncAck, this, _2),
+                          [](const Interest&, const lp::Nack&) {},
+                          [](const Interest&) {});
+    auto p = overheard_sync_interest.find(n);
+    if (p != overheard_sync_interest.end())
+      scheduler_.cancelEvent(p -> second);  // Refresh event 
+    if (myVectorNew) {
       int delay = dt_dist(rengine_);
-      // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
-        Interest interest_overhear(n, kAddToPitInterestLifetime);
-        face_.expressInterest(interest_overhear, std::bind(&Node::OnSyncAck, this, _2),
-                              [](const Interest&, const lp::Nack&) {},
-                              [](const Interest&) {});
-      // });
-
-      delay += ack_dist(rengine_);
       overheard_sync_interest[n] = scheduler_.scheduleEvent(
         time::microseconds(delay), [this, n] {
-          /* Remove entry and send ack */
           overheard_sync_interest.erase(n);
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") finally reply ACK with delay: " << n.toUri() );
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK with new state: " << n.toUri() );
           SendSyncAck(n);
         }
       );
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") starting overhear sync interest: " << n.toUri() );
-    } else {
+    } 
+    else {
       int delay = ack_dist(rengine_);
-      VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with delay:" << n.toUri() );
-      scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
-        SendSyncAck(n); 
-      });
+      overheard_sync_interest[n] = scheduler_.scheduleEvent(
+        time::microseconds(delay), [this, n] {
+          overheard_sync_interest.erase(n);
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") reply ACK without new state: " << n.toUri() );
+          SendSyncAck(n);
+        }
+      );
     }
+  } 
+  else {
+    int delay;
+    if (myVectorNew) {
+      delay = dt_dist(rengine_);
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK immediately:" << n.toUri() );
+    } else {
+      delay = ack_dist(rengine_);
+      VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with delay:" << n.toUri() );
+    }
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
+      SendSyncAck(n); 
+    });
   }
 }
 
@@ -517,7 +511,7 @@ void Node::OnSyncAck(const Data &ack) {
       overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
     scheduler_.cancelEvent(overheard_sync_interest[n]);
     overheard_sync_interest.erase(n);
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress: " << ack.getName().toUri());
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress pending ACK: " << ack.getName().toUri());
     return;
   } else {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
@@ -698,7 +692,7 @@ void Node::OnBundledDataInterest(const Interest &interest) {
       entry->set_name(data_name.toUri());
       entry->set_content(data_store_[data_name]->getContent().value(), data_store_[data_name]->getContent().value_size());
 
-      int cur_data_content_size = pack_data_proto.SerializeAsString().size();
+      size_t cur_data_content_size = pack_data_proto.SerializeAsString().size();
       if (cur_data_content_size >= kMaxDataContent) {
         exceed_max_size = true;
         if (seq == version_vector_[node_id]) {

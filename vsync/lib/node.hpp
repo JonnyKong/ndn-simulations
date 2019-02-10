@@ -89,6 +89,51 @@ private:
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
   bool isStatic;                /* Static nodes don't generate data or log store */
 
+  /* Constants */
+  const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
+  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
+  const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);
+  const time::seconds kBeaconLifetime = time::seconds(6);
+  const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
+  // const time::milliseconds kInterestWT = time::milliseconds(50);
+  // const time::milliseconds kInterestWT = time::milliseconds(200);
+  std::uniform_int_distribution<> packet_dist
+    = std::uniform_int_distribution<>(50, 100);   /* milliseconds */
+  // Distributions for multi-hop
+  std::uniform_int_distribution<> mhop_dist
+    = std::uniform_int_distribution<>(0, 10000);
+  const int pMultihopForwardDataInterest = 5000;
+  // Distribution for data generation
+  const int data_generation_rate_mean = 40000;
+  std::poisson_distribution<> data_generation_dist 
+    = std::poisson_distribution<>(data_generation_rate_mean);
+  // Threshold for bundled data fetching
+  const size_t kMissingDataThreshold = 0x7fffffff;
+  // MTU
+  const size_t kMaxDataContent = 4000;
+  // Delay for sending everything to avoid collision
+  std::uniform_int_distribution<> dt_dist
+    = std::uniform_int_distribution<>(0, 5000);
+  // Delay for sending ACK when local vector is not newer
+  std::uniform_int_distribution<> ack_dist
+    = std::uniform_int_distribution<>(5000, 10000);
+  // Delay for sync interest retx
+  // time::seconds kRetxTimer = time::seconds(2);
+  // std::uniform_int_distribution<> retx_dist(2000000, 10000000);
+  float retx_timer_base = 8000000;
+  std::uniform_int_distribution<> retx_dist
+    = std::uniform_int_distribution<>(retx_timer_base * 0.9, retx_timer_base * 1.1);
+  // Delay for beacon frequency
+  std::uniform_int_distribution<> beacon_dist
+    = std::uniform_int_distribution<>(2000000, 3000000);
+
+  /* Options */
+  const bool kBeacon =       false;       /* Use beacon? */
+  /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
+  const bool kMultihopSync = true;        /* Use multihop for sync? */
+  const bool kMultihopData = false;       /* Use multihop for data? */ 
+  const bool kSyncAckSuppression = true;
+
   /* Callbacks */
   DataCb data_cb_;              /* Never used in simulation */
   GetCurrentPos getCurrentPos_; 

@@ -238,7 +238,7 @@ Forwarder::onIncomingInterest(Face& inFace, const Interest& interest)
   this->cancelUnsatisfyAndStragglerTimer(*pitEntry);
 
   if (interest.getName().compare(0, 2, kSyncDataPrefix) == 0) {
-    if (interest.getInterestLifetime() == time::milliseconds(54)) {
+    if (interest.getInterestLifetime() == time::milliseconds(444)) {
       // insert in-record
       pitEntry->insertOrUpdateInRecord(const_cast<Face&>(inFace), interest);
 
@@ -364,9 +364,16 @@ Forwarder::onOutgoingInterest(const shared_ptr<pit::Entry>& pitEntry, Face& outF
 
   // insert out-record
   pitEntry->insertOrUpdateOutRecord(outFace, interest);
+  if (interest.getName().compare(0, 2, kSyncDataPrefix) == 0 || 
+      interest.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
+    if (interest.getInterestLifetime() == time::milliseconds(444)) {
+      return;
+    }
+  }
 
   // record related sync interests
-  if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
+  if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
+      interest.getInterestLifetime() != time::milliseconds(444)) {
     if (interest.getName().compare(0, 2, kSyncDataPrefix) == 0) m_outDataInterest++;
     else if (interest.getName().compare(0, 2, kBundledDataPrefix) == 0) m_outBundledInterest++;
     else if (interest.getName().compare(0, 2, kSyncNotifyPrefix) == 0) m_outNotifyInterest++;
@@ -443,6 +450,7 @@ Forwarder::onInterestFinalize(const shared_ptr<pit::Entry>& pitEntry, bool isSat
 void
 Forwarder::onIncomingData(Face& inFace, const Data& data)
 {
+  // std::cout << "OnIncomingData(): " << data.getName() << std::endl;
   // receive Data
   NFD_LOG_DEBUG("onIncomingData face=" << inFace.getId() << " data=" << data.getName());
   data.setTag(make_shared<lp::IncomingFaceIdTag>(inFace.getId()));
@@ -504,8 +512,9 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
   std::set<Face*> pendingDownstreams;
   // foreach PitEntry
   auto now = time::steady_clock::now();
+  // std::cout << "Matched pit size: " << pitMatches.size() << std::endl;
   for (const shared_ptr<pit::Entry>& pitEntry : pitMatches) {
-
+    // std::cout << "In-records size: " << pitEntry->getInRecords().size() << std::endl;
     // cancel unsatisfy & straggler timer
     this->cancelUnsatisfyAndStragglerTimer(*pitEntry);
 
@@ -525,14 +534,18 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
     this->insertDeadNonceList(*pitEntry, true, data.getFreshnessPeriod(), &inFace);
 
     // mark PIT satisfied
-    pitEntry->clearInRecords();
+    if (inFace.getScope() == ndn::nfd::FACE_SCOPE_LOCAL) 
+      pitEntry->clearInRecords();
     pitEntry->deleteOutRecord(inFace);
+    // std::cout << "Pit In-record Not Removed, size = " << pitEntry->getInRecords().size() << std::endl;
 
     // set PIT straggler timer
     this->setStragglerTimer(pitEntry, true, data.getFreshnessPeriod());
   }
 
+
   // foreach pending downstream
+  // std::cout << "Pending downstreams size: " << pendingDownstreams.size();
   for (Face* pendingDownstream : pendingDownstreams) {
     // if is vsyncData which means in ad hoc networks, we need to send out the data even if outFace == inFace
     if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
@@ -569,20 +582,19 @@ Forwarder::onDataUnsolicited(Face& inFace, const Data& data)
 void
 Forwarder::onOutgoingData(const Data& data, Face& outFace)
 {
-  if (data.getName().compare(0, 2, kSyncDataPrefix) == 0 ||
-    data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
-    // go to another pipeline
-    if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
-      onOutgoingVsyncData(data, outFace);
-      return;
-    }
-  }
+  // if (data.getName().compare(0, 2, kSyncDataPrefix) == 0 ||
+  //   data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
+  //   // go to another pipeline
+  //   if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
+  //     onOutgoingVsyncData(data, outFace);
+  //     return;
+  //   }
+  // }
   if (outFace.getId() == face::INVALID_FACEID) {
     NFD_LOG_WARN("onOutgoingData face=invalid data=" << data.getName());
     return;
   }
   NFD_LOG_DEBUG("onOutgoingData face=" << outFace.getId() << " data=" << data.getName());
-
 
   // /localhost scope control
   bool isViolatingLocalhost = outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL &&
@@ -596,7 +608,17 @@ Forwarder::onOutgoingData(const Data& data, Face& outFace)
 
   // TODO traffic manager
   if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
-    if (data.getName().compare(0, 2, kBundledDataPrefix) == 0) m_outBundledData++;
+    std::cout << "Traffic Manager triggered: ";
+    if (data.getName().compare(0, 2, kBundledDataPrefix) == 0) {
+      m_outBundledData++;
+      std::cout << "Bundled data" << std::endl;
+    } else if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+      m_outData++;
+      std::cout << "Data" << std::endl;
+    } else if (data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
+      std::cout << "ACK" << std::endl;
+      m_outAck++;
+    }
   }
 
   // simulate packet loss at the sender side
