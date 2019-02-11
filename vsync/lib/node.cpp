@@ -600,7 +600,8 @@ void Node::OnDataInterest(const Interest &interest) {
       Packet packet;
       packet.packet_type = Packet::INTEREST_TYPE;
       packet.packet_origin = Packet::FORWARDED;
-      packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+      // packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+      packet.interest = std::make_shared<Interest>(n, time::milliseconds(49));
 
       // /** 
       //  * Need to remove PIT, otherwise interferes with checking PIT entry. 
@@ -614,6 +615,8 @@ void Node::OnDataInterest(const Interest &interest) {
       //   pending_data_interest.push_front(packet);
       //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
       // }
+
+      // packet.interest = std::make_shared<Interest>(interest);
       pending_data_interest.push_front(packet);
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
 
