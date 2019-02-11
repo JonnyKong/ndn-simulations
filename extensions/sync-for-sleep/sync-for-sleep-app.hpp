@@ -62,7 +62,7 @@ public:
   Pit &
   GetCurrentPIT() {
     Ptr<L3Protocol> protoNode = L3Protocol::getL3Protocol(GetNode());
-    return protoNode->getForwarder()->getPit();
+    return protoNode -> getForwarder() -> getPit();
   }
 
   int GetNumSorroundingNodes_() {
@@ -76,6 +76,12 @@ public:
         num += 1;
     }
     return num;
+  }
+
+  ::std::shared_ptr<::nfd::Face>
+  GetFaceById(int id) {
+    Ptr<L3Protocol> protoNode = L3Protocol::getL3Protocol(GetNode());
+    return protoNode -> getFaceById(id);
   }
 
   NodeContainer *container_;  // Point back to container in simulator
@@ -93,6 +99,7 @@ protected:
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
       std::bind(&SyncForSleepApp::GetNumSorroundingNodes_, this),
+      std::bind(&SyncForSleepApp::GetFaceById, this, _1),
       useBeacon_, 
       useRetx_
     ));

@@ -23,6 +23,7 @@ class SimpleNode {
              Node::GetCurrentPos getCurrentPos,
              Node::GetCurrentPit getCurrentPit,
              Node::GetNumSorroundingNodes getNumSorroundingNodes,
+             Node::GetFaceById getFaceById,
             //  bool useHeartbeat, 
             //  bool useHeartbeatFlood, 
              bool useBeacon, 
@@ -42,7 +43,8 @@ class SimpleNode {
               std::bind(&SimpleNode::OnData, this, _1),
               getCurrentPos,
               getCurrentPit,
-              getNumSorroundingNodes) {}
+              getNumSorroundingNodes,
+              getFaceById) {}
 
   void Start() {
   }

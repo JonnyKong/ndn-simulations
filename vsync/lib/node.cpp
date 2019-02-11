@@ -18,11 +18,12 @@ namespace vsync {
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-           GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes) : 
+           GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes,
+           GetFaceById getFaceById) : 
   face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
   prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
   getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit), 
-  getNumSorroundingNodes_(getNumSorroundingNodes) {
+  getNumSorroundingNodes_(getNumSorroundingNodes), getFaceById_(getFaceById) {
   
   /* Initialize statistics */
   retx_sync_interest = 0;
@@ -67,6 +68,10 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     isStatic = true;
     generate_data = false;
   } 
+
+  // auto face0 = getFaceById_(0);
+  // auto face1 = getFaceById_(1);
+  // auto face2 = getFaceById_(2);
 
   /* Initiate event scheduling */
   /* 2s: Start simulation */
@@ -200,14 +205,25 @@ void Node::AsyncSendPacket() {
       pending_ack.size() > 0) {
     Name n; 
     Packet packet;
-    if (pending_sync_interest.size() > 0) {
-      packet = pending_sync_interest.front();
-      pending_sync_interest.pop_front();
-    } else if (pending_ack.size() > 0) {
+    // if (pending_sync_interest.size() > 0) {
+    //   packet = pending_sync_interest.front();
+    //   pending_sync_interest.pop_front();
+    // } 
+    // else if (pending_ack.size() > 0) {
+    //   packet = pending_ack.front();
+    //   pending_ack.pop_front();
+    //   // pending_ack.clear();
+    // } 
+    if (pending_ack.size() > 0) {
       packet = pending_ack.front();
       pending_ack.pop_front();
       // pending_ack.clear();
-    } else {
+    } 
+    else if (pending_sync_interest.size() > 0) {
+      packet = pending_sync_interest.front();
+      pending_sync_interest.pop_front();
+    }
+    else {
       packet = pending_data_interest.front();
       pending_data_interest.pop_front();
     }
@@ -216,7 +232,6 @@ void Node::AsyncSendPacket() {
       case Packet::INTEREST_TYPE:
         n = (packet.interest)->getName();
         if (n.compare(0, 2, kSyncDataPrefix) == 0) {            /* Data interest */
-          break;
           /* Remove falsy data interest */
           if (data_store_.find(n) != data_store_.end()) {
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Drop falsy data interest: i.name=" << n.toUri() );
@@ -235,49 +250,64 @@ void Node::AsyncSendPacket() {
                   // packet.last_sent = ns3::Simulator::Now().GetMicroSeconds();
                   pending_data_interest.push_back(packet);
                 });
-                /* Fall through */
+                /** Schedule next async transmission with delay, to avoid looping 
+                 *  through the queue too fast */
+                scheduler_.scheduleEvent(time::milliseconds(1), [this] {
+                  AsyncSendPacket();
+                });
+                // break;
+                return;
               default:
                 /* Best effort, don't add to queue. Send next packet immediately */
                 AsyncSendPacket();
                 return;
             }
-          } else {
+          } 
+          else {
             face_.expressInterest(*packet.interest,
                                   std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
                                   [](const Interest&, const lp::Nack&) {},
                                   [](const Interest&) {});
+            int sorrounding = getNumSorroundingNodes_();
+            should_receive_interest += sorrounding;
             switch (packet.packet_origin) {
               case Packet::ORIGINAL:
-                VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri() );
+                VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
+                                 << ", should be received by " << sorrounding );
+                VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
                 /* Add packet back to queue with longer delay to avoid retransmissions */
                 scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                   pending_data_interest.push_back(packet);
                 });
                 break;
               case Packet::FORWARDED:
-                VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri() );
+                VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
+                                 << ", should be received by " << sorrounding );
                 /* Best effort, don't add to queue */
                 break;
               default:
                 assert(0);
             }
           }
-        } else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data interest */
+        } 
+        else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data interest */
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnBundledDataReply, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
           pending_data_interest.push_back(packet);
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send bundled data interest: i.name=" << n.toUri() );
-        } else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
+        } 
+        else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnSyncAck, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
+          int sorrounding = getNumSorroundingNodes_();
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() 
-                           << ", should be received by " << getNumSorroundingNodes_() );
+                           << ", should be received by " << sorrounding );
           // VSYNC_LOG_TRACE ("node(" << nid_ << ") Should receive interest: " << getNumSorroundingNodes_() );
-          should_receive_interest += getNumSorroundingNodes_();
+          should_receive_interest += sorrounding;
         }
         break;
 
@@ -302,6 +332,7 @@ void Node::AsyncSendPacket() {
   
   /* Schedule self */
   int delay = packet_dist(rengine_);
+  // VSYNC_LOG_TRACE ("node(" << nid_ << ") Re-scheduling" );
   scheduler_.scheduleEvent(time::microseconds(delay), [this] {
     AsyncSendPacket();
   });
@@ -483,18 +514,18 @@ void Node::OnSyncAck(const Data &ack) {
   const auto& n = ack.getName();
 
   if (kSyncAckSuppression){
+    /* Remove pending ACK from both pending events and queue */
+    for (auto it = pending_ack.begin(); it != pending_ack.end(); ++it) {
+      if (it->data->getName() == n) {
+        // it = pending_ack.erase(it);  // TODO: Cause bug for unknown reason
+      }
+    }
     if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
       scheduler_.cancelEvent(overheard_sync_interest[n]);
       overheard_sync_interest.erase(n);
       VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress pending ACK: " << ack.getName().toUri());
       return;
     } 
-    // else if (n.compare((pending_ack.front().data)->getName()) == 0) {
-    //   /* Also clear pending ACK already sent to queue */
-    //   pending_ack.clear();
-    //   VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress pending ACK: " << ack.getName().toUri());
-    //   return;
-    // }
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
@@ -522,12 +553,15 @@ void Node::OnSyncAck(const Data &ack) {
         auto n = MakeDataName(node_id, seq);
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
+        packet.packet_origin = Packet::ORIGINAL;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
       version_vector_[node_id] = node_seq;
     }
   }
+  for (size_t i = 0; i < missing_data.size(); ++i)
+    pending_data_interest.push_back(missing_data[i]);
 
   /**
    * If remote vector has newer state, send another sync interest immediately,
@@ -563,33 +597,34 @@ void Node::OnDataInterest(const Interest &interest) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
     if (p < pMultihopForwardDataInterest) {
-      // int delay = dt_dist(rengine_);
-      // scheduler_.scheduleEvent(time::microseconds(delay), [this, interest, n] {  
-      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Forward data interest: i.name=" << n.toUri());
-      //   Interest interest_forward(n, kSendOutInterestLifetime);
-      //   face_.expressInterest(interest_forward, std::bind(&Node::OnDataReply, this, _2, Packet::FORWARDED),
-      //                         [](const Interest&, const lp::Nack&) {},
-      //                         [](const Interest&) {});
-      // });
       Packet packet;
       packet.packet_type = Packet::INTEREST_TYPE;
       packet.packet_origin = Packet::FORWARDED;
       packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
 
-      if (getCurrentPit_().find(*packet.interest) != nullptr) {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Data interest already in PIT: i.name=" << n.toUri());  
-      } else {
-        pending_data_interest.push_front(packet);
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
-      }
+      // /** 
+      //  * Need to remove PIT, otherwise interferes with checking PIT entry. 
+      //  * Remove only in-record of wifi face, and out-record of app face.
+      //  **/
+      // // TODO
+      // if (getCurrentPit_().find(*packet.interest) != nullptr) {
+      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Data interest to forward already in PIT: i.name=" << n.toUri());  
+      //   // VSYNC_LOG_TRACE( "node(" << nid_ << ") PIT entry exists: " << getCurrentPit_().find(*packet.interest)->getName());  
+      // } else {
+      //   pending_data_interest.push_front(packet);
+      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
+      // }
+      pending_data_interest.push_front(packet);
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
+
     } else {
       // int delay = dt_dist(rengine_);
       // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
         VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
         Interest interest_suppress(n, kAddToPitInterestLifetime);
         face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, Packet::SUPPRESSED),
-                            [](const Interest&, const lp::Nack&) {},
-                            [](const Interest&) {});
+                              [](const Interest&, const lp::Nack&) {},
+                              [](const Interest&) {});
       // });
     }
   }

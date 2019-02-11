@@ -48,6 +48,7 @@ public:
   using GetCurrentPos = std::function<double()>;
   using GetCurrentPit = std::function<Pit&()>;
   using GetNumSorroundingNodes = std::function<int()>;
+  using GetFaceById = std::function<std::shared_ptr<::nfd::Face>(int)>;  
 
   class Error : public std::exception {
    public:
@@ -60,7 +61,8 @@ public:
   /* For user application */
   Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
        const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos, 
-       GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes);
+       GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes,
+       GetFaceById getFaceById);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
@@ -99,11 +101,12 @@ private:
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
   std::uniform_int_distribution<> packet_dist
-    = std::uniform_int_distribution<>(2000, 5000);   /* microseconds */
+    // = std::uniform_int_distribution<>(2000, 5000);   /* microseconds */
+    = std::uniform_int_distribution<>(100000, 150000);   /* microseconds */
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
-  const int pMultihopForwardDataInterest = 5000;
+  const int pMultihopForwardDataInterest = 10000;
   // Distribution for data generation
   const int data_generation_rate_mean = 40000;
   std::poisson_distribution<> data_generation_dist 
@@ -133,14 +136,15 @@ private:
   const bool kBeacon =       false;       /* Use beacon? */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
   const bool kMultihopSync = true;        /* Use multihop for sync? */
-  const bool kMultihopData = false;       /* Use multihop for data? */ 
-  const bool kSyncAckSuppression = false;
+  const bool kMultihopData = true;       /* Use multihop for data? */ 
+  const bool kSyncAckSuppression = true;
 
   /* Callbacks */
   DataCb data_cb_;              /* Never used in simulation */
   GetCurrentPos getCurrentPos_; 
   GetCurrentPit getCurrentPit_;
   GetNumSorroundingNodes getNumSorroundingNodes_;
+  GetFaceById getFaceById_;
 
   /* Node statistics */
   unsigned int retx_sync_interest;    /* No of retx for sync interest */
