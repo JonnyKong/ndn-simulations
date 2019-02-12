@@ -22,8 +22,8 @@ namespace ndn {
 namespace vsync {
 
 typedef struct {
-  std::shared_ptr<Interest> interest;
-  std::shared_ptr<Data>     data;
+  std::shared_ptr<const Interest> interest;
+  std::shared_ptr<const Data>     data;
 
   enum PacketType { INTEREST_TYPE, DATA_TYPE }        packet_type;
   enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  /* Used in data only */
@@ -40,6 +40,7 @@ public:
   enum DataType : uint32_t {
     kUserData       = 0,
     kGeoData        = 1,
+    kRepoData       = 2,  
     kSyncReply      = 9668,
     kConfigureInfo  = 9669,
     kVectorClock    = 9670
@@ -77,6 +78,7 @@ private:
   Name prefix_;                 /* To be configured by application */
   std::random_device rdevice_;
   std::mt19937 rengine_;
+  std::shared_ptr<::nfd::Face> face1;  /* Face object in NFD */
 
   /* Node states */
   VersionVector version_vector_;
@@ -84,8 +86,9 @@ private:
   bool generate_data;           /* If false, PubishData() returns immediately */
   unsigned int notify_time;     /* No. of retx left for same sync interest */
   unsigned int left_retx_count; /* No. of retx left for same data interest */
-  std::deque<Packet> pending_sync_interest; /* Multi-level queue */
-  std::deque<Packet> pending_ack;
+  std::deque<Packet> pending_ack;           /* Multi-level queue */
+  std::deque<Packet> pending_sync_interest;
+  std::deque<Packet> pending_data_reply;  
   std::deque<Packet> pending_data_interest;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
@@ -94,19 +97,21 @@ private:
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
-  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(50);
-  const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);
+  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(100);
+  // const time::milliseconds kForwardInterestLifetime = time::milliseconds(99);  // Have to be different
+  // const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);    // Should be larger than kSendOutInterestLifetime
+  const time::milliseconds kRetxDataInterestTime = time::milliseconds(1);    // Should be larger than kSendOutInterestLifetime
   const time::seconds kBeaconLifetime = time::seconds(6);
   const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
   std::uniform_int_distribution<> packet_dist
     // = std::uniform_int_distribution<>(2000, 5000);   /* microseconds */
-    = std::uniform_int_distribution<>(100000, 150000);   /* microseconds */
+    = std::uniform_int_distribution<>(10000, 15000);   /* microseconds */
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
-  const int pMultihopForwardDataInterest = 10000;
+  const int pMultihopForwardDataInterest = 5000;
   // Distribution for data generation
   const int data_generation_rate_mean = 40000;
   std::poisson_distribution<> data_generation_dist 
@@ -138,6 +143,7 @@ private:
   const bool kMultihopSync = true;        /* Use multihop for sync? */
   const bool kMultihopData = true;       /* Use multihop for data? */ 
   const bool kSyncAckSuppression = true;
+  const bool log_verbose = false;
 
   /* Callbacks */
   DataCb data_cb_;              /* Never used in simulation */
@@ -154,6 +160,9 @@ private:
   unsigned int suppressed_sync_interest;  /* No of sync interest suppressed */
   unsigned int should_receive_interest;   /* No of interest should received receiver side */
   unsigned int received_interest;     /* No of interest (sync + data) received */
+  unsigned int data_reply;            /* No of data sent */
+  unsigned int received_data_mobile;  /* No of data received (if this node is mobile) */
+  unsigned int received_data_mobile_from_repo;  /* No of data mobile nodes received from repo */
 
   /* Helper functions */
   void StartSimulation();

@@ -64,6 +64,9 @@ recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
 should_receive_interest = 0
 received_interest = 0
+data_reply = 0
+received_data_mobile = 0
+received_data_mobile_from_repo = 0
 
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
@@ -167,6 +170,13 @@ for line in file:
       should_receive_interest += int(line.split()[-1])
     if line.find("received_interest") != -1:
       received_interest += int(line.split()[-1])
+    if line.find("data_reply") != -1:
+      data_reply += int(line.split()[-1])
+    if line.find("received_data_mobile") != -1:
+      received_data_mobile += int(line.split()[-1])
+    if line.find("received_data_mobile_from_repo") != -1:
+      received_data_mobile_from_repo += int(line.split()[-1])
+
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
 
@@ -243,6 +253,8 @@ print("suppressed notify interest = " + str(np.sum(suppressed_sync_interest)))
 print("should receive interest = " + str(should_receive_interest))
 print("received interest = " + str(received_interest))
 print("collision rate = " + str(1 - float(received_interest) / should_receive_interest))
+print("data reply = " + str(data_reply))
+print("repo reply rate = " + str(float(received_data_mobile_from_repo) / received_data_mobile))
 
 
 def cdf(data):

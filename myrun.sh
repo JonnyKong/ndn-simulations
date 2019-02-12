@@ -3,7 +3,7 @@
 set -e  # Exit on error
 
 RUN_TIMES=1
-NODE_NUM=3
+NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.01 0.05 0.1 0.3 0.5)
 
 WIFI_RANGE_LIST=(60 80 100 120 140 160) 
@@ -65,38 +65,39 @@ summarize_wifi_range_result() {
     for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
         echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "out data" \
-            | grep -v "out data interest" \
+            | grep "data reply" \
             >> ${RESULT_DIR}/${FILENAME}
+            # | grep "out data" \
+            # | grep -v "out data interest" \
     done
 
-    # Bundled interest
-    echo "Bundled interest:" >> ${RESULT_DIR}/${FILENAME}
-    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
-        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
-        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "out bundled interest" >> ${RESULT_DIR}/${FILENAME}
-    done
+    # # Bundled interest
+    # echo "Bundled interest:" >> ${RESULT_DIR}/${FILENAME}
+    # for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+    #     echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+    #     cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+    #         | grep "out bundled interest" >> ${RESULT_DIR}/${FILENAME}
+    # done
 
-    # Bundled data
-    echo "Bundled data:" >> ${RESULT_DIR}/${FILENAME}
-    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
-        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
-        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "out bundled data" >> ${RESULT_DIR}/${FILENAME}
-    done
+    # # Bundled data
+    # echo "Bundled data:" >> ${RESULT_DIR}/${FILENAME}
+    # for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+    #     echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+    #     cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+    #         | grep "out bundled data" >> ${RESULT_DIR}/${FILENAME}
+    # done
 
-    # Transmitted data (out data + out ack + out bundled data)
-    echo "Transmitted data (number of packets):" >> ${RESULT_DIR}/${FILENAME}
-    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
-        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
-        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "out" \
-            | grep "data\|ack\|bundled data" \
-            | grep -v "interest" \
-            | awk '{sum+=$NF} END {print sum}' \
-            >> ${RESULT_DIR}/${FILENAME}
-    done
+    # # Transmitted data (out data + out ack + out bundled data)
+    # echo "Transmitted data (number of packets):" >> ${RESULT_DIR}/${FILENAME}
+    # for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+    #     echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+    #     cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+    #         | grep "out" \
+    #         | grep "data\|ack\|bundled data" \
+    #         | grep -v "interest" \
+    #         | awk '{sum+=$NF} END {print sum}' \
+    #         >> ${RESULT_DIR}/${FILENAME}
+    # done
 
     # State sync delay
     echo "State sync delay:" >> ${RESULT_DIR}/${FILENAME}
@@ -138,13 +139,13 @@ summarize_wifi_range_result() {
             | grep "recvSuppressedDataReply" >> ${RESULT_DIR}/${FILENAME}
     done
 
-    # Number of collisions
-    echo "Number of collisions: " >> ${RESULT_DIR}/${FILENAME}
-    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
-        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
-        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
-            | grep "number of collision" >> ${RESULT_DIR}/${FILENAME}
-    done
+    # # Number of collisions
+    # echo "Number of collisions: " >> ${RESULT_DIR}/${FILENAME}
+    # for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+    #     echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+    #     cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+    #         | grep "number of collision" >> ${RESULT_DIR}/${FILENAME}
+    # done
 
     # Number of received sync interests
     echo "Received sync interest:" >> ${RESULT_DIR}/${FILENAME}
@@ -168,6 +169,14 @@ summarize_wifi_range_result() {
         echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "collision rate" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Repo reply rate
+    echo "Repo reply rate:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "repo reply rate" >> ${RESULT_DIR}/${FILENAME}
     done
 }
 
