@@ -93,7 +93,7 @@ void PrintCollision(YansWifiPhyHelper* wifiPhyHelper)
 // std::poisson_distribution<> data_generation_dist(data_generation_rate_mean);
 // std::uniform_real_distribution<> dt_dist(0, kInterestDT);
 
-static const int generate_data_time = 400;
+static const int generate_data_time = 800;
 static const int sim_time = generate_data_time * 3;
 static const int x_range = 800;
 static const int y_range = 800;
@@ -206,7 +206,7 @@ main (int argc, char *argv[])
   // cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
   cmd.Parse (argc,argv);
   assert(range != -1);
-  int node_num = mobile_node_num + 24;
+  int node_num = mobile_node_num + 5;
   if (mobile_node_num <= 5) node_num = mobile_node_num; // TODO: remove
   RngSeedManager::SetRun (run);
 

@@ -97,7 +97,7 @@ private:
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
-  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(100);
+  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(500);
   // const time::milliseconds kForwardInterestLifetime = time::milliseconds(99);  // Have to be different
   // const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);    // Should be larger than kSendOutInterestLifetime
   const time::milliseconds kRetxDataInterestTime = time::milliseconds(1);    // Should be larger than kSendOutInterestLifetime
@@ -113,7 +113,7 @@ private:
     = std::uniform_int_distribution<>(0, 10000);
   const int pMultihopForwardDataInterest = 5000;
   // Distribution for data generation
-  const int data_generation_rate_mean = 40000;
+  const int data_generation_rate_mean = 10000;
   std::poisson_distribution<> data_generation_dist 
     = std::poisson_distribution<>(data_generation_rate_mean);
   // Threshold for bundled data fetching

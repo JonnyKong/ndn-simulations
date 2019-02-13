@@ -81,12 +81,12 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   scheduler_.scheduleEvent(time::milliseconds(2000), [this] { StartSimulation(); });
 
   /* 400s: Stop data generation */
-  scheduler_.scheduleEvent(time::seconds(400), [this] {
+  scheduler_.scheduleEvent(time::seconds(800), [this] {
     generate_data = false;
   });
 
   /* 1195s: Print NFD statistics */
-  scheduler_.scheduleEvent(time::seconds(1195), [this] {
+  scheduler_.scheduleEvent(time::seconds(2395), [this] {
     // std::cout << "node(" << nid_ << ") outInterest = " << out_interest_num << std::endl;
     // std::cout << "node(" << nid_ << ") average time to meet a new node = " << total_time / (double)count << std::endl;
     std::cout << "node(" << nid_ << ") retx_sync_interest = " << retx_sync_interest << std::endl;
@@ -103,7 +103,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   });
 
   /* 1196s: Print Node statistics */
-  scheduler_.scheduleEvent(time::seconds(1196), [this] {
+  scheduler_.scheduleEvent(time::seconds(2396), [this] {
     uint64_t seq_sum = 0;
     for (auto entry: version_vector_) {
       seq_sum += entry.second;
@@ -480,14 +480,14 @@ void Node::OnSyncInterest(const Interest &interest) {
       overheard_sync_interest.erase(p);
     }
     if (myVectorNew) {
-      // int delay = dt_dist(rengine_);
-      // overheard_sync_interest[n] = scheduler_.scheduleEvent(
-      //   time::microseconds(delay), [this, n] {
-          // overheard_sync_interest.erase(n);
+      int delay = dt_dist(rengine_);
+      overheard_sync_interest[n] = scheduler_.scheduleEvent(
+        time::microseconds(delay), [this, n] {
+          overheard_sync_interest.erase(n);
           VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with new state: " << n.toUri() );
           SendSyncAck(n);
-      //   }
-      // );
+        }
+      );
     } 
     else {
       int delay = ack_dist(rengine_);
@@ -539,6 +539,9 @@ void Node::OnSyncAck(const Data &ack) {
     for (auto it = pending_ack.begin(); it != pending_ack.end(); ++it) {
       if (it->data->getName() == n) {
         // it = pending_ack.erase(it);  // TODO: Cause bug for unknown reason
+        // try { pending_ack.erase(it); } catch (...) {}
+        pending_ack.clear();
+        break;
       }
     }
     if (overheard_sync_interest.find(n) != overheard_sync_interest.end()) {
@@ -716,7 +719,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
   // SendDataInterest();
 
   /* Broadcast the received data for multi-hop */
-  if (kMultihopData) {
+  if (kMultihopData && sourceType == Packet::FORWARDED) {
     // int delay = dt_dist(rengine_);
     // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
     //   data_reply++;

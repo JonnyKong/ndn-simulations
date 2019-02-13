@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
+nodes_total = 25
 
 # Parse file
 def read_trace(filename):
@@ -105,7 +106,7 @@ def init():
     t, x_tmp, y_tmp = interpolate_trace(traces["0"]["T"], traces["0"]["X"], traces["0"]["Y"], 0, 2680, 26800)
     x.append(x_tmp)
     y.append(y_tmp)
-    for i in range(1, 44):
+    for i in range(1, nodes_total):
         _, x_tmp, y_tmp = interpolate_trace(traces[str(i)]["T"], traces[str(i)]["X"], traces[str(i)]["Y"], 0, 2680, 26800)
         x.append(x_tmp)
         y.append(y_tmp)
@@ -135,5 +136,7 @@ ani = FuncAnimation(fig, update,
                     blit = True,
                     interval = 10,
                     repeat = False)
-ani.save('lines.mp4')
+# ani.save('lines.mp4')
 # plt.show()
+
+ani.save('25.mp4')
