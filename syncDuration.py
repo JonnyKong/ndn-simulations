@@ -48,10 +48,6 @@ collision_rx = []
 collision_tx = []
 cache_hit = []
 cache_hit_special = []
-retx_notify_interest = []
-retx_data_interest = []
-retx_bundled_interest = []
-received_sync_interest = []
 suppressed_sync_interest = []
 file_name = sys.argv[1]
 if int(sys.argv[2]) <= 5:
@@ -62,8 +58,8 @@ else:
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
-should_receive_interest = 0
-received_interest = 0
+received_sync_interest = 0
+should_receive_sync_interest = 0
 data_reply = 0
 received_data_mobile = 0
 received_data_mobile_from_repo = 0
@@ -148,14 +144,8 @@ for line in file:
       cache_hit.append(float(line.split(' ')[-1]))
     if line.find("m_cacheHitSpecial") != -1:
       cache_hit_special.append(float(line.split(' ')[-1]))
-    if line.find("retx_sync_interest") != -1:
-      retx_notify_interest.append(float(line.split(' ')[-1]))
-    if line.find("retx_data_interest") != -1:
-      retx_data_interest.append(float(line.split(' ')[-1]))
-    if line.find("retx_bundled_interest") != -1:
-      retx_bundled_interest.append(float(line.split(' ')[-1]))
     if line.find("received_sync_interest") != -1:
-      received_sync_interest.append(float(line.split(' ')[-1]))
+      received_sync_interest += int(line.split(' ')[-1])
     if line.find("suppressed_sync_interest") != -1:
       suppressed_sync_interest.append(float(line.split(' ')[-1]))
     if line.find("PhyRxDropCount") != -1:
@@ -166,10 +156,8 @@ for line in file:
       recvForwardedDataReply += 1
     if line.find("Recv suppressed data reply") != -1:
       recvSuppressedDataReply += 1
-    if line.find("should_receive_interest") != -1:
-      should_receive_interest += int(line.split()[-1])
-    if line.find("received_interest") != -1:
-      received_interest += int(line.split()[-1])
+    if line.find("should_receive_sync_interest") != -1:
+      should_receive_sync_interest += int(line.split()[-1])
     if line.find("data_reply") != -1:
       data_reply += int(line.split()[-1])
     if line.find("received_data_mobile") != -1:
@@ -235,9 +223,6 @@ print("out bundled data = " + str(np.sum(np.array(out_bundled_data))))
 # print("collision tx = " + str(np.mean(np.array(collision_tx))))
 print("cache hit = " + str(np.sum(np.array(cache_hit))))
 print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
-print("retx_notify_interest = " + str(np.sum(np.array(retx_notify_interest))))
-print("retx_data_interest = " + str(np.sum(np.array(retx_data_interest))))
-print("retx_bundled_interest = " + str(np.sum(np.array(retx_bundled_interest))))
 
 # for data_name in data_store:
 #     print data_store[data_name].Owner 
@@ -250,9 +235,9 @@ print("recvSuppressedDataReply = " + str(recvSuppressedDataReply))
 print("number of collision = " + str(PhyRxDropCount))
 print("in notify interest = " + str(np.sum(received_sync_interest)))
 print("suppressed notify interest = " + str(np.sum(suppressed_sync_interest)))
-print("should receive interest = " + str(should_receive_interest))
-print("received interest = " + str(received_interest))
-print("collision rate = " + str(1 - float(received_interest) / should_receive_interest))
+print("should receive interest = " + str(should_receive_sync_interest))
+print("received interest = " + str(received_sync_interest))
+print("collision rate = " + str(1 - float(received_sync_interest) / should_receive_sync_interest))
 print("data reply = " + str(data_reply))
 print("repo reply rate = " + str(float(received_data_mobile_from_repo) / received_data_mobile))
 

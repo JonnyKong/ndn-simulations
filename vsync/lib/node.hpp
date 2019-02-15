@@ -98,22 +98,19 @@ private:
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
   const time::milliseconds kSendOutInterestLifetime = time::milliseconds(500);
-  // const time::milliseconds kForwardInterestLifetime = time::milliseconds(99);  // Have to be different
-  // const time::milliseconds kRetxDataInterestTime = time::milliseconds(1000);    // Should be larger than kSendOutInterestLifetime
-  const time::milliseconds kRetxDataInterestTime = time::milliseconds(1);    // Should be larger than kSendOutInterestLifetime
+  const time::milliseconds kRetxDataInterestTime = time::milliseconds(5000);    // Delay for re-insert to end of queue
   const time::seconds kBeaconLifetime = time::seconds(6);
   const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
   std::uniform_int_distribution<> packet_dist
-    // = std::uniform_int_distribution<>(2000, 5000);   /* microseconds */
     = std::uniform_int_distribution<>(10000, 15000);   /* microseconds */
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
   const int pMultihopForwardDataInterest = 5000;
   // Distribution for data generation
-  const int data_generation_rate_mean = 10000;
+  const int data_generation_rate_mean = 40000;
   std::poisson_distribution<> data_generation_dist 
     = std::poisson_distribution<>(data_generation_rate_mean);
   // Threshold for bundled data fetching
@@ -153,15 +150,14 @@ private:
   GetFaceById getFaceById_;
 
   /* Node statistics */
-  unsigned int retx_sync_interest;    /* No of retx for sync interest */
-  unsigned int retx_data_interest;    /* No of retx for data interest */
-  unsigned int retx_bundled_interest; /* No of retx for bundled data interest */
-  unsigned int received_sync_interest;    /* No of sync interest received */
+  // Sent
   unsigned int suppressed_sync_interest;  /* No of sync interest suppressed */
-  unsigned int should_receive_interest;   /* No of interest should received receiver side */
-  unsigned int received_interest;     /* No of interest (sync + data) received */
-  unsigned int data_reply;            /* No of data sent */
-  unsigned int received_data_mobile;  /* No of data received (if this node is mobile) */
+  unsigned int data_reply;                /* No of data sent */
+  // Received
+  unsigned int should_receive_sync_interest;   /* No of interest should received receiver side (for collision rate) */
+  unsigned int received_sync_interest;    /* No of sync interest received */
+  unsigned int received_data_interest;    /* No of data interest received */
+  unsigned int received_data_mobile;      /* No of data received (if this node is mobile) */
   unsigned int received_data_mobile_from_repo;  /* No of data mobile nodes received from repo */
 
   /* Helper functions */

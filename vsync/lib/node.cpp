@@ -26,13 +26,10 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   getNumSorroundingNodes_(getNumSorroundingNodes), getFaceById_(getFaceById) {
   
   /* Initialize statistics */
-  retx_sync_interest = 0;
-  retx_data_interest = 0;
-  retx_bundled_interest = 0;
   received_sync_interest = 0;
   suppressed_sync_interest = 0;
-  should_receive_interest = 0;
-  received_interest = 0;
+  should_receive_sync_interest = 0;
+  received_data_interest = 0;
   data_reply = 0;
   received_data_mobile = 0;
   received_data_mobile_from_repo = 0;
@@ -72,9 +69,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     generate_data = false;
   } 
 
-  // face0 = getFaceById_(0);
-  face1 = getFaceById_(1);
-  // face2 = getFaceById_(2);
+  // face1 = getFaceById_(1);
 
   /* Initiate event scheduling */
   /* 2s: Start simulation */
@@ -87,16 +82,11 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
 
   /* 1195s: Print NFD statistics */
   scheduler_.scheduleEvent(time::seconds(2395), [this] {
-    // std::cout << "node(" << nid_ << ") outInterest = " << out_interest_num << std::endl;
-    // std::cout << "node(" << nid_ << ") average time to meet a new node = " << total_time / (double)count << std::endl;
-    std::cout << "node(" << nid_ << ") retx_sync_interest = " << retx_sync_interest << std::endl;
-    std::cout << "node(" << nid_ << ") retx_data_interest = " << retx_data_interest << std::endl;
-    std::cout << "node(" << nid_ << ") retx_bundled_interest = " << retx_bundled_interest << std::endl;
-    std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
     std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
-    std::cout << "node(" << nid_ << ") should_receive_interest = " << should_receive_interest << std::endl;
-    std::cout << "node(" << nid_ << ") received_interest = " << received_interest << std::endl;
     std::cout << "node(" << nid_ << ") data_reply = " << data_reply << std::endl;
+    std::cout << "node(" << nid_ << ") should_receive_sync_interest = " << should_receive_sync_interest << std::endl;
+    std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
+    std::cout << "node(" << nid_ << ") received_data_interest = " << received_data_interest << std::endl;
     std::cout << "node(" << nid_ << ") received_data_mobile = " << received_data_mobile << std::endl;
     std::cout << "node(" << nid_ << ") received_data_mobile_from_repo = " << received_data_mobile_from_repo << std::endl;
     PrintNDNTraffic();
@@ -210,17 +200,10 @@ void Node::AsyncSendPacket() {
       pending_data_interest.size() > 0 || 
       pending_ack.size() > 0 || 
       pending_data_reply.size() > 0) {
+
+    /* Select the highest priority packet */
     Name n; 
     Packet packet;
-    // if (pending_sync_interest.size() > 0) {
-    //   packet = pending_sync_interest.front();
-    //   pending_sync_interest.pop_front();
-    // } 
-    // else if (pending_ack.size() > 0) {
-    //   packet = pending_ack.front();
-    //   pending_ack.pop_front();
-    //   // pending_ack.clear();
-    // } 
     if (pending_ack.size() > 0) {
       packet = pending_ack.front();
       pending_ack.pop_front();
@@ -249,64 +232,29 @@ void Node::AsyncSendPacket() {
             AsyncSendPacket();
             return;
           }
-          /**
-           * Check PIT to see if there's outstanding interest with same name. If
-           *  same name exists in PIT, it means it has recently been sent, and 
-           *  should be moved to the end of the queue.
-           * However, for forwarded interest, send it even if its name exists 
-           *  in PIT.
-           */
-          // Pit pit = getCurrentPit_();
-          if (getCurrentPit_().find(*packet.interest) != nullptr && 
-              packet.packet_origin != Packet::FORWARDED) {
-            if (log_verbose)
-              VSYNC_LOG_TRACE ("node(" << nid_ << ") Data interest already in PIT: i.name=" << n.toUri() );
-            /* Only add ORIGINAL packets back to queue */
-            switch (packet.packet_origin) {
-              case Packet::ORIGINAL:
-                /* Add packet back to queue with longer delay to avoid retransmissions */
-                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                  // packet.last_sent = ns3::Simulator::Now().GetMicroSeconds();
-                  pending_data_interest.push_back(packet);
-                });
-                /** Schedule next async transmission with delay, to avoid looping 
-                 *  through the queue too fast */
-                scheduler_.scheduleEvent(time::milliseconds(1), [this] {
-                  AsyncSendPacket();
-                });
-                // break;
-                return;
-              default:
-                /* Best effort, don't add to queue. Send next packet immediately */
-                AsyncSendPacket();
-                return;
-            }
-          } 
-          else {  /* Not in PIT */
-            face_.expressInterest(*packet.interest,
-                                  std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
-                                  [](const Interest&, const lp::Nack&) {},
-                                  [](const Interest&) {});
-            int sorrounding = getNumSorroundingNodes_();
-            // should_receive_interest += sorrounding;
-            switch (packet.packet_origin) {
-              case Packet::ORIGINAL:
-                VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
-                                 << ", should be received by " << sorrounding );
-                // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
-                /* Add packet back to queue with longer delay to avoid retransmissions */
-                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                  pending_data_interest.push_back(packet);
-                });
-                break;
-              case Packet::FORWARDED:
-                VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
-                                 << ", should be received by " << sorrounding );
-                /* Best effort, don't add to queue */
-                break;
-              default:
-                assert(0);
-            }
+          
+          face_.expressInterest(*packet.interest,
+                                std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
+                                [](const Interest&, const lp::Nack&) {},
+                                [](const Interest&) {});
+          int sorrounding = getNumSorroundingNodes_();
+          switch (packet.packet_origin) {
+            case Packet::ORIGINAL:
+              VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
+                                << ", should be received by " << sorrounding );
+              // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
+              /* Add packet back to queue with longer delay to avoid retransmissions */
+              scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                pending_data_interest.push_back(packet);
+              });
+              break;
+            case Packet::FORWARDED:
+              VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
+                                << ", should be received by " << sorrounding );
+              /* Best effort, don't add to queue */
+              break;
+            default:
+              assert(0);
           }
         } 
         else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data interest */
@@ -325,8 +273,7 @@ void Node::AsyncSendPacket() {
           int sorrounding = getNumSorroundingNodes_();
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() 
                            << ", should be received by " << sorrounding );
-          // VSYNC_LOG_TRACE ("node(" << nid_ << ") Should receive interest: " << getNumSorroundingNodes_() );
-          should_receive_interest += sorrounding;
+          should_receive_sync_interest += sorrounding;
         }
         break;
 
@@ -353,7 +300,6 @@ void Node::AsyncSendPacket() {
   
   /* Schedule self */
   int delay = packet_dist(rengine_);
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") Re-scheduling" );
   scheduler_.scheduleEvent(time::microseconds(delay), [this] {
     AsyncSendPacket();
   });
@@ -363,19 +309,6 @@ void Node::AsyncSendPacket() {
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  // int delay = dt_dist(rengine_);
-  // scheduler_.scheduleEvent(time::microseconds(delay), [this] {
-  //   std::string encoded_vv = EncodeVVToName(version_vector_);
-  //   // Don't know why append time stamp, but easier to keep it than remove
-  //   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
-  //   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
-    
-
-  //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Send sync interest: i.name=" << pending_sync_notify.toUri());
-  //   face_.expressInterest(pending_sync_notify, std::bind(&Node::OnSyncAck, this, _2),
-  //                         [](const Interest&, const lp::Nack&) {},
-  //                         [](const Interest&) {});
-  // });
   std::string encoded_vv = EncodeVVToName(version_vector_);
   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
@@ -384,7 +317,6 @@ void Node::SendSyncInterest() {
   packet.interest = std::make_shared<Interest>(pending_sync_notify, kSendOutInterestLifetime);
   pending_sync_interest.clear();
   pending_sync_interest.push_back(packet);
-  // VSYNC_LOG_TRACE( "node(" << nid_ << ") Added sync interest to queue: i.name=" << pending_sync_notify.toUri());
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
@@ -393,7 +325,6 @@ void Node::OnSyncInterest(const Interest &interest) {
   NodeID node_id = ExtractNodeID(n);
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
   received_sync_interest++;
-  received_interest++;
 
   /* Merge state vector, add missing data to pending_data_interest */
   bool otherVectorNew = false;
@@ -586,16 +517,6 @@ void Node::OnSyncAck(const Data &ack) {
   }
   for (size_t i = 0; i < missing_data.size(); ++i)
     pending_data_interest.push_back(missing_data[i]);
-
-  /**
-   * If remote vector has newer state, send another sync interest immediately,
-   *  because there may be sync reply got stuck in the network due to 
-   *  "one-interest-one-reply policy".
-   */
-  //  if (otherVectorNew) {
-  //    VSYNC_LOG_TRACE( "node(" << nid_ << ") Send another sync interest immediately");
-  //    SendSyncInterest();
-  //  }
 }
 
 
@@ -607,7 +528,6 @@ void Node::SendDataInterest() {
 void Node::OnDataInterest(const Interest &interest) {
   const auto& n = interest.getName();
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data interest: i.name=" << n.toUri());
-  // received_interest++;
 
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
@@ -638,27 +558,15 @@ void Node::OnDataInterest(const Interest &interest) {
        * Need to remove PIT, otherwise interferes with checking PIT entry. 
        * Remove only in-record of wifi face, and out-record of app face.
        **/
-      // // TODO
-      // if (getCurrentPit_().find(*packet.interest) != nullptr) {
-      //   auto it = getCurrentPit_().find(*packet.interest);
-      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Data interest to forward already in PIT: i.name=" << n.toUri());  
-      // } else {
-      //   pending_data_interest.push_front(packet);
-      //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
-      // }
-
       pending_data_interest.push_front(packet);
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
 
     } else {
-      // int delay = dt_dist(rengine_);
-      // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
-        VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
-        Interest interest_suppress(n, kAddToPitInterestLifetime);
-        face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, Packet::SUPPRESSED),
-                              [](const Interest&, const lp::Nack&) {},
-                              [](const Interest&) {});
-      // });
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Suppress data interest: i.name=" << n.toUri());
+      Interest interest_suppress(n, kAddToPitInterestLifetime);
+      face_.expressInterest(interest_suppress, std::bind(&Node::OnDataReply, this, _2, Packet::SUPPRESSED),
+                            [](const Interest&, const lp::Nack&) {},
+                            [](const Interest&) {});
     }
   }
 }
@@ -674,8 +582,6 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
     received_data_mobile++;
 
   const auto& n = data.getName();
-  // assert(n.compare(waiting_data) == 0);              // TODO: no longer true
-  // assert(data_store_.find(n) == data_store_.end());  // TODO: no longer true
   if (data_store_.find(n) != data_store_.end()) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Drops duplicate data: name=" << n.toUri());
     return;
@@ -713,19 +619,11 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
   }
   logDataStore(n);
 
-  // /* Trigger sending data interest */  // TODO: What's this?
-  // scheduler_.cancelEvent(wt_data_interest);
-  // left_retx_count = kInterestTransmissionTime;
-  // SendDataInterest();
-
-  /* Broadcast the received data for multi-hop */
+  /**
+   * Broadcast the received data for multi-hop only when it corresponds to
+   *  the reply of a forwarded data interest.
+   */
   if (kMultihopData && sourceType == Packet::FORWARDED) {
-    // int delay = dt_dist(rengine_);
-    // scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
-    //   data_reply++;
-    //   face_.put(*data_store_[n]);
-    //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Re-broadcast data: name=" << n.toUri());
-    // });
     Packet packet;
     packet.packet_type = Packet::DATA_TYPE;
     packet.data = std::make_shared<Data>(data);
