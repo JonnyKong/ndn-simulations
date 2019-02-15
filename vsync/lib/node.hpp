@@ -48,7 +48,7 @@ public:
  
   using GetCurrentPos = std::function<double()>;
   using GetCurrentPit = std::function<Pit&()>;
-  using GetNumSorroundingNodes = std::function<int()>;
+  using GetNumSurroundingNodes = std::function<int()>;
   using GetFaceById = std::function<std::shared_ptr<::nfd::Face>(int)>;  
 
   class Error : public std::exception {
@@ -62,7 +62,7 @@ public:
   /* For user application */
   Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
        const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos, 
-       GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes,
+       GetCurrentPit getCurrentPit, GetNumSurroundingNodes getNumSurroundingNodes,
        GetFaceById getFaceById);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
@@ -93,7 +93,9 @@ private:
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
-  bool isStatic;                /* Static nodes don't generate data or log store */
+  bool is_static;               /* Static nodes don't generate data or log store */
+  bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
+  size_t outstanding_interest; /* No of interest sent since last data reply received */
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
@@ -105,6 +107,10 @@ private:
   // const time::milliseconds kInterestWT = time::milliseconds(200);
   std::uniform_int_distribution<> packet_dist
     = std::uniform_int_distribution<>(10000, 15000);   /* microseconds */
+  std::uniform_int_distribution<> hibernate_packet_dist_
+    = std::uniform_int_distribution<>(1000000, 2000000);   /* microseconds */
+  // Timeout to enter hibernate mode if no packet received
+  const time::milliseconds kHibernameTime = time::milliseconds(3000);  
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
@@ -146,7 +152,7 @@ private:
   DataCb data_cb_;              /* Never used in simulation */
   GetCurrentPos getCurrentPos_; 
   GetCurrentPit getCurrentPit_;
-  GetNumSorroundingNodes getNumSorroundingNodes_;
+  GetNumSurroundingNodes getNumSurroundingNodes_;
   GetFaceById getFaceById_;
 
   /* Node statistics */
@@ -195,8 +201,11 @@ private:
   void RetxSyncInterest();
   void SendBeacon();
   void OnBeacon(const Interest &beacon);
-  EventId retx_event;   /* Event for retx next sync intrest */
-  EventId beacon_event; /* Event for retx next beacon */
+  void refreshHibernameTimer();
+  EventId retx_event;       /* will send retx next sync intrest */
+  EventId beacon_event;     /* will send retx next beacon */
+  EventId packet_event;     /* Will send next packet async */
+  EventId hibernate_event;  /* Will enter hibernate mode */
 };
 
 } // namespace vsync

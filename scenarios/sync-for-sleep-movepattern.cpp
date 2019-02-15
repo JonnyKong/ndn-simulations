@@ -163,7 +163,7 @@ void installMobility(NodeContainer& c, bool constant_pause, int pause_time) {
   }
 }
 
-int NumSorroundingNodes() {
+int NumSurroundingNodes() {
   return 777;
 }
 

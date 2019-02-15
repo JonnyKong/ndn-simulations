@@ -65,7 +65,7 @@ public:
     return protoNode -> getForwarder() -> getPit();
   }
 
-  int GetNumSorroundingNodes_() {
+  int GetNumSurroundingNodes_() {
     int num = 0;
     for (NodeContainer::Iterator i = container_->Begin(); i != container_->End(); ++i) {
       if (*i == GetNode())
@@ -98,7 +98,7 @@ protected:
       prefix_, 
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
-      std::bind(&SyncForSleepApp::GetNumSorroundingNodes_, this),
+      std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this),
       std::bind(&SyncForSleepApp::GetFaceById, this, _1),
       useBeacon_, 
       useRetx_

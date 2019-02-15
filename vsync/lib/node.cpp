@@ -18,21 +18,12 @@ namespace vsync {
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-           GetCurrentPit getCurrentPit, GetNumSorroundingNodes getNumSorroundingNodes,
+           GetCurrentPit getCurrentPit, GetNumSurroundingNodes getNumSurroundingNodes,
            GetFaceById getFaceById) : 
   face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
   prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
   getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit), 
-  getNumSorroundingNodes_(getNumSorroundingNodes), getFaceById_(getFaceById) {
-  
-  /* Initialize statistics */
-  received_sync_interest = 0;
-  suppressed_sync_interest = 0;
-  should_receive_sync_interest = 0;
-  received_data_interest = 0;
-  data_reply = 0;
-  received_data_mobile = 0;
-  received_data_mobile_from_repo = 0;
+  getNumSurroundingNodes_(getNumSurroundingNodes), getFaceById_(getFaceById) {
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -60,14 +51,24 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
       throw Error("Failed to register beacon prefix: " + reason);
   });
 
+  /* Initialize statistics */
+  received_sync_interest =          0;
+  suppressed_sync_interest =        0;
+  should_receive_sync_interest =    0;
+  received_data_interest =          0;
+  data_reply =                      0;
+  received_data_mobile =            0;
+  received_data_mobile_from_repo =  0;
+
   /* Initiate node states */
-  isStatic = false;
+  is_static = false;
   generate_data = true;     
   version_vector_[nid_] = 0;
   if (nid_ >= 20) {
-    isStatic = true;
+    is_static = true;
     generate_data = false;
   } 
+  is_hibernate = false;
 
   // face1 = getFaceById_(1);
 
@@ -152,10 +153,12 @@ void Node::StartSimulation() {
                            [this, content] { PublishData(content); });
 
   /* Init async interest sending */
-  // scheduler_.scheduleEvent(time::milliseconds(10 * nid_),
-  //                          [this] { AsyncSendPacket(); });
-  scheduler_.scheduleEvent(time::milliseconds(1 * nid_),
-                           [this] { AsyncSendPacket(); });
+  scheduler_.cancelEvent(packet_event);
+  packet_event = scheduler_.scheduleEvent(time::milliseconds(1 * nid_),
+                                          [this] { AsyncSendPacket(); });
+  /* Init hibernate timeout */
+  is_hibernate = false;
+  refreshHibernameTimer();
   
   if (kRetx) {
     int delay = retx_dist(rengine_);
@@ -180,14 +183,14 @@ void Node::PrintNDNTraffic() {
 }
 
 void Node::logDataStore(const Name& name) {
-  if (isStatic)
+  if (is_static)
     return;
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
   std::cout << now << " microseconds node(" << nid_ << ") Store New Data: " << name.toUri() << std::endl;
 }
 
 void Node::logStateStore(const NodeID& nid, int64_t seq) {
-  if (isStatic)
+  if (is_static)
     return;  
   std::string state_tag = to_string(nid) + "-" + to_string(seq);
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
@@ -233,16 +236,26 @@ void Node::AsyncSendPacket() {
             return;
           }
           
+          /**
+           * If several continuous data interests doesn't have reply, can infer
+           *  that there are 0 nodes around.
+           */
+          outstanding_interest++;
+          if (outstanding_interest >= 2) {
+            is_hibernate = true;  
+            VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to not receiving reply" );
+          }
+
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
-          int sorrounding = getNumSorroundingNodes_();
+          int num_surrounding = getNumSurroundingNodes_();
           switch (packet.packet_origin) {
             case Packet::ORIGINAL:
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
-                                << ", should be received by " << sorrounding );
-              // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
+                                << ", should be received by " << num_surrounding );
+              VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
               /* Add packet back to queue with longer delay to avoid retransmissions */
               scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                 pending_data_interest.push_back(packet);
@@ -250,7 +263,7 @@ void Node::AsyncSendPacket() {
               break;
             case Packet::FORWARDED:
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
-                                << ", should be received by " << sorrounding );
+                                << ", should be received by " << num_surrounding );
               /* Best effort, don't add to queue */
               break;
             default:
@@ -266,14 +279,19 @@ void Node::AsyncSendPacket() {
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send bundled data interest: i.name=" << n.toUri() );
         } 
         else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
+          // outstanding_interest++;
+          // if (outstanding_interest >= 3) {
+          //   is_hibernate = true;  
+          //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode" );
+          // }
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnSyncAck, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
-          int sorrounding = getNumSorroundingNodes_();
+          int num_surrounding = getNumSurroundingNodes_();
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() 
-                           << ", should be received by " << sorrounding );
-          should_receive_sync_interest += sorrounding;
+                           << ", should be received by " << num_surrounding );
+          should_receive_sync_interest += num_surrounding;
         }
         break;
 
@@ -299,8 +317,13 @@ void Node::AsyncSendPacket() {
   }
   
   /* Schedule self */
-  int delay = packet_dist(rengine_);
-  scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+  int delay;
+  if (!is_hibernate)
+    delay = packet_dist(rengine_);
+  else
+    delay = hibernate_packet_dist_(rengine_);
+  scheduler_.cancelEvent(packet_event);
+  packet_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] {
     AsyncSendPacket();
   });
 }
@@ -325,9 +348,10 @@ void Node::OnSyncInterest(const Interest &interest) {
   NodeID node_id = ExtractNodeID(n);
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
   received_sync_interest++;
+  refreshHibernameTimer();
 
   /* Merge state vector, add missing data to pending_data_interest */
-  bool otherVectorNew = false;
+  bool other_vector_new = false;
   std::vector<Packet> missing_data;
   VersionVector mv;     /* For encoding bundled interest */
   for (auto entry : other_vv) {
@@ -335,7 +359,7 @@ void Node::OnSyncInterest(const Interest &interest) {
     auto seq_other = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < seq_other) {
-      otherVectorNew = true;
+      other_vector_new = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       mv[node_id] = start_seq;
@@ -363,20 +387,20 @@ void Node::OnSyncInterest(const Interest &interest) {
   }
 
   /* Do I have newer state? */
-  bool myVectorNew = false;
+  bool my_vector_new = false;
   for (auto entry: version_vector_) {
     auto node_id = entry.first;
     auto seq = entry.second;
     if (other_vv.find(node_id) == other_vv.end() || 
         other_vv[node_id] < seq) {
-      myVectorNew = true;
+      my_vector_new = true;
       break;
     }
   }
 
 
   /* If incoming state not newer, reset timer to delay sending next sync interest */
-  if (!otherVectorNew && !myVectorNew) {  /* Case 1: Other vector same  */
+  if (!other_vector_new && !my_vector_new) {  /* Case 1: Other vector same  */
     scheduler_.cancelEvent(retx_event);
     int delay = retx_dist(rengine_);
     VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
@@ -386,7 +410,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       RetxSyncInterest();
     });
     suppressed_sync_interest++;
-  } else if (!otherVectorNew) {           /* Case 2: Other vector doesn't contain newer state */
+  } else if (!other_vector_new) {           /* Case 2: Other vector doesn't contain newer state */
     /* Do nothing */
     VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
                      << ", do nothing" );
@@ -410,7 +434,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       scheduler_.cancelEvent(p -> second);  // Cancel to refresh event 
       overheard_sync_interest.erase(p);
     }
-    if (myVectorNew) {
+    if (my_vector_new) {
       int delay = dt_dist(rengine_);
       overheard_sync_interest[n] = scheduler_.scheduleEvent(
         time::microseconds(delay), [this, n] {
@@ -433,7 +457,7 @@ void Node::OnSyncInterest(const Interest &interest) {
   } 
   else {
     int delay;
-    if (myVectorNew) {
+    if (my_vector_new) {
       delay = dt_dist(rengine_);
       VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK immediately:" << n.toUri() );
     } else {
@@ -463,8 +487,10 @@ void Node::SendSyncAck(const Name &n) {
 }
 
 void Node::OnSyncAck(const Data &ack) {
-  const auto& n = ack.getName();
+  // outstanding_interest = 0;
+  refreshHibernameTimer();
 
+  const auto& n = ack.getName();
   if (kSyncAckSuppression){
     /* Remove pending ACK from both pending events and queue */
     for (auto it = pending_ack.begin(); it != pending_ack.end(); ++it) {
@@ -493,14 +519,14 @@ void Node::OnSyncAck(const Data &ack) {
     assert(false);
   }
   auto vector_other = DecodeVV(content_proto.vv());
-  // bool otherVectorNew = false;    /* Set if remote vector has newer state */
+  // bool other_vector_new = false;    /* Set if remote vector has newer state */
   std::vector<Packet> missing_data;
   for (auto entry : vector_other) {
     auto node_id = entry.first;
     auto node_seq = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < node_seq) {
-      // otherVectorNew = true;
+      // other_vector_new = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
@@ -527,13 +553,14 @@ void Node::SendDataInterest() {
 
 void Node::OnDataInterest(const Interest &interest) {
   const auto& n = interest.getName();
+  refreshHibernameTimer();
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data interest: i.name=" << n.toUri());
 
   auto iter = data_store_.find(n);
   if (iter != data_store_.end()) {
     Packet packet;
     packet.packet_type = Packet::DATA_TYPE;
-    if (isStatic) { /* Set content type for repos */
+    if (is_static) { /* Set content type for repos */
       Data data(n);
       data.setFreshnessPeriod(time::seconds(3600));
       data.setContent(iter->second->getContent().value(), iter->second->getContent().size());
@@ -578,8 +605,10 @@ void Node::SendDataReply() {
 
 void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
-  if (!isStatic)
+  refreshHibernameTimer();
+  if (!is_static)
     received_data_mobile++;
+  outstanding_interest = 0;
 
   const auto& n = data.getName();
   if (data_store_.find(n) != data_store_.end()) {
@@ -612,7 +641,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
     key_chain_.sign(*data_no_flag, signingWithSha256());
     data_store_[n] = data_no_flag;
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Receive data from repo: name=" << n.toUri());
-    if (!isStatic)
+    if (!is_static)
       received_data_mobile_from_repo++;
   } else {
     data_store_[n] = data.shared_from_this();
@@ -796,6 +825,30 @@ void Node::OnBeacon(const Interest &beacon) {
       one_hop.erase(node_id);
     });
   }
+}
+
+/**
+ * Cancel pending hibernate event, and schedule a new one.
+ * 
+ * In case is_hibernate is true before upon this function is called, this 
+ *  function also cancels and re-schedules AsyncSendPacket() event, in order to 
+ *  send next packet as soon as possible.
+ */
+void Node::refreshHibernameTimer() {
+  if (is_hibernate) {
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Leaves hibernate mode" );
+    int delay = packet_dist(rengine_);
+    scheduler_.cancelEvent(packet_event);
+    packet_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+      AsyncSendPacket();
+    });
+    is_hibernate = false;
+  }
+  scheduler_.cancelEvent(hibernate_event);
+  hibernate_event = scheduler_.scheduleEvent(kHibernameTime, [this] {
+    is_hibernate = true;
+    VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode" );
+  });
 }
 
 } // namespace vsync
