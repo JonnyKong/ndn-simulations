@@ -63,6 +63,7 @@ should_receive_sync_interest = 0
 data_reply = 0
 received_data_mobile = 0
 received_data_mobile_from_repo = 0
+hibernate_duration = []
 
 # file_name = "adhoc-log/syncDuration-movepattern.txt"
 file = open(file_name)
@@ -164,6 +165,8 @@ for line in file:
       received_data_mobile += int(line.split()[-1])
     if line.find("received_data_mobile_from_repo") != -1:
       received_data_mobile_from_repo += int(line.split()[-1])
+    if line.find("hibernate_duration") != -1:
+      hibernate_duration.append(float(line.split()[-1]))
 
 
 # cdf_plot(syncDuration, "Synchronization Duration", 100, 'r')
@@ -240,6 +243,7 @@ print("received interest = " + str(received_sync_interest))
 print("collision rate = " + str(1 - float(received_sync_interest) / should_receive_sync_interest))
 print("data reply = " + str(data_reply))
 print("repo reply rate = " + str(float(received_data_mobile_from_repo) / received_data_mobile))
+print("hibernate duration = " + str(np.mean(hibernate_duration)))
 
 
 def cdf(data):

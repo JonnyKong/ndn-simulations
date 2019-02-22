@@ -59,6 +59,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   data_reply =                      0;
   received_data_mobile =            0;
   received_data_mobile_from_repo =  0;
+  hibernate_start =                 0;
+  hibernate_duration =              0;
 
   /* Initiate node states */
   is_static = false;
@@ -68,7 +70,6 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     is_static = true;
     generate_data = false;
   } 
-  is_hibernate = false;
 
   // face1 = getFaceById_(1);
 
@@ -90,6 +91,10 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     std::cout << "node(" << nid_ << ") received_data_interest = " << received_data_interest << std::endl;
     std::cout << "node(" << nid_ << ") received_data_mobile = " << received_data_mobile << std::endl;
     std::cout << "node(" << nid_ << ") received_data_mobile_from_repo = " << received_data_mobile_from_repo << std::endl;
+
+    if (is_hibernate)
+      hibernate_duration += ns3::Simulator::Now().GetMicroSeconds() - hibernate_start;
+    std::cout << "node(" << nid_ << ") hibernate_duration = " << (float)hibernate_duration / 1000000 << std::endl;
     PrintNDNTraffic();
   });
 
@@ -158,7 +163,7 @@ void Node::StartSimulation() {
                                           [this] { AsyncSendPacket(); });
   /* Init hibernate timeout */
   is_hibernate = false;
-  refreshHibernameTimer();
+  refreshHibernateTimer();
   
   if (kRetx) {
     int delay = retx_dist(rengine_);
@@ -241,7 +246,8 @@ void Node::AsyncSendPacket() {
            *  that there are 0 nodes around.
            */
           outstanding_interest++;
-          if (outstanding_interest >= 2) {
+          if (outstanding_interest >= 2 && !is_hibernate) {
+            hibernate_start = ns3::Simulator::Now().GetMicroSeconds();
             is_hibernate = true;  
             VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to not receiving reply" );
           }
@@ -279,11 +285,6 @@ void Node::AsyncSendPacket() {
           VSYNC_LOG_TRACE ("node(" << nid_ << ") Send bundled data interest: i.name=" << n.toUri() );
         } 
         else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
-          // outstanding_interest++;
-          // if (outstanding_interest >= 3) {
-          //   is_hibernate = true;  
-          //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode" );
-          // }
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnSyncAck, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
@@ -348,7 +349,7 @@ void Node::OnSyncInterest(const Interest &interest) {
   NodeID node_id = ExtractNodeID(n);
   auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
   received_sync_interest++;
-  refreshHibernameTimer();
+  refreshHibernateTimer();
 
   /* Merge state vector, add missing data to pending_data_interest */
   bool other_vector_new = false;
@@ -488,7 +489,7 @@ void Node::SendSyncAck(const Name &n) {
 
 void Node::OnSyncAck(const Data &ack) {
   // outstanding_interest = 0;
-  refreshHibernameTimer();
+  refreshHibernateTimer();
 
   const auto& n = ack.getName();
   if (kSyncAckSuppression){
@@ -553,7 +554,7 @@ void Node::SendDataInterest() {
 
 void Node::OnDataInterest(const Interest &interest) {
   const auto& n = interest.getName();
-  refreshHibernameTimer();
+  refreshHibernateTimer();
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv data interest: i.name=" << n.toUri());
 
   auto iter = data_store_.find(n);
@@ -605,7 +606,7 @@ void Node::SendDataReply() {
 
 void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
-  refreshHibernameTimer();
+  refreshHibernateTimer();
   if (!is_static)
     received_data_mobile++;
   outstanding_interest = 0;
@@ -834,7 +835,7 @@ void Node::OnBeacon(const Interest &beacon) {
  *  function also cancels and re-schedules AsyncSendPacket() event, in order to 
  *  send next packet as soon as possible.
  */
-void Node::refreshHibernameTimer() {
+void Node::refreshHibernateTimer() {
   if (is_hibernate) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Leaves hibernate mode" );
     int delay = packet_dist(rengine_);
@@ -843,11 +844,15 @@ void Node::refreshHibernameTimer() {
       AsyncSendPacket();
     });
     is_hibernate = false;
+    hibernate_duration += ns3::Simulator::Now().GetMicroSeconds() - hibernate_start;
   }
   scheduler_.cancelEvent(hibernate_event);
-  hibernate_event = scheduler_.scheduleEvent(kHibernameTime, [this] {
-    is_hibernate = true;
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode" );
+  hibernate_event = scheduler_.scheduleEvent(kHibernateTime, [this] {
+    if (!is_hibernate) {
+      hibernate_start = ns3::Simulator::Now().GetMicroSeconds();
+      is_hibernate = true;
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to timeout" );
+    }
   });
 }
 

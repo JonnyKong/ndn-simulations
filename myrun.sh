@@ -2,7 +2,7 @@
 
 set -e  # Exit on error
 
-RUN_TIMES=1
+RUN_TIMES=5
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.01 0.05 0.1 0.3 0.5)
 
@@ -177,6 +177,14 @@ summarize_wifi_range_result() {
         echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "repo reply rate" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Hibernate duration
+    echo "Hibernate duration:" >> ${RESULT_DIR}/${FILENAME}
+    for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
+        echo -n "Wifi range = ${WIFI_RANGE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
+            | grep "hibernate duration" >> ${RESULT_DIR}/${FILENAME}
     done
 }
 

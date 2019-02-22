@@ -110,7 +110,7 @@ private:
   std::uniform_int_distribution<> hibernate_packet_dist_
     = std::uniform_int_distribution<>(1000000, 2000000);   /* microseconds */
   // Timeout to enter hibernate mode if no packet received
-  const time::milliseconds kHibernameTime = time::milliseconds(3000);  
+  const time::milliseconds kHibernateTime = time::milliseconds(3000);  
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
@@ -165,6 +165,8 @@ private:
   unsigned int received_data_interest;    /* No of data interest received */
   unsigned int received_data_mobile;      /* No of data received (if this node is mobile) */
   unsigned int received_data_mobile_from_repo;  /* No of data mobile nodes received from repo */
+  int64_t hibernate_start;                /* Hibernation start time if in hibernation mode (micro-sec) */  
+  int64_t hibernate_duration;             /* Cumulative duration in hibernate mode (micro-sec) */
 
   /* Helper functions */
   void StartSimulation();
@@ -201,7 +203,7 @@ private:
   void RetxSyncInterest();
   void SendBeacon();
   void OnBeacon(const Interest &beacon);
-  void refreshHibernameTimer();
+  void refreshHibernateTimer();
   EventId retx_event;       /* will send retx next sync intrest */
   EventId beacon_event;     /* will send retx next beacon */
   EventId packet_event;     /* Will send next packet async */
