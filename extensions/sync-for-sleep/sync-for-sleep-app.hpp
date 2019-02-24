@@ -37,18 +37,12 @@ public:
                     MakeUintegerAccessor(&SyncForSleepApp::nid_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
                     MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker())
-      // .AddAttribute("UseHeartbeat", "if use heartbeat", BooleanValue(true),
-      //               MakeBooleanAccessor(&SyncForSleepApp::useHeartbeat_), MakeBooleanChecker())
-      // .AddAttribute("UseHeartbeatFlood", "if use heartbeat flood", BooleanValue(false),
-      //               MakeBooleanAccessor(&SyncForSleepApp::useHeartbeatFlood_), MakeBooleanChecker())
       .AddAttribute("UseBeacon", "if use beacon", BooleanValue(false),
                     MakeBooleanAccessor(&SyncForSleepApp::useBeacon_), MakeBooleanChecker())
       .AddAttribute("UseBeaconSuppression", "if use suppression for beacon", BooleanValue(false),
                     MakeBooleanAccessor(&SyncForSleepApp::useBeaconSuppression_), MakeBooleanChecker())
       .AddAttribute("UseRetx", "if use retx for sync notify", BooleanValue(false),
                     MakeBooleanAccessor(&SyncForSleepApp::useRetx_), MakeBooleanChecker());
-      // .AddAttribute("UseBeaconFlood", "if beacon flood", BooleanValue(false),
-      //               MakeBooleanAccessor(&SyncForSleepApp::useBeaconFlood_), MakeBooleanChecker());
     return tid;
   }
 
@@ -84,8 +78,12 @@ public:
     return protoNode -> getFaceById(id);
   }
 
+  bool IsImportantData(uint64_t node_id, uint64_t data_seq) {
+    return true;
+  }
+
   NodeContainer *container_;  // Point back to container in simulator
-  float wifi_range;           // Wifi range from simulator
+  float wifi_range;           // Wifi range from simulator to calculate num of surrounding nodes
 
 
 protected:
@@ -96,6 +94,7 @@ protected:
     m_instance.reset(new vsync::sync_for_sleep::SimpleNode(
       nid_, 
       prefix_, 
+      std::bind(&SyncForSleepApp::IsImportantData, this, _1, _2),
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
       std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this),

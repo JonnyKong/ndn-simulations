@@ -35,6 +35,7 @@ class Node {
 public:
   /* Dependence injection: callback for application */
   using DataCb = std::function<void(const VersionVector& vv)>;
+  using IsImportantData = std::function<bool(uint64_t node_id, uint64_t data_seq)>;
 
   /* typedef */
   enum DataType : uint32_t {
@@ -60,9 +61,16 @@ public:
   };
 
   /* For user application */
-  Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
-       const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos, 
-       GetCurrentPit getCurrentPit, GetNumSurroundingNodes getNumSurroundingNodes,
+  Node(Face &face, 
+       Scheduler &scheduler, 
+       KeyChain &key_chain, 
+       const NodeID &nid,
+       const Name &prefix, 
+       DataCb on_data, 
+       IsImportantData is_important_data, 
+       GetCurrentPos getCurrentPos, 
+       GetCurrentPit getCurrentPit, 
+       GetNumSurroundingNodes getNumSurroundingNodes,
        GetFaceById getFaceById);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
@@ -149,7 +157,8 @@ private:
   const bool log_verbose = false;
 
   /* Callbacks */
-  DataCb data_cb_;              /* Never used in simulation */
+  DataCb data_cb_;                      /* Never used in simulation */
+  IsImportantData is_important_data_;   /* App decides whether to fetch data */
   GetCurrentPos getCurrentPos_; 
   GetCurrentPit getCurrentPit_;
   GetNumSurroundingNodes getNumSurroundingNodes_;

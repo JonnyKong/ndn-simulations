@@ -20,6 +20,7 @@ class SimpleNode {
 
   SimpleNode(const NodeID& nid, 
              const Name& prefix, 
+             Node::IsImportantData is_important_data,
              Node::GetCurrentPos getCurrentPos,
              Node::GetCurrentPit getCurrentPit,
              Node::GetNumSurroundingNodes getNumSurroundingNodes,
@@ -41,6 +42,7 @@ class SimpleNode {
               nid,
               prefix, 
               std::bind(&SimpleNode::OnData, this, _1),
+              is_important_data,
               getCurrentPos,
               getCurrentPit,
               getNumSurroundingNodes,

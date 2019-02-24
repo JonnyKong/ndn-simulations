@@ -17,13 +17,14 @@ namespace vsync {
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
-           const Name &prefix, DataCb on_data, GetCurrentPos getCurrentPos,
-           GetCurrentPit getCurrentPit, GetNumSurroundingNodes getNumSurroundingNodes,
-           GetFaceById getFaceById) : 
+           const Name &prefix, DataCb on_data, IsImportantData is_important_data, 
+           GetCurrentPos getCurrentPos, GetCurrentPit getCurrentPit, 
+           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById) : 
   face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
   prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
-  getCurrentPos_(getCurrentPos), getCurrentPit_(getCurrentPit), 
-  getNumSurroundingNodes_(getNumSurroundingNodes), getFaceById_(getFaceById) {
+  is_important_data_(is_important_data), getCurrentPos_(getCurrentPos), 
+  getCurrentPit_(getCurrentPit), getNumSurroundingNodes_(getNumSurroundingNodes), 
+  getFaceById_(getFaceById) {
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -245,12 +246,12 @@ void Node::AsyncSendPacket() {
            * If several continuous data interests doesn't have reply, can infer
            *  that there are 0 nodes around.
            */
-          outstanding_interest++;
-          if (outstanding_interest >= 2 && !is_hibernate) {
-            hibernate_start = ns3::Simulator::Now().GetMicroSeconds();
-            is_hibernate = true;  
-            VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to not receiving reply" );
-          }
+          // outstanding_interest++;
+          // if (outstanding_interest >= 2 && !is_hibernate) {
+          //   hibernate_start = ns3::Simulator::Now().GetMicroSeconds();
+          //   is_hibernate = true;  
+          //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to not receiving reply" );
+          // }
 
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
@@ -366,6 +367,8 @@ void Node::OnSyncInterest(const Interest &interest) {
       mv[node_id] = start_seq;
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
         logStateStore(node_id, seq);
+        if (is_important_data_(node_id, seq) == false)  // Partial sync, skip data not interested
+          continue;
         auto n = MakeDataName(node_id, seq);
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
