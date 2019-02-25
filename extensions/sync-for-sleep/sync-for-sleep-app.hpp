@@ -79,7 +79,12 @@ public:
   }
 
   bool IsImportantData(uint64_t node_id, uint64_t data_seq) {
-    return true;
+    if (nid_ >= 20)
+    // if (nid_ == 1)
+      return true;
+    else
+      return (node_id % 4) == (nid_ % 4);
+      // return (node_id % 2) == (nid_ % 2);
   }
 
   NodeContainer *container_;  // Point back to container in simulator

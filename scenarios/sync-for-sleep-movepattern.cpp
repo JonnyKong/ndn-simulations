@@ -206,7 +206,7 @@ main (int argc, char *argv[])
   // cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
   cmd.Parse (argc,argv);
   assert(range != -1);
-  int node_num = mobile_node_num + 5;
+  int node_num = mobile_node_num + 0;
   if (mobile_node_num <= 5) node_num = mobile_node_num; // TODO: remove
   RngSeedManager::SetRun (run);
 

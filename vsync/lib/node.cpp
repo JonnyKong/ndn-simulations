@@ -68,8 +68,10 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   generate_data = true;     
   version_vector_[nid_] = 0;
   if (nid_ >= 20) {
+  // if (nid_ == 1) {
     is_static = true;
     generate_data = false;
+    pMultihopForwardDataInterest = 10000;
   } 
 
   // face1 = getFaceById_(1);
@@ -85,18 +87,22 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
 
   /* 1195s: Print NFD statistics */
   scheduler_.scheduleEvent(time::seconds(2395), [this] {
-    std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
-    std::cout << "node(" << nid_ << ") data_reply = " << data_reply << std::endl;
+    // Repo nodes are also used to calculate collision rates
     std::cout << "node(" << nid_ << ") should_receive_sync_interest = " << should_receive_sync_interest << std::endl;
     std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
-    std::cout << "node(" << nid_ << ") received_data_interest = " << received_data_interest << std::endl;
-    std::cout << "node(" << nid_ << ") received_data_mobile = " << received_data_mobile << std::endl;
-    std::cout << "node(" << nid_ << ") received_data_mobile_from_repo = " << received_data_mobile_from_repo << std::endl;
+    
+    if (!is_static) {
+      std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
+      std::cout << "node(" << nid_ << ") data_reply = " << data_reply << std::endl;
+      std::cout << "node(" << nid_ << ") received_data_interest = " << received_data_interest << std::endl;
+      std::cout << "node(" << nid_ << ") received_data_mobile = " << received_data_mobile << std::endl;
+      std::cout << "node(" << nid_ << ") received_data_mobile_from_repo = " << received_data_mobile_from_repo << std::endl;
 
-    if (is_hibernate)
-      hibernate_duration += ns3::Simulator::Now().GetMicroSeconds() - hibernate_start;
-    std::cout << "node(" << nid_ << ") hibernate_duration = " << (float)hibernate_duration / 1000000 << std::endl;
-    PrintNDNTraffic();
+      if (is_hibernate)
+        hibernate_duration += ns3::Simulator::Now().GetMicroSeconds() - hibernate_start;
+      std::cout << "node(" << nid_ << ") hibernate_duration = " << (float)hibernate_duration / 1000000 << std::endl;
+      PrintNDNTraffic();
+    }
   });
 
   /* 1196s: Print Node statistics */
@@ -164,6 +170,7 @@ void Node::StartSimulation() {
                                           [this] { AsyncSendPacket(); });
   /* Init hibernate timeout */
   is_hibernate = false;
+
   refreshHibernateTimer();
   
   if (kRetx) {
@@ -535,6 +542,8 @@ void Node::OnSyncAck(const Data &ack) {
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
         logStateStore(node_id, seq);
+        if (is_important_data_(node_id, seq) == false)  // Partial sync, skip data not interested
+          continue;
         auto n = MakeDataName(node_id, seq);
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
@@ -610,11 +619,11 @@ void Node::SendDataReply() {
 void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
   refreshHibernateTimer();
-  if (!is_static)
-    received_data_mobile++;
   outstanding_interest = 0;
 
   const auto& n = data.getName();
+  NodeID node_id = ExtractNodeID(n);
+  uint64_t seq = ExtractSequence(n);
   if (data_store_.find(n) != data_store_.end()) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Drops duplicate data: name=" << n.toUri());
     return;
@@ -635,31 +644,51 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
       assert(0);
   }
 
-  /* Save data */
-  /* Check content type */
-  if (data.getContentType() == kRepoData) {
-    std::shared_ptr<Data> data_no_flag = std::make_shared<Data>(n);
-    data_no_flag -> setFreshnessPeriod(time::seconds(3600));
-    data_no_flag -> setContent(data.getContent().value(), data.getContent().size());
-    data_no_flag -> setContentType(kUserData);
-    key_chain_.sign(*data_no_flag, signingWithSha256());
-    data_store_[n] = data_no_flag;
-    VSYNC_LOG_TRACE( "node(" << nid_ << ") Receive data from repo: name=" << n.toUri());
+  /**
+   * Save data if this data is of interest. Only log important data stores to
+   *  calculate data availability.
+   */
+  if (is_important_data_(node_id, seq)) {
+    /* Check content type */
+    if (data.getContentType() == kRepoData) {
+      std::shared_ptr<Data> data_no_flag = std::make_shared<Data>(n);
+      data_no_flag -> setFreshnessPeriod(time::seconds(3600));
+      data_no_flag -> setContent(data.getContent().value(), data.getContent().size());
+      data_no_flag -> setContentType(kUserData);
+      key_chain_.sign(*data_no_flag, signingWithSha256());
+      data_store_[n] = data_no_flag;
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Receive data from repo: name=" << n.toUri());
+      if (!is_static)
+        received_data_mobile_from_repo++;
+    } else {
+      data_store_[n] = data.shared_from_this();
+    }
     if (!is_static)
-      received_data_mobile_from_repo++;
-  } else {
-    data_store_[n] = data.shared_from_this();
+       received_data_mobile++;
+    logDataStore(n);
   }
-  logDataStore(n);
+
 
   /**
    * Broadcast the received data for multi-hop only when it corresponds to
    *  the reply of a forwarded data interest.
    */
-  if (kMultihopData && sourceType == Packet::FORWARDED) {
+  if (kMultihopData && (sourceType == Packet::FORWARDED || sourceType == Packet::SUPPRESSED)) {
     Packet packet;
     packet.packet_type = Packet::DATA_TYPE;
-    packet.data = std::make_shared<Data>(data);
+    // if (!is_static) {
+      packet.data = std::make_shared<Data>(data);
+    //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Re-broadcasting data reply: " << n.toUri() );
+    // } else {
+    //   /* Mark data as from repo */
+    //   Data data_with_flag(n);
+    //   data_with_flag.setFreshnessPeriod(time::seconds(3600));
+    //   data_with_flag.setContent(data.getContent().value(), data.getContent().size());
+    //   data_with_flag.setContentType(kRepoData);
+    //   key_chain_.sign(data_with_flag, signingWithSha256());
+    //   packet.data = std::make_shared<Data>(data_with_flag);
+    //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Re-broadcasting data reply: " << n.toUri() );
+    // }
     pending_data_reply.push_back(packet);
   }
 }
@@ -839,6 +868,8 @@ void Node::OnBeacon(const Interest &beacon) {
  *  send next packet as soon as possible.
  */
 void Node::refreshHibernateTimer() {
+  if (is_static)
+    return;
   if (is_hibernate) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Leaves hibernate mode" );
     int delay = packet_dist(rengine_);

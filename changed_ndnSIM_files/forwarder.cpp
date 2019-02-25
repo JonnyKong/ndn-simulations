@@ -534,6 +534,10 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
     this->insertDeadNonceList(*pitEntry, true, data.getFreshnessPeriod(), &inFace);
 
     // mark PIT satisfied
+    /**
+     * For data arriving from wifi face, don't clear in-record, so that app
+     *  can decide to broadcast
+     */
     if (inFace.getScope() == ndn::nfd::FACE_SCOPE_LOCAL) 
       pitEntry->clearInRecords();
     pitEntry->deleteOutRecord(inFace);
@@ -547,11 +551,11 @@ Forwarder::onIncomingData(Face& inFace, const Data& data)
   // foreach pending downstream
   // std::cout << "Pending downstreams size: " << pendingDownstreams.size();
   for (Face* pendingDownstream : pendingDownstreams) {
-    // if is vsyncData which means in ad hoc networks, we need to send out the data even if outFace == inFace
-    if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
-      this->onOutgoingData(data, *pendingDownstream);
-      continue;
-    }
+    // // if is vsyncData which means in ad hoc networks, we need to send out the data even if outFace == inFace
+    // if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
+    //   this->onOutgoingData(data, *pendingDownstream);
+    //   continue;
+    // }
     
     if (pendingDownstream == &inFace) {
       continue;
@@ -608,16 +612,16 @@ Forwarder::onOutgoingData(const Data& data, Face& outFace)
 
   // TODO traffic manager
   if (outFace.getScope() == ndn::nfd::FACE_SCOPE_NON_LOCAL) {
-    std::cout << "Traffic Manager triggered: ";
+    // std::cout << "Traffic Manager triggered: ";
     if (data.getName().compare(0, 2, kBundledDataPrefix) == 0) {
       m_outBundledData++;
-      std::cout << "Bundled data" << std::endl;
+      // std::cout << "Bundled data" << std::endl;
     } else if (data.getName().compare(0, 2, kSyncDataPrefix) == 0) {
       m_outData++;
-      std::cout << "Data" << std::endl;
+      // std::cout << "Data" << std::endl;
     } else if (data.getName().compare(0, 2, kSyncNotifyPrefix) == 0) {
-      std::cout << "ACK" << std::endl;
       m_outAck++;
+      // std::cout << "ACK" << std::endl;
     }
   }
 

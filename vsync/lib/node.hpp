@@ -122,7 +122,7 @@ private:
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
-  const int pMultihopForwardDataInterest = 5000;
+  int pMultihopForwardDataInterest = 5000;  // Non-const, different for repo
   // Distribution for data generation
   const int data_generation_rate_mean = 40000;
   std::poisson_distribution<> data_generation_dist 

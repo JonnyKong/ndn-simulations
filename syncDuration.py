@@ -55,6 +55,7 @@ if int(sys.argv[2]) <= 5:
 else:
   # node_num = int(sys.argv[2]) + 24
   node_num = int(sys.argv[2])
+node_num_state_sync = 5    # For partial sync
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
@@ -80,11 +81,11 @@ for line in file:
             data_store[data_name].Owner += 1
             data_store[data_name].LastTime = int(time)
         data_info = data_store[data_name]
-        if data_info.Owner > node_num:
+        if data_info.Owner > node_num_state_sync:
             print line
             print data_name
             raise AssertionError()
-        elif data_info.Owner == node_num:
+        elif data_info.Owner == node_num_state_sync:
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
             syncDuration.append(cur_sync_duration)
@@ -210,7 +211,6 @@ print("std outData: " + str(np.std(np.array(out_data))))
 '''
 
 print("data availability = " + str(float(len(syncDuration)) / float(len(data_store))))
-print(str(syncDuration))
 stateSyncDuration = np.array(stateSyncDuration)
 dataSyncDuration = np.array(syncDuration)
 print("state sync delay = " + str(np.mean(stateSyncDuration)))
