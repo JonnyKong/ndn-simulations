@@ -36,7 +36,7 @@ public:
   /* Dependence injection: callback for application */
   using DataCb = std::function<void(const VersionVector& vv)>;
   using IsImportantData = std::function<bool(uint64_t node_id, uint64_t data_seq)>;
-
+  
   /* typedef */
   enum DataType : uint32_t {
     kUserData       = 0,
@@ -103,7 +103,7 @@ private:
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
   bool is_static;               /* Static nodes don't generate data or log store */
   bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
-  size_t outstanding_interest; /* No of interest sent since last data reply received */
+  size_t num_scheduler_retx;    /* Number of data interest the scheduler will put back to the queue (for statistics) */
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */

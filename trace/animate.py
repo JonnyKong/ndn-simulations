@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-nodes_total = 25
+nodes_total = 21
 
 # Parse file
 def read_trace(filename):
@@ -136,7 +136,5 @@ ani = FuncAnimation(fig, update,
                     blit = True,
                     interval = 10,
                     repeat = False)
-# ani.save('lines.mp4')
 # plt.show()
-
-ani.save('25.mp4')
+ani.save('21.mp4')

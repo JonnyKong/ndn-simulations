@@ -67,6 +67,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   is_static = false;
   generate_data = true;     
   version_vector_[nid_] = 0;
+  num_scheduler_retx = 0;
+
   if (nid_ >= 20) {
   // if (nid_ == 1) {
     is_static = true;
@@ -248,17 +250,6 @@ void Node::AsyncSendPacket() {
             AsyncSendPacket();
             return;
           }
-          
-          /**
-           * If several continuous data interests doesn't have reply, can infer
-           *  that there are 0 nodes around.
-           */
-          // outstanding_interest++;
-          // if (outstanding_interest >= 2 && !is_hibernate) {
-          //   hibernate_start = ns3::Simulator::Now().GetMicroSeconds();
-          //   is_hibernate = true;  
-          //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Enters hibernate mode due to not receiving reply" );
-          // }
 
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
@@ -271,8 +262,10 @@ void Node::AsyncSendPacket() {
                                 << ", should be received by " << num_surrounding );
               VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
               /* Add packet back to queue with longer delay to avoid retransmissions */
+              num_scheduler_retx++;
               scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                 pending_data_interest.push_back(packet);
+                num_scheduler_retx--;
               });
               break;
             case Packet::FORWARDED:
@@ -498,7 +491,6 @@ void Node::SendSyncAck(const Name &n) {
 }
 
 void Node::OnSyncAck(const Data &ack) {
-  // outstanding_interest = 0;
   refreshHibernateTimer();
 
   const auto& n = ack.getName();
@@ -619,7 +611,6 @@ void Node::SendDataReply() {
 void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
   refreshHibernateTimer();
-  outstanding_interest = 0;
 
   const auto& n = data.getName();
   NodeID node_id = ExtractNodeID(n);
