@@ -40,12 +40,6 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
       throw Error("Failed to register data prefix: " + reason);
   });
   face_.setInterestFilter(
-    Name(kBundledDataPrefix).appendNumber(nid_), std::bind(&Node::OnBundledDataInterest, this, _2),
-    [this](const Name&, const std::string& reason) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register bundled data prefix: " << reason); 
-      throw Error("Failed to register bundled data prefix: " + reason);
-  }); 
-  face_.setInterestFilter(
     Name(kBeaconPrefix), std::bind(&Node::OnBeacon, this, _2),
     [this](const Name&, const std::string& reason) {
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register beacon prefix: " << reason); 
@@ -215,7 +209,8 @@ void Node::logStateStore(const NodeID& nid, int64_t seq) {
 void Node::AsyncSendPacket() {
   // VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue size: " << pending_sync_interest.size() << ", " << pending_ack.size() );
   if (pending_sync_interest.size() > 0 || 
-      pending_data_interest.size() > 0 || 
+      pending_data_interest_high.size() > 0 || 
+      pending_data_interest_low.size() > 0 || 
       pending_ack.size() > 0 || 
       pending_data_reply.size() > 0) {
 
@@ -226,18 +221,18 @@ void Node::AsyncSendPacket() {
       packet = pending_ack.front();
       pending_ack.pop_front();
       // pending_ack.clear();
-    }
-    else if (pending_data_reply.size() > 0) {
+    } else if (pending_data_reply.size() > 0) {
       packet = pending_data_reply.front();
       pending_data_reply.pop_front();
-    } 
-    else if (pending_sync_interest.size() > 0) {
+    } else if (pending_sync_interest.size() > 0) {
       packet = pending_sync_interest.front();
       pending_sync_interest.pop_front();
-    }
-    else {
-      packet = pending_data_interest.front();
-      pending_data_interest.pop_front();
+    } else if (pending_data_interest_high.size() > 0) {
+      packet = pending_data_interest_high.front();
+      pending_data_interest_high.pop_front();
+    } else {
+      packet = pending_data_interest_low.front();
+      pending_data_interest_low.pop_front();
     }
     switch (packet.packet_type) {
 
@@ -260,11 +255,14 @@ void Node::AsyncSendPacket() {
             case Packet::ORIGINAL:
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
-              VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length=" << pending_data_interest.size() );
               /* Add packet back to queue with longer delay to avoid retransmissions */
               num_scheduler_retx++;
               scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                pending_data_interest.push_back(packet);
+                if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
+                    != surrounding_producers.end())
+                  pending_data_interest_high.push_back(packet);
+                else
+                  pending_data_interest_low.push_back(packet);
                 num_scheduler_retx--;
               });
               break;
@@ -276,14 +274,6 @@ void Node::AsyncSendPacket() {
             default:
               assert(0);
           }
-        } 
-        else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data interest */
-          face_.expressInterest(*packet.interest,
-                                std::bind(&Node::OnBundledDataReply, this, _2),
-                                [](const Interest&, const lp::Nack&) {},
-                                [](const Interest&) {});
-          pending_data_interest.push_back(packet);
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send bundled data interest: i.name=" << n.toUri() );
         } 
         else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
           face_.expressInterest(*packet.interest,
@@ -303,8 +293,6 @@ void Node::AsyncSendPacket() {
           data_reply++;
           face_.put(*packet.data);
           VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << (packet.data)->getName());
-        } else if (n.compare(0, 2, kBundledDataPrefix) == 0) {  /* Bundled data */
-          face_.put(*packet.data);
         } else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync ACK */
           VSYNC_LOG_TRACE ("node(" << nid_ << ") replying ACK:" << n.toUri() );
           face_.put(*packet.data);
@@ -353,6 +341,23 @@ void Node::OnSyncInterest(const Interest &interest) {
   auto other_vv = ret.first;
   auto other_interested = ret.second;
 
+  /* Update soft state of interested producers of nearby nodes */
+  for (NodeID interested_node_id : other_interested) {
+    auto it = surrounding_producers.find(interested_node_id);
+    if (it != surrounding_producers.end())
+      scheduler_.cancelEvent(it -> second);
+    surrounding_producers[interested_node_id] = scheduler_.scheduleEvent(
+      time::seconds(1),
+      [this, interested_node_id] {
+        surrounding_producers.erase(interested_node_id);
+        VSYNC_LOG_TRACE ("node(" << nid_ << ") remove new surrounding producer: " << interested_node_id );
+        reshuffle_priority();
+      }
+    );
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") add new surrounding producer: " << interested_node_id );
+    reshuffle_priority();
+  }
+
   received_sync_interest++;
   refreshHibernateTimer();
 
@@ -377,7 +382,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
-        packet.last_sent = 0;
+        packet.last_sent = ns3::Simulator::Now().GetMilliSeconds();
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
@@ -390,8 +395,14 @@ void Node::OnSyncInterest(const Interest &interest) {
     packet.packet_type = Packet::INTEREST_TYPE;
     packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
   } else {
-    for (size_t i = 0; i < missing_data.size(); ++i)
-      pending_data_interest.push_back(missing_data[i]);
+    for (size_t i = 0; i < missing_data.size(); ++i) {
+      // pending_data_interest.push_back(missing_data[i]);
+      if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
+          != surrounding_producers.end())
+        pending_data_interest_high.push_back(missing_data[i]);
+      else
+        pending_data_interest_low.push_back(missing_data[i]);
+    }
   }
 
   /* Do I have newer state? */
@@ -550,8 +561,14 @@ void Node::OnSyncAck(const Data &ack) {
       version_vector_[node_id] = node_seq;
     }
   }
-  for (size_t i = 0; i < missing_data.size(); ++i)
-    pending_data_interest.push_back(missing_data[i]);
+  for (size_t i = 0; i < missing_data.size(); ++i) {
+    // pending_data_interest.push_back(missing_data[i]);
+    if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
+        != surrounding_producers.end())
+      pending_data_interest_high.push_back(missing_data[i]);
+    else
+      pending_data_interest_low.push_back(missing_data[i]);
+  }
 }
 
 
@@ -594,7 +611,7 @@ void Node::OnDataInterest(const Interest &interest) {
        * Need to remove PIT, otherwise interferes with checking PIT entry. 
        * Remove only in-record of wifi face, and out-record of app face.
        **/
-      pending_data_interest.push_front(packet);
+      pending_data_interest_high.push_front(packet);
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
 
     } else {
@@ -688,125 +705,47 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
   }
 }
 
+/**
+ * reshuffle_priority() - Reshuffle pending_data_interest_high/low queues, based
+ *  on current state of surrounding_producers. 
+ * Use last_sent as a timestamp to determine the sequence and prevent starvation.
+ */
+void Node::reshuffle_priority() {
 
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" << 
+                               pending_data_interest_high.size() << ", " <<
+                               pending_data_interest_low.size() );
 
-/* 3. Bundled data packet processing */
-void Node::SendBundledDataInterest() {
-  /* Do nothing */
-}
-
-void Node::OnBundledDataInterest(const Interest &interest) {
-  auto n = interest.getName();
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv bundled data interest: " << n.toUri() );
-
-  auto missing_data = DecodeVVFromName(ExtractEncodedMV(n));
-  proto::PackData pack_data_proto;
-  VersionVector next_vv = missing_data;
-  for (auto item: missing_data) {
-    auto node_id = item.first;
-    auto start_seq = item.second;
-    bool exceed_max_size = false;   /* MTU */
-
-    /* Because bundled interest/data are unicast */
-    assert(version_vector_.find(node_id) != version_vector_.end());
-
-    for (auto seq = start_seq; seq <= version_vector_[node_id]; ++seq) {
-      Name data_name = MakeDataName(node_id, seq);
-      if (data_store_.find(data_name) == data_store_.end()) {
-        continue;
-      }
-      auto* entry = pack_data_proto.add_entry();
-      entry->set_name(data_name.toUri());
-      entry->set_content(data_store_[data_name]->getContent().value(), data_store_[data_name]->getContent().value_size());
-
-      size_t cur_data_content_size = pack_data_proto.SerializeAsString().size();
-      if (cur_data_content_size >= kMaxDataContent) {
-        exceed_max_size = true;
-        if (seq == version_vector_[node_id]) {
-          next_vv.erase(node_id);
-        } else {
-          next_vv[node_id] = seq + 1;
-        }
-        break;
-      }
-    }
-
-    /* Send data up to MTU, discard rest of the interest */
-    if (exceed_max_size) {
-      break;
-    } else {
-      next_vv.erase(node_id); 
-    }
+  std::vector<Packet> packets;
+  while(pending_data_interest_high.size() > 0 && 
+        pending_data_interest_high.back().packet_origin != Packet::FORWARDED) {
+    // Don't touch forwarded packets
+    packets.push_back(pending_data_interest_high.back());
+    pending_data_interest_high.pop_back();
+  }
+  while(pending_data_interest_low.size() > 0) {
+    packets.push_back(pending_data_interest_low.back());
+    pending_data_interest_low.pop_back();
   }
 
-  /* Encode remaining interest as tag */
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Back Packed Data" );
-  EncodeVV(next_vv, pack_data_proto.mutable_nextvv());
-  const std::string& pack_data = pack_data_proto.SerializeAsString();
-  std::shared_ptr<Data> data = std::make_shared<Data>(n);
-  data->setContent(reinterpret_cast<const uint8_t*>(pack_data.data()),
-                   pack_data.size());
-  key_chain_.sign(*data);
-  face_.put(*data); // TODO: Add delay?
-}
+  /* Sort in ascending timestamp order */
+  std::sort(packets.begin(), packets.end(), [](const Packet &a, const Packet &b) {
+    return a.last_sent < b.last_sent;
+  });
 
-void Node::SendBundledDataReply() {
-  /* Do nothing */
-  /* See Node::SendDataInterest() */
-}
-
-void Node::OnBundledDataReply(const Data &data) {
-  const auto& n = data.getName();
-  assert(n.compare(waiting_data) == 0);
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Recv bundled data: name=" << n.toUri());
-
-  const auto& content = data.getContent();
-  proto::PackData pack_data_proto;
-  if (!pack_data_proto.ParseFromArray(content.value(), content.value_size())) {
-    VSYNC_LOG_WARN( "Invalid syncNotifyNotify reply content format" );
-    return;
+  /* Distribute the packets back into two queues accordingly */
+  for (auto packet : packets) {
+    if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
+        != surrounding_producers.end())
+      pending_data_interest_high.push_back(packet);
+    else
+      pending_data_interest_low.push_back(packet);
   }
 
-  for (int i = 0; i < pack_data_proto.entry_size(); ++i) {
-    const auto& entry = pack_data_proto.entry(i);
-    auto data_name = Name(entry.name());
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" << 
+                               pending_data_interest_high.size() << ", " <<
+                               pending_data_interest_low.size() );
 
-    if (data_store_.find(data_name) != data_store_.end()) {
-      continue;
-    }
-
-    std::string data_content = entry.content();
-    std::shared_ptr<Data> data = std::make_shared<Data>(data_name);
-    data->setContent(reinterpret_cast<const uint8_t*>(data_content.data()),
-                     data_content.size());
-    key_chain_.sign(*data, signingWithSha256());
-    data_store_[data_name] = data;
-    logDataStore(data_name);
-  }
-
-  /* If next_vv tag not empty, send another bundled interest */
-  auto recv_nid = ExtractNodeID(n);
-  auto next_vv = DecodeVV(pack_data_proto.nextvv());
-  auto next_bundle = MakeBundledDataName(recv_nid, EncodeVVToName(next_vv));
-  // assert(pending_interest.front().size() == 1);   /* Is bundled interest */
-  // pending_interest.front().pop();
-  // TODO: Remove bundled interest from queue
-  if (!next_vv.empty()) {
-    std::cout << "node(" << nid_ << ") sends next bundled interest: " 
-              << next_bundle.toUri() << std::endl;
-    // pending_interest.front().push(next_bundle);
-    Packet packet;
-    packet.packet_type = Packet::INTEREST_TYPE;
-    packet.interest = std::make_shared<Interest>(next_bundle, kSendOutInterestLifetime);
-    pending_data_interest.push_front(packet);
-  } else {
-    std::cout << "node(" << nid_ << ") has no next bundled interest" << std::endl;
-  }
-
-  // /* Re-schedule */
-  // scheduler_.cancelEvent(wt_data_interest);
-  // left_retx_count = kInterestTransmissionTime;
-  // SendDataInterest();
 }
 
 

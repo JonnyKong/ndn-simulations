@@ -97,10 +97,12 @@ private:
   std::deque<Packet> pending_ack;           /* Multi-level queue */
   std::deque<Packet> pending_sync_interest;
   std::deque<Packet> pending_data_reply;  
-  std::deque<Packet> pending_data_interest;
+  std::deque<Packet> pending_data_interest_high;
+  std::deque<Packet> pending_data_interest_low;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
+  std::unordered_map<NodeID, EventId> surrounding_producers;/* Soft state of interested producers of nearby nodes */
   bool is_static;               /* Static nodes don't generate data or log store */
   bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
   size_t num_scheduler_retx;    /* Number of data interest the scheduler will put back to the queue (for statistics) */
@@ -201,14 +203,9 @@ private:
   void SendDataReply();
   void OnDataReply(const Data &data, Packet::SourceType sourceType);
   EventId wt_data_interest; /* Event for sending next data interest */
+  void reshuffle_priority();
 
-  /* 3. Bundled data packet processing */
-  void SendBundledDataInterest();
-  void OnBundledDataInterest(const Interest &interest);
-  void SendBundledDataReply();
-  void OnBundledDataReply(const Data &data);
-
-  /* 4. Pro-active events (beacons and sync interest retx) */
+  /* 3. Pro-active events (beacons and sync interest retx) */
   void RetxSyncInterest();
   void SendBeacon();
   void OnBeacon(const Interest &beacon);
