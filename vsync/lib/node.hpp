@@ -35,7 +35,7 @@ class Node {
 public:
   /* Dependence injection: callback for application */
   using DataCb = std::function<void(const VersionVector& vv)>;
-  using IsImportantData = std::function<bool(uint64_t node_id, uint64_t data_seq)>;
+  using IsImportantData = std::function<bool(uint64_t node_id)>;
   
   /* typedef */
   enum DataType : uint32_t {

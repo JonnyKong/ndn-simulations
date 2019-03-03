@@ -334,7 +334,7 @@ void Node::AsyncSendPacket() {
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  std::string encoded_vv = EncodeVVToName(version_vector_);
+  std::string encoded_vv = EncodeVVToNameWithInterest(version_vector_, is_important_data_);
   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
   Packet packet;
@@ -348,7 +348,11 @@ void Node::OnSyncInterest(const Interest &interest) {
 
   const auto& n = interest.getName();
   NodeID node_id = ExtractNodeID(n);
-  auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
+  // auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
+  auto ret = DecodeVVFromNameWithInterest(ExtractEncodedVV(n));
+  auto other_vv = ret.first;
+  auto other_interested = ret.second;
+
   received_sync_interest++;
   refreshHibernateTimer();
 
@@ -367,7 +371,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       mv[node_id] = start_seq;
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
         logStateStore(node_id, seq);
-        if (is_important_data_(node_id, seq) == false)  // Partial sync, skip data not interested
+        if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
         Packet packet;
@@ -534,7 +538,7 @@ void Node::OnSyncAck(const Data &ack) {
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
         logStateStore(node_id, seq);
-        if (is_important_data_(node_id, seq) == false)  // Partial sync, skip data not interested
+        if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
         Packet packet;
@@ -614,7 +618,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
   const auto& n = data.getName();
   NodeID node_id = ExtractNodeID(n);
-  uint64_t seq = ExtractSequence(n);
+  // uint64_t seq = ExtractSequence(n);
   if (data_store_.find(n) != data_store_.end()) {
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Drops duplicate data: name=" << n.toUri());
     return;
@@ -639,7 +643,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
    * Save data if this data is of interest. Only log important data stores to
    *  calculate data availability.
    */
-  if (is_important_data_(node_id, seq)) {
+  if (is_important_data_(node_id)) {
     /* Check content type */
     if (data.getContentType() == kRepoData) {
       std::shared_ptr<Data> data_no_flag = std::make_shared<Data>(n);

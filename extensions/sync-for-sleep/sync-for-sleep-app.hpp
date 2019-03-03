@@ -78,7 +78,7 @@ public:
     return protoNode -> getFaceById(id);
   }
 
-  bool IsImportantData(uint64_t node_id, uint64_t data_seq) {
+  bool IsImportantData(uint64_t node_id) {
     if (nid_ >= 20)
     // if (nid_ == 1)
       return true;
@@ -99,7 +99,7 @@ protected:
     m_instance.reset(new vsync::sync_for_sleep::SimpleNode(
       nid_, 
       prefix_, 
-      std::bind(&SyncForSleepApp::IsImportantData, this, _1, _2),
+      std::bind(&SyncForSleepApp::IsImportantData, this, _1),
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
       std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this),
