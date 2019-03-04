@@ -62,6 +62,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   generate_data = true;     
   version_vector_[nid_] = 0;
   num_scheduler_retx = 0;
+  pending_forward = 0;
 
   if (nid_ >= 20) {
   // if (nid_ == 1) {
@@ -242,6 +243,13 @@ void Node::AsyncSendPacket() {
           /* Remove falsy data interest */
           if (data_store_.find(n) != data_store_.end()) {
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Drop falsy data interest: i.name=" << n.toUri() );
+            
+            if (packet.packet_origin == Packet::FORWARDED)
+              pending_forward--;
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+                   pending_data_interest_high.size() +
+                   pending_data_interest_low.size() +
+                   num_scheduler_retx - pending_forward );
             AsyncSendPacket();
             return;
           }
@@ -270,6 +278,7 @@ void Node::AsyncSendPacket() {
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
               /* Best effort, don't add to queue */
+              pending_forward--;
               break;
             default:
               assert(0);
@@ -404,6 +413,11 @@ void Node::OnSyncInterest(const Interest &interest) {
         pending_data_interest_low.push_back(missing_data[i]);
     }
   }
+
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+                   pending_data_interest_high.size() +
+                   pending_data_interest_low.size() +
+                   num_scheduler_retx - pending_forward );
 
   /* Do I have newer state? */
   bool my_vector_new = false;
@@ -569,6 +583,11 @@ void Node::OnSyncAck(const Data &ack) {
     else
       pending_data_interest_low.push_back(missing_data[i]);
   }
+
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+                   pending_data_interest_high.size() +
+                   pending_data_interest_low.size() +
+                   num_scheduler_retx - pending_forward );
 }
 
 
@@ -612,6 +631,7 @@ void Node::OnDataInterest(const Interest &interest) {
        * Remove only in-record of wifi face, and out-record of app face.
        **/
       pending_data_interest_high.push_front(packet);
+      pending_forward++;
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
 
     } else {
@@ -712,9 +732,9 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
  */
 void Node::reshuffle_priority() {
 
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" << 
-                               pending_data_interest_high.size() << ", " <<
-                               pending_data_interest_low.size() );
+  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" << 
+  //                              pending_data_interest_high.size() << ", " <<
+  //                              pending_data_interest_low.size() );
 
   std::vector<Packet> packets;
   while(pending_data_interest_high.size() > 0 && 
@@ -742,10 +762,9 @@ void Node::reshuffle_priority() {
       pending_data_interest_low.push_back(packet);
   }
 
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" << 
-                               pending_data_interest_high.size() << ", " <<
-                               pending_data_interest_low.size() );
-
+  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" << 
+  //                              pending_data_interest_high.size() << ", " <<
+  //                              pending_data_interest_low.size() );
 }
 
 

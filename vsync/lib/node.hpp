@@ -106,6 +106,7 @@ private:
   bool is_static;               /* Static nodes don't generate data or log store */
   bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
   size_t num_scheduler_retx;    /* Number of data interest the scheduler will put back to the queue (for statistics) */
+  size_t pending_forward;       /* Number of data interest in queue that will be forwarded */
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
