@@ -224,26 +224,12 @@ main (int argc, char *argv[])
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
   wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel",
                                   "MaxRange", DoubleValue(range));
-  // YansWifiChannelHelper wifiChannel_1;// = YansWifiChannelHelper::Default ();
-  // wifiChannel_1.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  // wifiChannel_1.AddPropagationLoss ("ns3::RangePropagationLossModel",
-  //                                 "MaxRange", DoubleValue(range));
-  // YansWifiChannelHelper wifiChannel_2;// = YansWifiChannelHelper::Default ();
-  // wifiChannel_2.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  // wifiChannel_2.AddPropagationLoss ("ns3::RangePropagationLossModel",
-  //                                 "MaxRange", DoubleValue(range));
 
   // YansWifiPhy wifiPhy = YansWifiPhy::Default();
   // /*
   YansWifiPhyHelper wifiPhyHelper = YansWifiPhyHelper::Default ();
   wifiPhyHelper.SetChannel (wifiChannel.Create ());
   // */
-  // YansWifiPhyHelper wifiPhyHelper_1 = YansWifiPhyHelper::Default ();
-  // wifiPhyHelper_1.SetChannel (wifiChannel_1.Create ());
-  // YansWifiPhyHelper wifiPhyHelper_2 = YansWifiPhyHelper::Default ();
-  // wifiPhyHelper_2.SetChannel (wifiChannel_2.Create ());
-  // wifiPhyHelper.Set("TxPowerStart", DoubleValue(5));
-  // wifiPhyHelper.Set("TxPowerEnd", DoubleValue(5));
 
   NqosWifiMacHelper wifiMacHelper = NqosWifiMacHelper::Default ();
   wifiMacHelper.SetType("ns3::AdhocWifiMac");
@@ -252,19 +238,13 @@ main (int argc, char *argv[])
   NodeContainer nodes;
   nodes.Create (node_num);
   // */
-  // NodeContainer nodes_1;
-  // nodes_1.Create (node_num / 2);
-  // NodeContainer nodes_2;
-  // nodes_2.Create (node_num / 2);
 
   ////////////////
   // 1. Install Wifi
   // /*
   NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
   // */
-  // NetDeviceContainer wifiNetDevices_1 = wifi.Install (wifiPhyHelper_1, wifiMacHelper, nodes_1);
-  // NetDeviceContainer wifiNetDevices_2 = wifi.Install (wifiPhyHelper_2, wifiMacHelper, nodes_2);
-  // NetDeviceContainer wifiNetDevices(wifiNetDevices_1, wifiNetDevices_2);
+  
   wifi.AssignStreams(wifiNetDevices, 0);  // Fix rng
 
   // 2. Install Mobility model

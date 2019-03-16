@@ -31,8 +31,9 @@ inline std::string EncodeVVToName(const VersionVector& v) {
  * Where interested is 0/1 indicating whether this node is interested in data 
  *  produced by this NodeID.
  */
-inline std::string EncodeVVToNameWithInterest(const VersionVector &v,
-                                              std::function<bool(uint64_t)> is_important_data_) {
+inline std::string 
+EncodeVVToNameWithInterest(const VersionVector &v,
+                           std::function<bool(uint64_t)> is_important_data_) {
   std::string vv_encode = "";
   for (auto entry : v) {
     vv_encode += (to_string(entry.first) + "-" + 

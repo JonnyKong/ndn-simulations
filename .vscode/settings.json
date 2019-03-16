@@ -82,6 +82,8 @@
         "numeric": "cpp",
         "ratio": "cpp",
         "system_error": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "any": "cpp",
+        "variant": "cpp"
     }
 }

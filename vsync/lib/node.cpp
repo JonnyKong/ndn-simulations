@@ -209,6 +209,8 @@ void Node::logStateStore(const NodeID& nid, int64_t seq) {
 
 void Node::AsyncSendPacket() {
   // VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue size: " << pending_sync_interest.size() << ", " << pending_ack.size() );
+  // if (is_hibernate)
+  //   SendSyncInterest(); 
   if (pending_sync_interest.size() > 0 || 
       pending_data_interest_high.size() > 0 || 
       pending_data_interest_low.size() > 0 || 
@@ -420,11 +422,18 @@ void Node::OnSyncInterest(const Interest &interest) {
                    num_scheduler_retx - pending_forward );
 
   /* Do I have newer state? */
+  /**
+   * Check if I have newer state. Do not assume sync interests always carry
+   *  entire vector. Assume my vector is newer only when I have a larger
+   *  sequence number than a producer that exists in the vector.
+   */
   bool my_vector_new = false;
   for (auto entry: version_vector_) {
     auto node_id = entry.first;
     auto seq = entry.second;
-    if (other_vv.find(node_id) == other_vv.end() || 
+    // if (other_vv.find(node_id) == other_vv.end() || 
+    //     other_vv[node_id] < seq) {
+    if (other_vv.find(node_id) != other_vv.end() &&
         other_vv[node_id] < seq) {
       my_vector_new = true;
       break;
@@ -705,7 +714,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
    * Broadcast the received data for multi-hop only when it corresponds to
    *  the reply of a forwarded data interest.
    */
-  if (kMultihopData && (sourceType == Packet::FORWARDED || sourceType == Packet::SUPPRESSED)) {
+  if (kMultihopData && (sourceType == Packet::FORWARDED)) {
     Packet packet;
     packet.packet_type = Packet::DATA_TYPE;
     // if (!is_static) {

@@ -121,7 +121,7 @@ private:
   std::uniform_int_distribution<> hibernate_packet_dist_
     = std::uniform_int_distribution<>(1000000, 2000000);   /* microseconds */
   // Timeout to enter hibernate mode if no packet received
-  const time::milliseconds kHibernateTime = time::milliseconds(3000);  
+  const time::milliseconds kHibernateTime = time::milliseconds(1000);  
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
