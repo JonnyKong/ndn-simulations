@@ -61,6 +61,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   is_static = false;
   generate_data = true;     
   version_vector_[nid_] = 0;
+  version_vector_data_[nid_] = 0;
   num_scheduler_retx = 0;
   pending_forward = 0;
 
@@ -119,6 +120,7 @@ void Node::PublishData(const std::string& content, uint32_t type) {
     return;
   }
   version_vector_[nid_]++;
+  version_vector_data_[nid_]++;
 
   /* Make data name */
   auto n = MakeDataName(nid_, version_vector_[nid_]);
@@ -126,7 +128,8 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   data->setFreshnessPeriod(time::seconds(3600));
   /* Set data content */
   proto::Content content_proto;
-  EncodeVV(version_vector_, content_proto.mutable_vv());
+  // EncodeVV(version_vector_, content_proto.mutable_vv());
+  EncodeVVWithInterest(version_vector_, content_proto.mutable_vv(), is_important_data_, surrounding_producers);
   content_proto.set_content(content);
   const std::string& content_proto_str = content_proto.SerializeAsString();
   data -> setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
@@ -333,7 +336,7 @@ void Node::AsyncSendPacket() {
 /* Packet processing pipeline */
 /* 1. Sync packet processing */
 void Node::SendSyncInterest() {
-  std::string encoded_vv = EncodeVVToNameWithInterest(version_vector_, is_important_data_);
+  std::string encoded_vv = EncodeVVToNameWithInterest(version_vector_, is_important_data_, surrounding_producers);
   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
   Packet packet;
@@ -381,12 +384,27 @@ void Node::OnSyncInterest(const Interest &interest) {
     auto seq_other = entry.second;
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < seq_other) {
-      other_vector_new = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
+      for (auto seq = start_seq; seq <= seq_other; ++seq)
+        logStateStore(node_id, seq);
+      version_vector_[node_id] = seq_other;
+    }
+
+    // Don't add uninterested data interest to queue
+    if (other_interested.find(node_id) == other_interested.end()) {
+      // VSYNC_LOG_TRACE ("node(" << nid_ << ") jump over uninterested producer: " << node_id );
+      continue;
+    }
+
+    if (version_vector_data_.find(node_id) == version_vector_data_.end() || 
+        version_vector_data_[node_id] < seq_other) {
+      other_vector_new = true;
+      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ? 
+                       1: version_vector_data_[node_id] + 1;
       mv[node_id] = start_seq;
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
-        logStateStore(node_id, seq);
+        // logStateStore(node_id, seq);
         if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
@@ -397,7 +415,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
-      version_vector_[node_id] = seq_other;  // Will be set later
+      version_vector_data_[node_id] = seq_other;
     }
   }
   if (missing_data.size() > kMissingDataThreshold) {
@@ -408,11 +426,12 @@ void Node::OnSyncInterest(const Interest &interest) {
   } else {
     for (size_t i = 0; i < missing_data.size(); ++i) {
       // pending_data_interest.push_back(missing_data[i]);
-      if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
-          != surrounding_producers.end())
-        pending_data_interest_high.push_back(missing_data[i]);
-      else
-        pending_data_interest_low.push_back(missing_data[i]);
+      pending_data_interest_low.push_back(missing_data[i]);
+      // if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
+      //     != surrounding_producers.end())
+      //   pending_data_interest_high.push_back(missing_data[i]);
+      // else
+      //   pending_data_interest_low.push_back(missing_data[i]);
     }
   }
 
@@ -516,7 +535,8 @@ void Node::OnSyncInterest(const Interest &interest) {
 void Node::SendSyncAck(const Name &n) {
   std::shared_ptr<Data> ack = std::make_shared<Data>(n);
   proto::AckContent content_proto;
-  EncodeVV(version_vector_, content_proto.mutable_vv());
+  // EncodeVV(version_vector_, content_proto.mutable_vv());
+  EncodeVVWithInterest(version_vector_, content_proto.mutable_vv(), is_important_data_, surrounding_producers);
   const std::string& content_proto_str = content_proto.SerializeAsString();
   ack->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
                   content_proto_str.size());
@@ -559,19 +579,38 @@ void Node::OnSyncAck(const Data &ack) {
     VSYNC_LOG_WARN("Invalid data AckContent format: nid=" << nid_);
     assert(false);
   }
-  auto vector_other = DecodeVV(content_proto.vv());
+  // auto vector_other = DecodeVV(content_proto.vv());
+  auto ret = DecodeVVWithInterest(content_proto.vv());
+  auto vector_other = ret.first;
+  auto other_interested = ret.second;
   // bool other_vector_new = false;    /* Set if remote vector has newer state */
   std::vector<Packet> missing_data;
   for (auto entry : vector_other) {
     auto node_id = entry.first;
     auto node_seq = entry.second;
+
     if (version_vector_.find(node_id) == version_vector_.end() || 
         version_vector_[node_id] < node_seq) {
-      // other_vector_new = true;
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
                        1: version_vector_[node_id] + 1;
-      for (auto seq = start_seq; seq <= node_seq; ++seq) {
+      for (auto seq = start_seq; seq <= node_seq; ++seq)
         logStateStore(node_id, seq);
+      version_vector_[node_id] = node_seq;
+    }
+
+    // Don't add uninterested data interest to queue
+    if (other_interested.find(node_id) == other_interested.end()) {
+      // VSYNC_LOG_TRACE ("node(" << nid_ << ") jump over uninterested producer: " << node_id );
+      continue;
+    }
+
+    if (version_vector_data_.find(node_id) == version_vector_data_.end() || 
+        version_vector_data_[node_id] < node_seq) {
+      // other_vector_new = true;
+      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ? 
+                       1: version_vector_data_[node_id] + 1;
+      for (auto seq = start_seq; seq <= node_seq; ++seq) {
+        // logStateStore(node_id, seq);
         if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
@@ -581,16 +620,17 @@ void Node::OnSyncAck(const Data &ack) {
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
-      version_vector_[node_id] = node_seq;
+      version_vector_data_[node_id] = node_seq;
     }
   }
   for (size_t i = 0; i < missing_data.size(); ++i) {
     // pending_data_interest.push_back(missing_data[i]);
-    if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
-        != surrounding_producers.end())
-      pending_data_interest_high.push_back(missing_data[i]);
-    else
-      pending_data_interest_low.push_back(missing_data[i]);
+    pending_data_interest_low.push_back(missing_data[i]);
+  //   if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
+  //       != surrounding_producers.end())
+  //     pending_data_interest_high.push_back(missing_data[i]);
+  //   else
+  //     pending_data_interest_low.push_back(missing_data[i]);
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 

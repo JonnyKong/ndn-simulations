@@ -90,6 +90,7 @@ private:
 
   /* Node states */
   VersionVector version_vector_;
+  VersionVector version_vector_data_;   /* Data interest already added */  
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   bool generate_data;           /* If false, PubishData() returns immediately */
   unsigned int notify_time;     /* No. of retx left for same sync interest */

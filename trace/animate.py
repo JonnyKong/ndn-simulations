@@ -1,13 +1,3 @@
-"""
-Animation of Elastic collisions with Gravity
-
-author: Jake Vanderplas
-email: vanderplas@astro.washington.edu
-website: http://jakevdp.github.com
-license: BSD
-Please feel free to use and modify this, but keep the above information. Thanks!
-"""
-
 import os, sys
 import json
 
@@ -17,12 +7,13 @@ from matplotlib.animation import FuncAnimation
 
 nodes_total = 21
 
-# Parse file
+# Read the ns-2 tracefile 
 def read_trace(filename):
     result = dict()
     with open(filename, "r") as f:
         for line in f.readlines():
-            if "set " in line:  # First occurence
+            # First occurence of a node
+            if "set " in line:
                 line = line.split()
                 node = line[0].split('(')[1].split(')')[0]
                 pos = float(line[3])
@@ -35,8 +26,9 @@ def read_trace(filename):
                     result[node]["X"].append(pos)
                 elif line[2] == "Y_":
                     result[node]["Y"].append(pos)
-
-            elif "setdest" in line:  # Subsequent occurence
+            
+            # Subsequent occurences of a node
+            elif "setdest" in line:  
                 line = line.split()
                 node = line[3].split('(')[1].split(')')[0]
                 dest_x = float(line[5])

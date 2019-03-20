@@ -9,6 +9,7 @@ message VV {
   message Entry {
     uint64 nid = 1;
     uint64 seq = 2;
+    bool interested = 3;
   }
   repeated Entry entry = 1;
 }
