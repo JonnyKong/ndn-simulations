@@ -1,14 +1,11 @@
 import datetime
 import sys
 
-path = "result/" + str(datetime.date.today())
-filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (int(sys.argv[1]))]
-
 def variance(lst):
     mean = float(sum(lst)) / len(lst)
     return float(reduce(lambda x, y: x + y, map(lambda x: (x - mean) ** 2, lst))) / len(lst)
 
-def main():
+def main(path, filenames):
     files = [open(file, "r") for file in filenames]
     for row in zip(*files):
         if '=' in row[0]:
@@ -19,4 +16,9 @@ def main():
             print row[0].strip()
 
 if __name__ == "__main__":
-    main()
+    path = "result/" + str(datetime.date.today())
+    if sys.argv[1] == "WIFI_RANGE":
+        filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (int(sys.argv[2]))]
+    else:
+        filenames = [path + "/loss_rate_" + str(i + 1) + ".txt" for i in range (int(sys.argv[2]))]
+    main(path, filenames)

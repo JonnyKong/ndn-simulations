@@ -17,10 +17,11 @@ class DataInfo:
         self.GenerationTime = birth
         self.LastTime = birth
         self.Owner = 1
+        self.Available = False
 
 # def cdf_plot(data, name, number, c):
 #   """
-#   data: dataset   
+#   data: dataset
 #   name: name on legend
 #   number: how many pieces are split between min and max
 #   """
@@ -55,7 +56,7 @@ if int(sys.argv[2]) <= 5:
 else:
   # node_num = int(sys.argv[2]) + 24
   node_num = int(sys.argv[2])
-node_num_state_sync = 5    # For partial sync
+node_num_state_sync = 21    # For partial sync
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
@@ -75,8 +76,7 @@ for line in file:
         time = elements[0]
         data_name = elements[-1]
         if data_name not in data_store:
-            data_info = DataInfo(int(time))
-            data_store[data_name] = data_info
+            data_store[data_name] = DataInfo(int(time))
         else:
             data_store[data_name].Owner += 1
             data_store[data_name].LastTime = int(time)
@@ -85,7 +85,8 @@ for line in file:
             print line
             print data_name
             raise AssertionError()
-        elif data_info.Owner == node_num_state_sync:
+        elif not data_info.Available and data_info.Owner == int(0.9 * node_num_state_sync):
+            data_store[data_name].Available = True
             cur_sync_duration = data_info.LastTime - data_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
             syncDuration.append(cur_sync_duration)
@@ -94,8 +95,7 @@ for line in file:
         time = elements[0]
         state_name = elements[-1]
         if state_name not in state_store:
-            state_info = DataInfo(int(time))
-            state_store[state_name] = state_info
+            state_store[state_name] = DataInfo(int(time))
         else:
             state_store[state_name].Owner += 1
             state_store[state_name].LastTime = int(time)
@@ -104,7 +104,8 @@ for line in file:
             print line
             print state_info.Owner
             raise AssertionError()
-        elif state_info.Owner == node_num:
+        elif not state_info.Available and state_info.Owner == int(0.9 * node_num):
+            state_store[state_name].Available = True
             cur_sync_duration = state_info.LastTime - state_info.GenerationTime
             cur_sync_duration = float(cur_sync_duration) / 1000000.0
             stateSyncDuration.append(cur_sync_duration)
@@ -228,7 +229,7 @@ print("cache hit = " + str(np.sum(np.array(cache_hit))))
 print("cache hit special = " + str(np.sum(np.array(cache_hit_special))))
 
 # for data_name in data_store:
-#     print data_store[data_name].Owner 
+#     print data_store[data_name].Owner
 
 print("number of data available = " + str(dataSyncDuration.size))
 print("number of data produced = " + str(len(data_store)))

@@ -41,6 +41,7 @@ EncodeVVToNameWithInterest(const VersionVector &v,
                   to_string(entry.second) + "-");
     if (is_important_data_(entry.first) ||
         surrounding_producers.find(entry.first) != surrounding_producers.end()) 
+    // if (is_important_data_(entry.first))
       vv_encode += "1_";
     else
       vv_encode += "0_";
@@ -116,6 +117,7 @@ inline void EncodeVVWithInterest(const VersionVector& v,
     entry->set_seq(item.second);
     if (is_important_data_(item.first) ||
         surrounding_producers.find(item.first) != surrounding_producers.end())
+    // if (is_important_data_(item.first))
       entry->set_interested(true);
     else
       entry->set_interested(false);

@@ -83,8 +83,9 @@ public:
     // if (nid_ == 1)
       return true;
     else
-      return (node_id % 4) == (nid_ % 4);
+      // return (node_id % 4) == (nid_ % 4);
       // return (node_id % 2) == (nid_ % 2);
+      return true;
   }
 
   NodeContainer *container_;  // Point back to container in simulator
@@ -97,14 +98,14 @@ protected:
   StartApplication()
   {
     m_instance.reset(new vsync::sync_for_sleep::SimpleNode(
-      nid_, 
-      prefix_, 
+      nid_,
+      prefix_,
       std::bind(&SyncForSleepApp::IsImportantData, this, _1),
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
       std::bind(&SyncForSleepApp::GetCurrentPIT, this),
       std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this),
       std::bind(&SyncForSleepApp::GetFaceById, this, _1),
-      useBeacon_, 
+      useBeacon_,
       useRetx_
     ));
     m_instance->Start();

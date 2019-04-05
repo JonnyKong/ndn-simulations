@@ -6,11 +6,11 @@ RUN_TIMES=1
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.01 0.05 0.1 0.3 0.5)
 
-WIFI_RANGE_LIST=(60 80 100 120 140 160) 
-# WIFI_RANGE_LIST=(80) 
+# WIFI_RANGE_LIST=(60 80 100 120 140 160)
+WIFI_RANGE_LIST=(20 30 40 50 60 70 80 90 100)
 rm -f cdf.txt
 
-run_loss_rate() {   
+run_loss_rate() {
     local LOSS_RATE=$1
     local RESULT_DIR=$2
     echo "Starting simulation: Loss rate = ${LOSS_RATE} ..."
@@ -51,7 +51,7 @@ summarize_wifi_range_result() {
         cat ${RESULT_DIR}/wifi_range_${WIFI_RANGE}.txt \
             | grep "out ack" >> ${RESULT_DIR}/${FILENAME}
     done
-    
+
     # Data interest
     echo "Data interest:" >> ${RESULT_DIR}/${FILENAME}
     for WIFI_RANGE in "${WIFI_RANGE_LIST[@]}"; do
@@ -188,31 +188,105 @@ summarize_wifi_range_result() {
     done
 }
 
+summarize_loss_rate_result() {
+    local RESULT_DIR=$1
+    local FILENAME=loss_rate.txt
+
+    # Sync interest
+    echo "Sync interest:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "out notify interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Sync ack
+    echo "Sync ack:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "out ack" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Data interest
+    echo "Data interest:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "out data interest" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Data reply
+    echo "Data reply:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "data reply" \
+            >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # State sync delay
+    echo "State sync delay:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "state sync delay" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Data sync delay
+    echo "Data sync delay:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "data sync delay" >> ${RESULT_DIR}/${FILENAME}
+    done
+
+    # Rate of collision
+    echo "Collision rate:" >> ${RESULT_DIR}/${FILENAME}
+    for LOSS_RATE in "${LOSS_RATE_LIST[@]}"; do
+        echo -n "Loss rate = ${LOSS_RATE} " >> ${RESULT_DIR}/${FILENAME}
+        cat ${RESULT_DIR}/loss_rate_${LOSS_RATE}.txt \
+            | grep "collision rate" >> ${RESULT_DIR}/${FILENAME}
+    done
+}
+
 main() {
     local RESULT_DIR=result/$(date -I)
     rm -rf $RESULT_DIR
 
+    # Run different wifi ranges
     for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
         mkdir -p ${RESULT_DIR}/${TIME}/raw
         local pids=""
-        # for i in "${LOSS_RATE_LIST[@]}"; do
-        #     run_loss_rate $i $RESULT_DIR &
-        #     pids="$pids $!"
-        # done
         for i in "${WIFI_RANGE_LIST[@]}"; do
             run_wifi_range $i ${RESULT_DIR}/${TIME} &
             pids="$pids $!"
             sleep 10
-        done    
+        done
         wait $pids
         summarize_wifi_range_result ${RESULT_DIR}/${TIME}
     done
-
     for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
         mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
     done
+    python calculate_mean.py WIFI_RANGE ${RUN_TIMES} >> $RESULT_DIR/wifi_range.txt
 
-    python calculate_mean.py ${RUN_TIMES} >> $RESULT_DIR/wifi_range.txt
+    # # Run different loss rates
+    # for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+    #     mkdir -p ${RESULT_DIR}/${TIME}/raw
+    #     local pids=""
+    #     for i in "${LOSS_RATE_LIST[@]}"; do
+    #         run_loss_rate $i ${RESULT_DIR}/${TIME} &
+    #         pids="$pids $!"
+    #         sleep 10
+    #     done
+    #     wait $pids
+    #     summarize_loss_rate_result ${RESULT_DIR}/${TIME}
+    # done
+    # for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+    #     mv ${RESULT_DIR}/${TIME}/loss_rate.txt ${RESULT_DIR}/loss_rate_${TIME}.txt
+    # done
+    # python calculate_mean.py LOSS_RATE ${RUN_TIMES} >> $RESULT_DIR/loss_rate.txt
 }
 
 main

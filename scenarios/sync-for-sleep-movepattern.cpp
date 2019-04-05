@@ -40,7 +40,7 @@ PrintDrop()
   std::cout << "MacTxDropCount: " << MacTxDropCount << std::endl;
   std::cout << "PhyTxDropCount: " << PhyTxDropCount << std::endl;
   std::cout << "PhyRxDropCount: " << PhyRxDropCount << std::endl;
-  std::cout << "PhyRxBeginCount: " << PhyRxBeginCount << std::endl; 
+  std::cout << "PhyRxBeginCount: " << PhyRxBeginCount << std::endl;
   std::cout << "PhyRxEndCount: " << PhyRxEndCount << std::endl;
   std::cout << "******************** Collision Results ******************" << std::endl;
 }
@@ -206,7 +206,7 @@ main (int argc, char *argv[])
   // cmd.AddValue("useBeaconFlood", "useBeaconFlood", useBeaconFlood);
   cmd.Parse (argc,argv);
   assert(range != -1);
-  int node_num = mobile_node_num + 1;
+  int node_num = mobile_node_num + 0;
   if (mobile_node_num <= 5) node_num = mobile_node_num; // TODO: remove
   RngSeedManager::SetRun (run);
 
@@ -244,12 +244,13 @@ main (int argc, char *argv[])
   // /*
   NetDeviceContainer wifiNetDevices = wifi.Install (wifiPhyHelper, wifiMacHelper, nodes);
   // */
-  
+
   wifi.AssignStreams(wifiNetDevices, 0);  // Fix rng
 
   // 2. Install Mobility model
   // installMobility(nodes, constant_pause, pause_time);
   auto traceFile = "trace/scenario-" + to_string(mobile_node_num) + ".ns_movements";
+  // auto traceFile = "trace/scenario-test.ns_movements";
   Ns2MobilityHelper ns2 = Ns2MobilityHelper (traceFile);
   ns2.Install ();
 
@@ -297,7 +298,7 @@ main (int argc, char *argv[])
     auto app = DynamicCast<ns3::ndn::SyncForSleepApp>(object -> GetApplication(0));
     app -> container_ = &nodes;
     app -> wifi_range = range;
-  }  
+  }
 
   // Trace Collisions
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));

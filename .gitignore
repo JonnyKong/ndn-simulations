@@ -9,3 +9,4 @@ adhoc-log/*
 adhoc-result/*
 adhoc-result2/*
 *.xml
+.vscode/

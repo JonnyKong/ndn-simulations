@@ -17,32 +17,32 @@ namespace vsync {
 
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
-           const Name &prefix, DataCb on_data, IsImportantData is_important_data, 
-           GetCurrentPos getCurrentPos, GetCurrentPit getCurrentPit, 
-           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById) : 
+           const Name &prefix, DataCb on_data, IsImportantData is_important_data,
+           GetCurrentPos getCurrentPos, GetCurrentPit getCurrentPit,
+           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById) :
   face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
-  prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)), 
-  is_important_data_(is_important_data), getCurrentPos_(getCurrentPos), 
-  getCurrentPit_(getCurrentPit), getNumSurroundingNodes_(getNumSurroundingNodes), 
+  prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)),
+  is_important_data_(is_important_data), getCurrentPos_(getCurrentPos),
+  getCurrentPit_(getCurrentPit), getNumSurroundingNodes_(getNumSurroundingNodes),
   getFaceById_(getFaceById) {
 
   /* Set interest filters */
   face_.setInterestFilter(
     Name(kSyncNotifyPrefix), std::bind(&Node::OnSyncInterest, this, _2),
     [this](const Name&, const std::string& reason) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register sync prefix: " << reason); 
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register sync prefix: " << reason);
       throw Error("Failed to register sync interest prefix: " + reason);
   });
   face_.setInterestFilter(
     Name(kSyncDataPrefix), std::bind(&Node::OnDataInterest, this, _2),
     [this](const Name&, const std::string& reason) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register data prefix: " << reason); 
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register data prefix: " << reason);
       throw Error("Failed to register data prefix: " + reason);
   });
   face_.setInterestFilter(
     Name(kBeaconPrefix), std::bind(&Node::OnBeacon, this, _2),
     [this](const Name&, const std::string& reason) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register beacon prefix: " << reason); 
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register beacon prefix: " << reason);
       throw Error("Failed to register beacon prefix: " + reason);
   });
 
@@ -59,18 +59,18 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
 
   /* Initiate node states */
   is_static = false;
-  generate_data = true;     
+  generate_data = true;
   version_vector_[nid_] = 0;
   version_vector_data_[nid_] = 0;
   num_scheduler_retx = 0;
   pending_forward = 0;
 
-  if (nid_ >= 20) {
-  // if (nid_ == 1) {
-    is_static = true;
-    generate_data = false;
-    pMultihopForwardDataInterest = 10000;
-  } 
+  // if (nid_ >= 20) {
+  // // if (nid_ == 1) {
+  //   is_static = true;
+  //   generate_data = false;
+  //   pMultihopForwardDataInterest = 10000;
+  // }
 
   // face1 = getFaceById_(1);
 
@@ -88,7 +88,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     // Repo nodes are also used to calculate collision rates
     std::cout << "node(" << nid_ << ") should_receive_sync_interest = " << should_receive_sync_interest << std::endl;
     std::cout << "node(" << nid_ << ") received_sync_interest = " << received_sync_interest << std::endl;
-    
+
     if (!is_static) {
       std::cout << "node(" << nid_ << ") suppressed_sync_interest = " << suppressed_sync_interest << std::endl;
       std::cout << "node(" << nid_ << ") data_reply = " << data_reply << std::endl;
@@ -172,17 +172,17 @@ void Node::StartSimulation() {
   is_hibernate = false;
 
   refreshHibernateTimer();
-  
+
   if (kRetx) {
     int delay = retx_dist(rengine_);
-    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
-      RetxSyncInterest(); 
+    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+      RetxSyncInterest();
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
     });
   }
   if (kBeacon) {
     int next_beacon = beacon_dist(rengine_);
-    scheduler_.scheduleEvent(time::microseconds(next_beacon), 
+    scheduler_.scheduleEvent(time::microseconds(next_beacon),
                              [this] { SendBeacon(); });
   }
 }
@@ -199,29 +199,31 @@ void Node::logDataStore(const Name& name) {
   if (is_static)
     return;
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds node(" << nid_ << ") Store New Data: " << name.toUri() << std::endl;
+  std::cout << now << " microseconds node(" << nid_ << ") at " << getCurrentPos_()
+            << " Store New Data: " << name.toUri() << std::endl;
 }
 
 void Node::logStateStore(const NodeID& nid, int64_t seq) {
   if (is_static)
-    return;  
+    return;
   std::string state_tag = to_string(nid) + "-" + to_string(seq);
   int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds node(" << nid_ << ") Update New Seq: " << state_tag << std::endl;
+  std::cout << now << " microseconds node(" << nid_ << ") at " << getCurrentPos_()
+            << " Update New Seq: " << state_tag << std::endl;
 }
 
 void Node::AsyncSendPacket() {
   // VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue size: " << pending_sync_interest.size() << ", " << pending_ack.size() );
   // if (is_hibernate)
-  //   SendSyncInterest(); 
-  if (pending_sync_interest.size() > 0 || 
-      pending_data_interest_high.size() > 0 || 
-      pending_data_interest_low.size() > 0 || 
-      pending_ack.size() > 0 || 
+  //   SendSyncInterest();
+  if (pending_sync_interest.size() > 0 ||
+      pending_data_interest_high.size() > 0 ||
+      pending_data_interest_low.size() > 0 ||
+      pending_ack.size() > 0 ||
       pending_data_reply.size() > 0) {
 
     /* Select the highest priority packet */
-    Name n; 
+    Name n;
     Packet packet;
     if (pending_ack.size() > 0) {
       packet = pending_ack.front();
@@ -248,10 +250,10 @@ void Node::AsyncSendPacket() {
           /* Remove falsy data interest */
           if (data_store_.find(n) != data_store_.end()) {
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Drop falsy data interest: i.name=" << n.toUri() );
-            
+
             if (packet.packet_origin == Packet::FORWARDED)
               pending_forward--;
-            VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
                    pending_data_interest_high.size() +
                    pending_data_interest_low.size() +
                    num_scheduler_retx - pending_forward );
@@ -288,14 +290,14 @@ void Node::AsyncSendPacket() {
             default:
               assert(0);
           }
-        } 
+        }
         else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync interest */
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnSyncAck, this, _2),
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
           int num_surrounding = getNumSurroundingNodes_();
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri() 
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri()
                            << ", should be received by " << num_surrounding );
           should_receive_sync_interest += num_surrounding;
         }
@@ -319,7 +321,7 @@ void Node::AsyncSendPacket() {
         assert(0);  /* Shouldn't get here */
     }
   }
-  
+
   /* Schedule self */
   int delay;
   if (!is_hibernate)
@@ -382,9 +384,9 @@ void Node::OnSyncInterest(const Interest &interest) {
   for (auto entry : other_vv) {
     auto node_id = entry.first;
     auto seq_other = entry.second;
-    if (version_vector_.find(node_id) == version_vector_.end() || 
+    if (version_vector_.find(node_id) == version_vector_.end() ||
         version_vector_[node_id] < seq_other) {
-      auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
+      auto start_seq = version_vector_.find(node_id) == version_vector_.end() ?
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= seq_other; ++seq)
         logStateStore(node_id, seq);
@@ -394,13 +396,13 @@ void Node::OnSyncInterest(const Interest &interest) {
     // Don't add uninterested data interest to queue
     if (other_interested.find(node_id) == other_interested.end()) {
       // VSYNC_LOG_TRACE ("node(" << nid_ << ") jump over uninterested producer: " << node_id );
-      continue;
+      // continue;
     }
 
-    if (version_vector_data_.find(node_id) == version_vector_data_.end() || 
+    if (version_vector_data_.find(node_id) == version_vector_data_.end() ||
         version_vector_data_[node_id] < seq_other) {
       other_vector_new = true;
-      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ? 
+      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ?
                        1: version_vector_data_[node_id] + 1;
       mv[node_id] = start_seq;
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
@@ -435,7 +437,7 @@ void Node::OnSyncInterest(const Interest &interest) {
     }
   }
 
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
                    pending_data_interest_high.size() +
                    pending_data_interest_low.size() +
                    num_scheduler_retx - pending_forward );
@@ -450,7 +452,7 @@ void Node::OnSyncInterest(const Interest &interest) {
   for (auto entry: version_vector_) {
     auto node_id = entry.first;
     auto seq = entry.second;
-    // if (other_vv.find(node_id) == other_vv.end() || 
+    // if (other_vv.find(node_id) == other_vv.end() ||
     //     other_vv[node_id] < seq) {
     if (other_vv.find(node_id) != other_vv.end() &&
         other_vv[node_id] < seq) {
@@ -467,7 +469,7 @@ void Node::OnSyncInterest(const Interest &interest) {
     VSYNC_LOG_TRACE ("node(" << nid_ << ") Recv a syncNotify Interest:" << n.toUri()
                      << ", will reset retx timer" );
     pending_sync_interest.clear();
-    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
+    retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] {
       RetxSyncInterest();
     });
     suppressed_sync_interest++;
@@ -492,7 +494,7 @@ void Node::OnSyncInterest(const Interest &interest) {
                           [](const Interest&) {});
     auto p = overheard_sync_interest.find(n);
     if (p != overheard_sync_interest.end()) {
-      scheduler_.cancelEvent(p -> second);  // Cancel to refresh event 
+      scheduler_.cancelEvent(p -> second);  // Cancel to refresh event
       overheard_sync_interest.erase(p);
     }
     if (my_vector_new) {
@@ -504,7 +506,7 @@ void Node::OnSyncInterest(const Interest &interest) {
           SendSyncAck(n);
         }
       );
-    } 
+    }
     else {
       int delay = ack_dist(rengine_);
       VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK without new state: " << n.toUri() );
@@ -515,7 +517,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         }
       );
     }
-  } 
+  }
   else {
     int delay;
     if (my_vector_new) {
@@ -525,8 +527,8 @@ void Node::OnSyncInterest(const Interest &interest) {
       delay = ack_dist(rengine_);
       VSYNC_LOG_TRACE ("node(" << nid_ << ") will reply ACK with delay:" << n.toUri() );
     }
-    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] { 
-      SendSyncAck(n); 
+    scheduler_.scheduleEvent(time::microseconds(delay), [this, n] {
+      SendSyncAck(n);
     });
   }
 }
@@ -567,7 +569,7 @@ void Node::OnSyncAck(const Data &ack) {
       overheard_sync_interest.erase(n);
       VSYNC_LOG_TRACE ("node(" << nid_ << ") Overhear sync ack, suppress pending ACK: " << ack.getName().toUri());
       return;
-    } 
+    }
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") RECV sync ack: " << ack.getName().toUri());
@@ -589,9 +591,9 @@ void Node::OnSyncAck(const Data &ack) {
     auto node_id = entry.first;
     auto node_seq = entry.second;
 
-    if (version_vector_.find(node_id) == version_vector_.end() || 
+    if (version_vector_.find(node_id) == version_vector_.end() ||
         version_vector_[node_id] < node_seq) {
-      auto start_seq = version_vector_.find(node_id) == version_vector_.end() ? 
+      auto start_seq = version_vector_.find(node_id) == version_vector_.end() ?
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq)
         logStateStore(node_id, seq);
@@ -601,13 +603,13 @@ void Node::OnSyncAck(const Data &ack) {
     // Don't add uninterested data interest to queue
     if (other_interested.find(node_id) == other_interested.end()) {
       // VSYNC_LOG_TRACE ("node(" << nid_ << ") jump over uninterested producer: " << node_id );
-      continue;
+      // continue;
     }
 
-    if (version_vector_data_.find(node_id) == version_vector_data_.end() || 
+    if (version_vector_data_.find(node_id) == version_vector_data_.end() ||
         version_vector_data_[node_id] < node_seq) {
       // other_vector_new = true;
-      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ? 
+      auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ?
                        1: version_vector_data_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
         // logStateStore(node_id, seq);
@@ -633,7 +635,7 @@ void Node::OnSyncAck(const Data &ack) {
   //     pending_data_interest_low.push_back(missing_data[i]);
   }
 
-  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " << 
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
                    pending_data_interest_high.size() +
                    pending_data_interest_low.size() +
                    num_scheduler_retx - pending_forward );
@@ -675,8 +677,8 @@ void Node::OnDataInterest(const Interest &interest) {
       packet.packet_origin = Packet::FORWARDED;
       packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
 
-      /** 
-       * Need to remove PIT, otherwise interferes with checking PIT entry. 
+      /**
+       * Need to remove PIT, otherwise interferes with checking PIT entry.
        * Remove only in-record of wifi face, and out-record of app face.
        **/
       pending_data_interest_high.push_front(packet);
@@ -776,17 +778,17 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
 
 /**
  * reshuffle_priority() - Reshuffle pending_data_interest_high/low queues, based
- *  on current state of surrounding_producers. 
+ *  on current state of surrounding_producers.
  * Use last_sent as a timestamp to determine the sequence and prevent starvation.
  */
 void Node::reshuffle_priority() {
 
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" << 
+  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" <<
   //                              pending_data_interest_high.size() << ", " <<
   //                              pending_data_interest_low.size() );
 
   std::vector<Packet> packets;
-  while(pending_data_interest_high.size() > 0 && 
+  while(pending_data_interest_high.size() > 0 &&
         pending_data_interest_high.back().packet_origin != Packet::FORWARDED) {
     // Don't touch forwarded packets
     packets.push_back(pending_data_interest_high.back());
@@ -811,7 +813,7 @@ void Node::reshuffle_priority() {
       pending_data_interest_low.push_back(packet);
   }
 
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" << 
+  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" <<
   //                              pending_data_interest_high.size() << ", " <<
   //                              pending_data_interest_low.size() );
 }
@@ -822,8 +824,8 @@ void Node::RetxSyncInterest() {
   SendSyncInterest();
   int delay = retx_dist(rengine_);
   scheduler_.cancelEvent(retx_event);
-  retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] { 
-    RetxSyncInterest(); 
+  retx_event = scheduler_.scheduleEvent(time::microseconds(delay), [this] {
+    RetxSyncInterest();
     VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
   });
 }
@@ -850,7 +852,7 @@ void Node::OnBeacon(const Interest &beacon) {
     for (auto entry : one_hop) {
       one_hop_list += ", " + to_string(entry.first);
     }
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: " 
+    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: "
                      << node_id << ", the current one-hop list: " << one_hop_list);
     SendSyncInterest();
 
@@ -864,9 +866,9 @@ void Node::OnBeacon(const Interest &beacon) {
 
 /**
  * Cancel pending hibernate event, and schedule a new one.
- * 
- * In case is_hibernate is true before upon this function is called, this 
- *  function also cancels and re-schedules AsyncSendPacket() event, in order to 
+ *
+ * In case is_hibernate is true before upon this function is called, this
+ *  function also cancels and re-schedules AsyncSendPacket() event, in order to
  *  send next packet as soon as possible.
  */
 void Node::refreshHibernateTimer() {
