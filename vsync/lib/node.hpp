@@ -29,6 +29,7 @@ typedef struct {
   enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  /* Used in data only */
 
   int64_t last_sent;
+  int nRetries;
 } Packet;
 
 class Node {
@@ -122,7 +123,7 @@ private:
   std::uniform_int_distribution<> hibernate_packet_dist_
     = std::uniform_int_distribution<>(1000000, 2000000);   /* microseconds */
   // Timeout to enter hibernate mode if no packet received
-  const time::milliseconds kHibernateTime = time::milliseconds(1000);  
+  const time::milliseconds kHibernateTime = time::milliseconds(1000); 
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
@@ -151,6 +152,7 @@ private:
   // Delay for beacon frequency
   std::uniform_int_distribution<> beacon_dist
     = std::uniform_int_distribution<>(2000000, 3000000);
+  const int kDataInterestRetries = 10;
 
   /* Options */
   const bool kBeacon =       false;       /* Use beacon? */

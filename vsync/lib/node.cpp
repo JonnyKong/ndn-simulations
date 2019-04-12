@@ -271,15 +271,17 @@ void Node::AsyncSendPacket() {
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
               /* Add packet back to queue with longer delay to avoid retransmissions */
-              num_scheduler_retx++;
-              scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
-                    != surrounding_producers.end())
-                  pending_data_interest_high.push_back(packet);
-                else
-                  pending_data_interest_low.push_back(packet);
-                num_scheduler_retx--;
-              });
+              if (--packet.nRetries >= 0) {
+                num_scheduler_retx++;
+                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                  if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
+                      != surrounding_producers.end())
+                    pending_data_interest_high.push_back(packet);
+                  else
+                    pending_data_interest_low.push_back(packet);
+                  num_scheduler_retx--;
+                });
+              }
               break;
             case Packet::FORWARDED:
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
@@ -414,6 +416,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
         packet.last_sent = ns3::Simulator::Now().GetMilliSeconds();
+        packet.nRetries = kDataInterestRetries;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
@@ -619,6 +622,7 @@ void Node::OnSyncAck(const Data &ack) {
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
+        packet.nRetries = kDataInterestRetries;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }
