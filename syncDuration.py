@@ -127,7 +127,7 @@ for line in file:
         elements = line.split(' ')
         cur_out_bundled_interest = elements[4][:-1]
         out_bundled_interest.append(float(cur_out_bundled_interest))
-      elif line.find("m_outData") != -1:
+      elif line.find("m_outData =") != -1:
         elements = line.split(' ')
         cur_out_data = elements[4][:-1]
         out_data.append(float(cur_out_data))

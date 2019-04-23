@@ -274,6 +274,7 @@ void Node::AsyncSendPacket() {
               if (--packet.nRetries >= 0) {
                 num_scheduler_retx++;
                 scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                  const_cast<Interest*>(packet.interest.get())->refreshNonce();
                   if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
                       != surrounding_producers.end())
                     pending_data_interest_high.push_back(packet);
@@ -281,6 +282,8 @@ void Node::AsyncSendPacket() {
                     pending_data_interest_low.push_back(packet);
                   num_scheduler_retx--;
                 });
+              } else {
+                VSYNC_LOG_TRACE("DROP INTEREST");
               }
               break;
             case Packet::FORWARDED:
@@ -418,6 +421,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         packet.last_sent = ns3::Simulator::Now().GetMilliSeconds();
         packet.nRetries = kDataInterestRetries;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
+        // const_cast<Interest*>(packet.interest.get())->setMustBeFresh(true);
         missing_data.push_back(packet);
       }
       version_vector_data_[node_id] = seq_other;
@@ -670,6 +674,7 @@ void Node::OnDataInterest(const Interest &interest) {
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Send type repo data = " << iter->second->getName());
     } else {
       packet.data = iter -> second;
+      VSYNC_LOG_TRACE( "node(" << nid_ << ") Will send type regular data = " << iter->second->getName());
     }
     pending_data_reply.push_back(packet);
   } else if (kMultihopData) {
