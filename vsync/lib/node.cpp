@@ -18,8 +18,7 @@ namespace vsync {
 /* Public */
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data, IsImportantData is_important_data,
-           GetCurrentPos getCurrentPos, GetCurrentPit getCurrentPit,
-           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById)
+           GetCurrentPos getCurrentPos, GetNumSurroundingNodes getNumSurroundingNodes)
   : face_(face)
   , scheduler_(scheduler)
   , key_chain_(key_chain)
@@ -30,9 +29,8 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   , data_cb_(std::move(on_data))
   , is_important_data_(is_important_data)
   , getCurrentPos_(getCurrentPos)
-  , getCurrentPit_(getCurrentPit)
   , getNumSurroundingNodes_(getNumSurroundingNodes)
-  , getFaceById_(getFaceById)
+  , odometer(getCurrentPos, face_.getIoService())
 {
 
   /* Set interest filters */
@@ -47,12 +45,6 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
     [this](const Name&, const std::string& reason) {
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register data prefix: " << reason);
       throw Error("Failed to register data prefix: " + reason);
-  });
-  face_.setInterestFilter(
-    Name(kBeaconPrefix), std::bind(&Node::OnBeacon, this, _2),
-    [this](const Name&, const std::string& reason) {
-      VSYNC_LOG_TRACE( "node(" << nid_ << ") Failed to register beacon prefix: " << reason);
-      throw Error("Failed to register beacon prefix: " + reason);
   });
 
   /* Initialize statistics */
@@ -181,6 +173,7 @@ void Node::StartSimulation() {
   is_hibernate = false;
 
   refreshHibernateTimer();
+  odometer.init();
 
   if (kRetx) {
     int delay = retx_dist(rengine_);
@@ -188,11 +181,6 @@ void Node::StartSimulation() {
       RetxSyncInterest();
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Retx sync interest" );
     });
-  }
-  if (kBeacon) {
-    int next_beacon = beacon_dist(rengine_);
-    scheduler_.scheduleEvent(time::microseconds(next_beacon),
-                             [this] { SendBeacon(); });
   }
 }
 
@@ -205,12 +193,13 @@ void Node::PrintNDNTraffic() {
 }
 
 void Node::AsyncSendPacket() {
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue size: " << pending_sync_interest.size() << ", " << pending_ack.size() );
   // if (is_hibernate)
   //   SendSyncInterest();
+
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Travelled distance: " << odometer.getDist() );
+
   if (pending_sync_interest.size() > 0 ||
-      pending_data_interest_high.size() > 0 ||
-      pending_data_interest_low.size() > 0 ||
+      pending_data_interest.size() > 0 ||
       pending_ack.size() > 0 ||
       pending_data_reply.size() > 0) {
 
@@ -227,12 +216,9 @@ void Node::AsyncSendPacket() {
     } else if (pending_sync_interest.size() > 0) {
       packet = pending_sync_interest.front();
       pending_sync_interest.pop_front();
-    } else if (pending_data_interest_high.size() > 0) {
-      packet = pending_data_interest_high.front();
-      pending_data_interest_high.pop_front();
     } else {
-      packet = pending_data_interest_low.front();
-      pending_data_interest_low.pop_front();
+      packet = pending_data_interest.front();
+      pending_data_interest.pop_front();
     }
     switch (packet.packet_type) {
 
@@ -246,8 +232,7 @@ void Node::AsyncSendPacket() {
             if (packet.packet_origin == Packet::FORWARDED)
               pending_forward--;
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest_high.size() +
-                   pending_data_interest_low.size() +
+                   pending_data_interest.size() +
                    num_scheduler_retx - pending_forward );
             AsyncSendPacket();
             return;
@@ -267,11 +252,7 @@ void Node::AsyncSendPacket() {
                 num_scheduler_retx++;
                 scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                   const_cast<Interest*>(packet.interest.get())->refreshNonce();
-                  if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
-                      != surrounding_producers.end())
-                    pending_data_interest_high.push_back(packet);
-                  else
-                    pending_data_interest_low.push_back(packet);
+                  pending_data_interest.push_back(packet);
                   num_scheduler_retx--;
                 });
               } else {
@@ -348,7 +329,6 @@ void Node::SendSyncInterest() {
 void Node::OnSyncInterest(const Interest &interest) {
 
   const auto& n = interest.getName();
-  NodeID node_id = ExtractNodeID(n);
   // auto other_vv = DecodeVVFromName(ExtractEncodedVV(n));
   auto ret = DecodeVVFromNameWithInterest(ExtractEncodedVV(n));
   auto other_vv = ret.first;
@@ -364,11 +344,9 @@ void Node::OnSyncInterest(const Interest &interest) {
       [this, interested_node_id] {
         surrounding_producers.erase(interested_node_id);
         VSYNC_LOG_TRACE ("node(" << nid_ << ") remove new surrounding producer: " << interested_node_id );
-        reshuffle_priority();
       }
     );
     VSYNC_LOG_TRACE ("node(" << nid_ << ") add new surrounding producer: " << interested_node_id );
-    reshuffle_priority();
   }
 
   received_sync_interest++;
@@ -419,26 +397,18 @@ void Node::OnSyncInterest(const Interest &interest) {
       version_vector_data_[node_id] = seq_other;
     }
   }
-  if (missing_data.size() > kMissingDataThreshold) {
-    auto n = MakeBundledDataName(node_id, EncodeVVToName(mv));
-    Packet packet;
-    packet.packet_type = Packet::INTEREST_TYPE;
-    packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
-  } else {
-    for (size_t i = 0; i < missing_data.size(); ++i) {
-      // pending_data_interest.push_back(missing_data[i]);
-      pending_data_interest_low.push_back(missing_data[i]);
-      // if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
-      //     != surrounding_producers.end())
-      //   pending_data_interest_high.push_back(missing_data[i]);
-      // else
-      //   pending_data_interest_low.push_back(missing_data[i]);
-    }
+  for (size_t i = 0; i < missing_data.size(); ++i) {
+    // pending_data_interest.push_back(missing_data[i]);
+    pending_data_interest.push_back(missing_data[i]);
+    // if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
+    //     != surrounding_producers.end())
+    //   pending_data_interest_high.push_back(missing_data[i]);
+    // else
+    //   pending_data_interest_low.push_back(missing_data[i]);
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest_high.size() +
-                   pending_data_interest_low.size() +
+                   pending_data_interest.size() +
                    num_scheduler_retx - pending_forward );
 
   /* Do I have newer state? */
@@ -627,7 +597,7 @@ void Node::OnSyncAck(const Data &ack) {
   }
   for (size_t i = 0; i < missing_data.size(); ++i) {
     // pending_data_interest.push_back(missing_data[i]);
-    pending_data_interest_low.push_back(missing_data[i]);
+    pending_data_interest.push_back(missing_data[i]);
   //   if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
   //       != surrounding_producers.end())
   //     pending_data_interest_high.push_back(missing_data[i]);
@@ -636,8 +606,7 @@ void Node::OnSyncAck(const Data &ack) {
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest_high.size() +
-                   pending_data_interest_low.size() +
+                   pending_data_interest.size() +
                    num_scheduler_retx - pending_forward );
 }
 
@@ -682,7 +651,7 @@ void Node::OnDataInterest(const Interest &interest) {
        * Need to remove PIT, otherwise interferes with checking PIT entry.
        * Remove only in-record of wifi face, and out-record of app face.
        **/
-      pending_data_interest_high.push_front(packet);
+      pending_data_interest.push_front(packet);
       pending_forward++;
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Add forwarded interest to queue: i.name=" << n.toUri());
 
@@ -777,49 +746,6 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
   }
 }
 
-/**
- * reshuffle_priority() - Reshuffle pending_data_interest_high/low queues, based
- *  on current state of surrounding_producers.
- * Use last_sent as a timestamp to determine the sequence and prevent starvation.
- */
-void Node::reshuffle_priority() {
-
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length before shuffle=" <<
-  //                              pending_data_interest_high.size() << ", " <<
-  //                              pending_data_interest_low.size() );
-
-  std::vector<Packet> packets;
-  while(pending_data_interest_high.size() > 0 &&
-        pending_data_interest_high.back().packet_origin != Packet::FORWARDED) {
-    // Don't touch forwarded packets
-    packets.push_back(pending_data_interest_high.back());
-    pending_data_interest_high.pop_back();
-  }
-  while(pending_data_interest_low.size() > 0) {
-    packets.push_back(pending_data_interest_low.back());
-    pending_data_interest_low.pop_back();
-  }
-
-  /* Sort in ascending timestamp order */
-  std::sort(packets.begin(), packets.end(), [](const Packet &a, const Packet &b) {
-    return a.last_sent < b.last_sent;
-  });
-
-  /* Distribute the packets back into two queues accordingly */
-  for (auto packet : packets) {
-    if (surrounding_producers.find(ExtractNodeID((packet.interest)->getName()))
-        != surrounding_producers.end())
-      pending_data_interest_high.push_back(packet);
-    else
-      pending_data_interest_low.push_back(packet);
-  }
-
-  // VSYNC_LOG_TRACE ("node(" << nid_ << ") queue length after shuffle=" <<
-  //                              pending_data_interest_high.size() << ", " <<
-  //                              pending_data_interest_low.size() );
-}
-
-
 /* 4. Pro-active events (beacons and sync interest retx) */
 void Node::RetxSyncInterest() {
   SendSyncInterest();
@@ -831,39 +757,6 @@ void Node::RetxSyncInterest() {
   });
 }
 
-void Node::SendBeacon() {
-  /* Notify presence of myself */
-  auto n = MakeBeaconName(nid_);
-  Interest i(n, time::milliseconds(1));
-  face_.expressInterest(i, [](const Interest&, const Data&) {},
-                        [](const Interest&, const lp::Nack&) {},
-                        [](const Interest&) {});
-  int next_beacon = beacon_dist(rengine_);
-  beacon_event = scheduler_.scheduleEvent(time::microseconds(next_beacon),
-                                          [this] { SendBeacon(); });
-}
-
-void Node::OnBeacon(const Interest &beacon) {
-  auto n = beacon.getName();
-  auto node_id = ExtractNodeID(n);
-
-  if (one_hop.find(node_id) == one_hop.end()) {
-    /* New node enter one-hop distance,  */
-    std::string one_hop_list = to_string(node_id);
-    for (auto entry : one_hop) {
-      one_hop_list += ", " + to_string(entry.first);
-    }
-    VSYNC_LOG_TRACE ("node(" << nid_ << ") detect a new one-hop node: "
-                     << node_id << ", the current one-hop list: " << one_hop_list);
-    SendSyncInterest();
-
-    /* Update one-hop info */
-    scheduler_.cancelEvent(one_hop[node_id]);
-    one_hop[node_id] = scheduler_.scheduleEvent(kBeaconLifetime, [this, node_id] {
-      one_hop.erase(node_id);
-    });
-  }
-}
 
 /**
  * Cancel pending hibernate event, and schedule a new one.

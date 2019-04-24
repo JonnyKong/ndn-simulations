@@ -36,27 +36,15 @@ public:
       .AddAttribute("NodeID", "NodeID for sync node", UintegerValue(0),
                     MakeUintegerAccessor(&SyncForSleepApp::nid_), MakeUintegerChecker<uint64_t>())
       .AddAttribute("Prefix", "Prefix for sync node", StringValue("/"),
-                    MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker())
-      .AddAttribute("UseBeacon", "if use beacon", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useBeacon_), MakeBooleanChecker())
-      .AddAttribute("UseBeaconSuppression", "if use suppression for beacon", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useBeaconSuppression_), MakeBooleanChecker())
-      .AddAttribute("UseRetx", "if use retx for sync notify", BooleanValue(false),
-                    MakeBooleanAccessor(&SyncForSleepApp::useRetx_), MakeBooleanChecker());
+                    MakeNameAccessor(&SyncForSleepApp::prefix_), MakeNameChecker());
     return tid;
   }
 
-  double
+  std::pair<double, double>
   GetCurrentPosition() {
-    double cur_pos = GetNode()->GetObject<MobilityModel>()->GetPosition().x;
-    //std::cout << "App " << m_appId << " on Node " << GetNode()->GetId() << " connected to " << dest << std::endl;
-    return cur_pos;
-  }
-
-  Pit &
-  GetCurrentPIT() {
-    Ptr<L3Protocol> protoNode = L3Protocol::getL3Protocol(GetNode());
-    return protoNode -> getForwarder() -> getPit();
+    double cur_pos_x = GetNode()->GetObject<MobilityModel>()->GetPosition().x;
+    double cur_pos_y = GetNode()->GetObject<MobilityModel>()->GetPosition().y;
+    return std::make_pair(cur_pos_x, cur_pos_y);
   }
 
   int GetNumSurroundingNodes_() {
@@ -70,12 +58,6 @@ public:
         num += 1;
     }
     return num;
-  }
-
-  ::std::shared_ptr<::nfd::Face>
-  GetFaceById(int id) {
-    Ptr<L3Protocol> protoNode = L3Protocol::getL3Protocol(GetNode());
-    return protoNode -> getFaceById(id);
   }
 
   bool IsImportantData(uint64_t node_id) {
@@ -102,11 +84,7 @@ protected:
       prefix_,
       std::bind(&SyncForSleepApp::IsImportantData, this, _1),
       std::bind(&SyncForSleepApp::GetCurrentPosition, this),
-      std::bind(&SyncForSleepApp::GetCurrentPIT, this),
-      std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this),
-      std::bind(&SyncForSleepApp::GetFaceById, this, _1),
-      useBeacon_,
-      useRetx_
+      std::bind(&SyncForSleepApp::GetNumSurroundingNodes_, this)
     ));
     m_instance->Start();
   }

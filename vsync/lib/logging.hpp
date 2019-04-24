@@ -62,12 +62,21 @@ namespace vsync {
 class Logger {
 public:
   Logger(uint64_t nid);
-  void disable();
-  void enable();
 
-  void logDataStore(const Name& name);
-  void logStateStore(const NodeID& nid, int64_t seq);
-  void logDist(double dist);
+  void
+  disable();
+
+  void
+  enable();
+
+  void
+  logDataStore(const Name& name);
+
+  void
+  logStateStore(const NodeID& nid, int64_t seq);
+
+  void
+  logDist(double dist);
 
 private:
   uint64_t m_nid;

@@ -274,11 +274,6 @@ main (int argc, char *argv[])
     AppHelper syncForSleepAppHelper("SyncForSleepApp");
     syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
     syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    // syncForSleepAppHelper.SetAttribute("UseHeartbeat", BooleanValue(useHeartbeat));
-    // syncForSleepAppHelper.SetAttribute("UseHeartbeatFlood", BooleanValue(useHeartbeatFlood));
-    syncForSleepAppHelper.SetAttribute("UseBeacon", BooleanValue(useBeacon));
-    syncForSleepAppHelper.SetAttribute("UseRetx", BooleanValue(useRetx));
-    // syncForSleepAppHelper.SetAttribute("UseBeaconFlood", BooleanValue(useBeaconFlood));
     auto app = syncForSleepAppHelper.Install(object);
     app.Start(Seconds(2));
 
@@ -286,10 +281,6 @@ main (int argc, char *argv[])
     StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/heartbeat", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/bundledData", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/beacon", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn/beaconFlood", std::numeric_limits<int32_t>::max());
     idx++;
   }
 

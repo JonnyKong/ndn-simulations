@@ -18,35 +18,25 @@ static const std::string snapshotFileName = "snapshot.txt";
 class SimpleNode {
  public:
 
-  SimpleNode(const NodeID& nid, 
-             const Name& prefix, 
+  SimpleNode(const NodeID& nid,
+             const Name& prefix,
              Node::IsImportantData is_important_data,
              Node::GetCurrentPos getCurrentPos,
-             Node::GetCurrentPit getCurrentPit,
-             Node::GetNumSurroundingNodes getNumSurroundingNodes,
-             Node::GetFaceById getFaceById,
-            //  bool useHeartbeat, 
-            //  bool useHeartbeatFlood, 
-             bool useBeacon, 
-            //  bool useBeaconSuppression, 
-            //  bool useBeaconFlood,
-             bool useRetx)
+             Node::GetNumSurroundingNodes getNumSurroundingNodes)
       : scheduler_(face_.getIoService()),
         nid_(nid),
         // node_(face_, scheduler_, ns3::ndn::StackHelper::getKeyChain(), nid, prefix,
         //       std::bind(&SimpleNode::OnData, this, _1), getCurrentPos,
         //       useHeartbeat, useHeartbeatFlood, useBeacon, useBeaconSuppression, useRetx, useBeaconFlood)
-        node_(face_, 
-              scheduler_, 
-              ns3::ndn::StackHelper::getKeyChain(), 
+        node_(face_,
+              scheduler_,
+              ns3::ndn::StackHelper::getKeyChain(),
               nid,
-              prefix, 
+              prefix,
               std::bind(&SimpleNode::OnData, this, _1),
               is_important_data,
               getCurrentPos,
-              getCurrentPit,
-              getNumSurroundingNodes,
-              getFaceById) {}
+              getNumSurroundingNodes) {}
 
   void Start() {
   }
@@ -72,7 +62,7 @@ class SimpleNode {
       }
     }
     else {
-      std::cout << "Fail to write files" << std::endl; 
+      std::cout << "Fail to write files" << std::endl;
     }
     */
   }

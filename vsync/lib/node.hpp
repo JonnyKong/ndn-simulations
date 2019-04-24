@@ -14,6 +14,7 @@
 #include "vsync-helper.hpp"
 #include "recv-window.hpp"
 #include "logging.hpp"
+#include "odometer.hpp"
 
 #include "ns3/ndnSIM/NFD/daemon/table/pit.hpp"
 
@@ -49,10 +50,8 @@ public:
     kVectorClock    = 9670
   };
 
-  using GetCurrentPos = std::function<double()>;
-  using GetCurrentPit = std::function<Pit&()>;
+  using GetCurrentPos = std::function<std::pair<double, double>()>;
   using GetNumSurroundingNodes = std::function<int()>;
-  using GetFaceById = std::function<std::shared_ptr<::nfd::Face>(int)>;
 
   class Error : public std::exception {
    public:
@@ -71,9 +70,7 @@ public:
        DataCb on_data,
        IsImportantData is_important_data,
        GetCurrentPos getCurrentPos,
-       GetCurrentPit getCurrentPit,
-       GetNumSurroundingNodes getNumSurroundingNodes,
-       GetFaceById getFaceById);
+       GetNumSurroundingNodes getNumSurroundingNodes);
 
   void PublishData(const std::string& content, uint32_t type = kUserData);
 
@@ -100,8 +97,7 @@ private:
   std::deque<Packet> pending_ack;           /* Multi-level queue */
   std::deque<Packet> pending_sync_interest;
   std::deque<Packet> pending_data_reply;
-  std::deque<Packet> pending_data_interest_high;
-  std::deque<Packet> pending_data_interest_low;
+  std::deque<Packet> pending_data_interest;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */
@@ -115,7 +111,6 @@ private:
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
   const time::milliseconds kSendOutInterestLifetime = time::milliseconds(500);
   const time::milliseconds kRetxDataInterestTime = time::milliseconds(5000);    // Delay for re-insert to end of queue
-  const time::seconds kBeaconLifetime = time::seconds(6);
   const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
@@ -157,20 +152,17 @@ private:
   const int kDataInterestRetries = 10;
 
   /* Options */
-  const bool kBeacon =       false;       /* Use beacon? */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
   const bool kMultihopSync = true;        /* Use multihop for sync? */
   const bool kMultihopData = true;       /* Use multihop for data? */
   const bool kSyncAckSuppression = true;
-  const bool log_verbose = false;
 
   /* Callbacks */
   DataCb data_cb_;                      /* Never used in simulation */
   IsImportantData is_important_data_;   /* App decides whether to fetch data */
   GetCurrentPos getCurrentPos_;
-  GetCurrentPit getCurrentPit_;
   GetNumSurroundingNodes getNumSurroundingNodes_;
-  GetFaceById getFaceById_;
+  Odometer odometer;
 
   /* Node statistics */
   // Sent
@@ -207,12 +199,9 @@ private:
   void SendDataReply();
   void OnDataReply(const Data &data, Packet::SourceType sourceType);
   EventId wt_data_interest; /* Event for sending next data interest */
-  void reshuffle_priority();
 
   /* 3. Pro-active events (beacons and sync interest retx) */
   void RetxSyncInterest();
-  void SendBeacon();
-  void OnBeacon(const Interest &beacon);
   void refreshHibernateTimer();
   EventId retx_event;       /* will send retx next sync intrest */
   EventId beacon_event;     /* will send retx next beacon */

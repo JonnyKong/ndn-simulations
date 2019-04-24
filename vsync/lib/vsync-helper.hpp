@@ -28,19 +28,19 @@ inline std::string EncodeVVToName(const VersionVector& v) {
 /**
  * EncodeVVToNameWithInterest() - Encode version vector to name in format of :
  *  <NodeID>-<seq>-<interested>
- * Where interested is 0/1 indicating whether this node is interested in data 
+ * Where interested is 0/1 indicating whether this node is interested in data
  *  produced by this NodeID.
  */
-inline std::string 
+inline std::string
 EncodeVVToNameWithInterest(const VersionVector &v,
                            std::function<bool(uint64_t)> is_important_data_,
                            std::unordered_map<NodeID, EventId> surrounding_producers) {
   std::string vv_encode = "";
   for (auto entry : v) {
-    vv_encode += (to_string(entry.first) + "-" + 
+    vv_encode += (to_string(entry.first) + "-" +
                   to_string(entry.second) + "-");
     if (is_important_data_(entry.first) ||
-        surrounding_producers.find(entry.first) != surrounding_producers.end()) 
+        surrounding_producers.find(entry.first) != surrounding_producers.end())
     // if (is_important_data_(entry.first))
       vv_encode += "1_";
     else
@@ -71,7 +71,7 @@ inline VersionVector DecodeVVFromName(const std::string& vv_encode) {
  *  <NodeID>-<seq>-<interested>
  * Return the state vector, and a set of its interested nodes.
  */
-inline std::pair<VersionVector, std::set<NodeID>> 
+inline std::pair<VersionVector, std::set<NodeID>>
 DecodeVVFromNameWithInterest(const std::string& vv_encode) {
   int start = 0;
   VersionVector vv;
@@ -107,8 +107,8 @@ inline void EncodeVV(const VersionVector& v, std::string& out) {
   vv_proto.AppendToString(&out);
 }
 
-inline void EncodeVVWithInterest(const VersionVector& v, 
-                                 proto::VV* vv_proto, 
+inline void EncodeVVWithInterest(const VersionVector& v,
+                                 proto::VV* vv_proto,
                                  std::function<bool(uint64_t)> is_important_data_,
                                  std::unordered_map<NodeID, EventId> surrounding_producers) {
   for (auto item : v) {
@@ -144,7 +144,7 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
   return DecodeVV(vv_proto);
 }
 
-inline std::pair<VersionVector, std::set<NodeID>> 
+inline std::pair<VersionVector, std::set<NodeID>>
 DecodeVVWithInterest(const proto::VV& vv_proto) {
   VersionVector vv;
   std::set<NodeID> interested_nodes;
@@ -161,7 +161,7 @@ DecodeVVWithInterest(const proto::VV& vv_proto) {
 }
 
 // Naming conventions for interests and data
-// TBD 
+// TBD
 // actually, the [state-vector] is no needed to be carried because the carried data contains the vv.
 // but lixia said we maybe should remove the vv from data.
 inline Name MakeSyncNotifyName(const NodeID& nid, std::string encoded_vv, int64_t timestamp) {
@@ -177,31 +177,6 @@ inline Name MakeDataName(const NodeID& nid, uint64_t seq) {
   n.appendNumber(nid).appendNumber(seq).appendNumber(0);
   return n;
 }
-
-inline Name MakeBundledDataName(const NodeID& nid, std::string missing_data_vector) {
-  // name = /[bundledData_prefix]/[node_id]/[missing_data_vector]/%0
-  Name n(kBundledDataPrefix);
-  n.appendNumber(nid).append(missing_data_vector).appendNumber(0);
-  return n;
-}
-
-inline Name MakeBeaconName(uint64_t nid) {
-  Name n(kBeaconPrefix);
-  n.appendNumber(nid).appendNumber(0).appendNumber(0);
-  return n;
-}
-
-// inline Name MakeHeartbeatName(const NodeID& nid, std::string encoded_hv, std::string tag) {
-//   Name n(kHeartbeatPrefix);
-//   n.appendNumber(nid).append(encoded_hv).appendNumber(0);
-//   return n;
-// }
-
-// inline Name MakeBeaconFloodName(uint64_t sender, uint64_t initializer, uint64_t seq) {
-//   Name n(kBeaconFloodPrefix);
-//   n.appendNumber(sender).appendNumber(initializer).appendNumber(seq);
-//   return n;
-// }
 
 inline uint64_t ExtractNodeID(const Name& n) {
   return n.get(-3).toNumber();
