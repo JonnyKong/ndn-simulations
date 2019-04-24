@@ -2,7 +2,7 @@
 
 set -e  # Exit on error
 
-RUN_TIMES=12
+RUN_TIMES=1
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.05 0.2 0.5)
 
@@ -270,7 +270,7 @@ main() {
     #     mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
     # done
     # python calculate_mean.py WIFI_RANGE ${RUN_TIMES} >> $RESULT_DIR/wifi_range.txt
-    
+
     # Run different loss rates
     for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
         mkdir -p ${RESULT_DIR}/${TIME}/raw

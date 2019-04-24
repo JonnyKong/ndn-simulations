@@ -13,6 +13,7 @@
 #include "vsync-common.hpp"
 #include "vsync-helper.hpp"
 #include "recv-window.hpp"
+#include "logging.hpp"
 
 #include "ns3/ndnSIM/NFD/daemon/table/pit.hpp"
 
@@ -37,21 +38,21 @@ public:
   /* Dependence injection: callback for application */
   using DataCb = std::function<void(const VersionVector& vv)>;
   using IsImportantData = std::function<bool(uint64_t node_id)>;
-  
+
   /* typedef */
   enum DataType : uint32_t {
     kUserData       = 0,
     kGeoData        = 1,
-    kRepoData       = 2,  
+    kRepoData       = 2,
     kSyncReply      = 9668,
     kConfigureInfo  = 9669,
     kVectorClock    = 9670
   };
- 
+
   using GetCurrentPos = std::function<double()>;
   using GetCurrentPit = std::function<Pit&()>;
   using GetNumSurroundingNodes = std::function<int()>;
-  using GetFaceById = std::function<std::shared_ptr<::nfd::Face>(int)>;  
+  using GetFaceById = std::function<std::shared_ptr<::nfd::Face>(int)>;
 
   class Error : public std::exception {
    public:
@@ -62,15 +63,15 @@ public:
   };
 
   /* For user application */
-  Node(Face &face, 
-       Scheduler &scheduler, 
-       KeyChain &key_chain, 
+  Node(Face &face,
+       Scheduler &scheduler,
+       KeyChain &key_chain,
        const NodeID &nid,
-       const Name &prefix, 
-       DataCb on_data, 
-       IsImportantData is_important_data, 
-       GetCurrentPos getCurrentPos, 
-       GetCurrentPit getCurrentPit, 
+       const Name &prefix,
+       DataCb on_data,
+       IsImportantData is_important_data,
+       GetCurrentPos getCurrentPos,
+       GetCurrentPit getCurrentPit,
        GetNumSurroundingNodes getNumSurroundingNodes,
        GetFaceById getFaceById);
 
@@ -87,23 +88,23 @@ private:
   Name prefix_;                 /* To be configured by application */
   std::random_device rdevice_;
   std::mt19937 rengine_;
-  std::shared_ptr<::nfd::Face> face1;  /* Face object in NFD */
+  Logger logger;
 
   /* Node states */
   VersionVector version_vector_;
-  VersionVector version_vector_data_;   /* Data interest already added */  
+  VersionVector version_vector_data_;   /* Data interest already added */
   std::unordered_map<Name, std::shared_ptr<const Data>> data_store_;
   bool generate_data;           /* If false, PubishData() returns immediately */
   unsigned int notify_time;     /* No. of retx left for same sync interest */
   unsigned int left_retx_count; /* No. of retx left for same data interest */
   std::deque<Packet> pending_ack;           /* Multi-level queue */
   std::deque<Packet> pending_sync_interest;
-  std::deque<Packet> pending_data_reply;  
+  std::deque<Packet> pending_data_reply;
   std::deque<Packet> pending_data_interest_high;
   std::deque<Packet> pending_data_interest_low;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
-  std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */  
+  std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */
   std::unordered_map<NodeID, EventId> surrounding_producers;/* Soft state of interested producers of nearby nodes */
   bool is_static;               /* Static nodes don't generate data or log store */
   bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
@@ -123,7 +124,7 @@ private:
   std::uniform_int_distribution<> hibernate_packet_dist_
     = std::uniform_int_distribution<>(1000000, 2000000);   /* microseconds */
   // Timeout to enter hibernate mode if no packet received
-  const time::milliseconds kHibernateTime = time::milliseconds(1000); 
+  const time::milliseconds kHibernateTime = time::milliseconds(1000);
   // Distributions for multi-hop
   std::uniform_int_distribution<> mhop_dist
     = std::uniform_int_distribution<>(0, 10000);
@@ -131,7 +132,7 @@ private:
   // Distribution for data generation
   // const int data_generation_rate_mean = 40000;
   const int data_generation_rate_mean = 10000;
-  std::poisson_distribution<> data_generation_dist 
+  std::poisson_distribution<> data_generation_dist
     = std::poisson_distribution<>(data_generation_rate_mean);
   // Threshold for bundled data fetching
   const size_t kMissingDataThreshold = 0x7fffffff;
@@ -159,14 +160,14 @@ private:
   const bool kBeacon =       false;       /* Use beacon? */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
   const bool kMultihopSync = true;        /* Use multihop for sync? */
-  const bool kMultihopData = true;       /* Use multihop for data? */ 
+  const bool kMultihopData = true;       /* Use multihop for data? */
   const bool kSyncAckSuppression = true;
   const bool log_verbose = false;
 
   /* Callbacks */
   DataCb data_cb_;                      /* Never used in simulation */
   IsImportantData is_important_data_;   /* App decides whether to fetch data */
-  GetCurrentPos getCurrentPos_; 
+  GetCurrentPos getCurrentPos_;
   GetCurrentPit getCurrentPit_;
   GetNumSurroundingNodes getNumSurroundingNodes_;
   GetFaceById getFaceById_;
@@ -181,14 +182,12 @@ private:
   unsigned int received_data_interest;    /* No of data interest received */
   unsigned int received_data_mobile;      /* No of data received (if this node is mobile) */
   unsigned int received_data_mobile_from_repo;  /* No of data mobile nodes received from repo */
-  int64_t hibernate_start;                /* Hibernation start time if in hibernation mode (micro-sec) */  
+  int64_t hibernate_start;                /* Hibernation start time if in hibernation mode (micro-sec) */
   int64_t hibernate_duration;             /* Cumulative duration in hibernate mode (micro-sec) */
 
   /* Helper functions */
   void StartSimulation();
   void PrintNDNTraffic();
-  void logDataStore(const Name& name);                  /* Logger */
-  void logStateStore(const NodeID& nid, int64_t seq);   /* Logger */
 
   /* Packet processing pipeline */
   /* Unified queue for outgoing interest */

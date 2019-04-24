@@ -19,12 +19,21 @@ namespace vsync {
 Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &nid,
            const Name &prefix, DataCb on_data, IsImportantData is_important_data,
            GetCurrentPos getCurrentPos, GetCurrentPit getCurrentPit,
-           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById) :
-  face_(face), scheduler_(scheduler),key_chain_(key_chain), nid_(nid),
-  prefix_(prefix), rengine_(rdevice_()), data_cb_(std::move(on_data)),
-  is_important_data_(is_important_data), getCurrentPos_(getCurrentPos),
-  getCurrentPit_(getCurrentPit), getNumSurroundingNodes_(getNumSurroundingNodes),
-  getFaceById_(getFaceById) {
+           GetNumSurroundingNodes getNumSurroundingNodes, GetFaceById getFaceById)
+  : face_(face)
+  , scheduler_(scheduler)
+  , key_chain_(key_chain)
+  , nid_(nid)
+  , prefix_(prefix)
+  , rengine_(rdevice_())
+  , logger(nid_)
+  , data_cb_(std::move(on_data))
+  , is_important_data_(is_important_data)
+  , getCurrentPos_(getCurrentPos)
+  , getCurrentPit_(getCurrentPit)
+  , getNumSurroundingNodes_(getNumSurroundingNodes)
+  , getFaceById_(getFaceById)
+{
 
   /* Set interest filters */
   face_.setInterestFilter(
@@ -140,8 +149,8 @@ void Node::PublishData(const std::string& content, uint32_t type) {
   data_store_[n] = data;
 
   /* Print that both state and data have been stored */
-  logDataStore(n);
-  logStateStore(nid_, version_vector_[nid_]);
+  logger.logDataStore(n);
+  logger.logStateStore(nid_, version_vector_[nid_]);
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Publish Data: d.name=" << n.toUri() );
 
   /* Schedule next publish with same data */
@@ -193,23 +202,6 @@ void Node::PrintNDNTraffic() {
   face_.expressInterest(i, [](const Interest&, const Data&) {},
                         [](const Interest&, const lp::Nack&) {},
                         [](const Interest&) {});
-}
-
-void Node::logDataStore(const Name& name) {
-  if (is_static)
-    return;
-  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds node(" << nid_ << ") at " << getCurrentPos_()
-            << " Store New Data: " << name.toUri() << std::endl;
-}
-
-void Node::logStateStore(const NodeID& nid, int64_t seq) {
-  if (is_static)
-    return;
-  std::string state_tag = to_string(nid) + "-" + to_string(seq);
-  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds node(" << nid_ << ") at " << getCurrentPos_()
-            << " Update New Seq: " << state_tag << std::endl;
 }
 
 void Node::AsyncSendPacket() {
@@ -394,7 +386,7 @@ void Node::OnSyncInterest(const Interest &interest) {
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ?
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= seq_other; ++seq)
-        logStateStore(node_id, seq);
+        logger.logStateStore(node_id, seq);
       version_vector_[node_id] = seq_other;
     }
 
@@ -411,7 +403,7 @@ void Node::OnSyncInterest(const Interest &interest) {
                        1: version_vector_data_[node_id] + 1;
       mv[node_id] = start_seq;
       for (auto seq = start_seq; seq <= seq_other; ++seq) {
-        // logStateStore(node_id, seq);
+        // logger.logStateStore(node_id, seq);
         if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
@@ -603,7 +595,7 @@ void Node::OnSyncAck(const Data &ack) {
       auto start_seq = version_vector_.find(node_id) == version_vector_.end() ?
                        1: version_vector_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq)
-        logStateStore(node_id, seq);
+        logger.logStateStore(node_id, seq);
       version_vector_[node_id] = node_seq;
     }
 
@@ -619,7 +611,7 @@ void Node::OnSyncAck(const Data &ack) {
       auto start_seq = version_vector_data_.find(node_id) == version_vector_data_.end() ?
                        1: version_vector_data_[node_id] + 1;
       for (auto seq = start_seq; seq <= node_seq; ++seq) {
-        // logStateStore(node_id, seq);
+        // logger.logStateStore(node_id, seq);
         if (is_important_data_(node_id) == false)  // Partial sync, skip data not interested
           continue;
         auto n = MakeDataName(node_id, seq);
@@ -757,7 +749,7 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
     }
     if (!is_static)
        received_data_mobile++;
-    logDataStore(n);
+    logger.logDataStore(n);
   }
 
 
