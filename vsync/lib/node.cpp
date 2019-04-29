@@ -196,8 +196,6 @@ void Node::AsyncSendPacket() {
   // if (is_hibernate)
   //   SendSyncInterest();
 
-  VSYNC_LOG_TRACE( "node(" << nid_ << ") Travelled distance: " << odometer.getDist() );
-
   if (pending_sync_interest.size() > 0 ||
       pending_data_interest.size() > 0 ||
       pending_ack.size() > 0 ||
@@ -232,12 +230,24 @@ void Node::AsyncSendPacket() {
             if (packet.packet_origin == Packet::FORWARDED)
               pending_forward--;
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest.size() +
-                   num_scheduler_retx - pending_forward );
+                pending_data_interest.size() + num_scheduler_retx - pending_forward );
             AsyncSendPacket();
             return;
           }
 
+          // If the node didn't travel far since last time sending this packet, put
+          //  this data packet back into the queue, and send the next packet immediately.
+          // To prevent iterating the queue too fast, need to add some delay.
+          /*
+          if (odometer.getDist() - packet.last_sent_dist < 50) {
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
+            scheduler_.scheduleEvent(time::seconds(1), [this, packet] {      
+              pending_data_interest.push_back(packet);
+            });
+            AsyncSendPacket();
+            return;
+          }
+          */
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
                                 [](const Interest&, const lp::Nack&) {},
@@ -245,22 +255,29 @@ void Node::AsyncSendPacket() {
           int num_surrounding = getNumSurroundingNodes_();
           switch (packet.packet_origin) {
             case Packet::ORIGINAL:
-              VSYNC_LOG_TRACE ("node(" << nid_ << ") Send data interest: i.name=" << n.toUri()
+              VSYNC_LOG_TRACE ("node(" << nid_ << ") Send Data Interest: i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
               /* Add packet back to queue with longer delay to avoid retransmissions */
               if (--packet.nRetries >= 0) {
                 num_scheduler_retx++;
-                scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                  const_cast<Interest*>(packet.interest.get())->refreshNonce();
+                packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds(); 
+                packet.last_sent_dist = odometer.getDist();
+                // if (packet.nRetries % 3 == 0) {
+                if (0) {
+                  scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
+                    pending_data_interest.push_back(packet);
+                    num_scheduler_retx--;
+                  });
+                } else {
                   pending_data_interest.push_back(packet);
                   num_scheduler_retx--;
-                });
+                }
               } else {
                 VSYNC_LOG_TRACE("DROP INTEREST");
               }
               break;
             case Packet::FORWARDED:
-              VSYNC_LOG_TRACE ("node(" << nid_ << ") Forward data interest: i.name=" << n.toUri()
+              VSYNC_LOG_TRACE ("node(" << nid_ << ") Send Data Interest (forward): i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
               /* Best effort, don't add to queue */
               pending_forward--;
@@ -275,7 +292,7 @@ void Node::AsyncSendPacket() {
                                 [](const Interest&, const lp::Nack&) {},
                                 [](const Interest&) {});
           int num_surrounding = getNumSurroundingNodes_();
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send sync interest: i.name=" << n.toUri()
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send Sync Interest: i.name=" << n.toUri()
                            << ", should be received by " << num_surrounding );
           should_receive_sync_interest += num_surrounding;
         }
@@ -286,9 +303,9 @@ void Node::AsyncSendPacket() {
         if (n.compare(0, 2, kSyncDataPrefix) == 0) {            /* Data */
           data_reply++;
           face_.put(*packet.data);
-          VSYNC_LOG_TRACE( "node(" << nid_ << ") Send data = " << (packet.data)->getName());
+          VSYNC_LOG_TRACE( "node(" << nid_ << ") Send Data Reply = " << (packet.data)->getName());
         } else if (n.compare(0, 2, kSyncNotifyPrefix) == 0) {   /* Sync ACK */
-          VSYNC_LOG_TRACE ("node(" << nid_ << ") replying ACK:" << n.toUri() );
+          VSYNC_LOG_TRACE ("node(" << nid_ << ") Send Sync Reply = " << n.toUri() );
           face_.put(*packet.data);
         } else {                                                /* Shouldn't get here */
           assert(0);
@@ -388,7 +405,8 @@ void Node::OnSyncInterest(const Interest &interest) {
         Packet packet;
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
-        packet.last_sent = ns3::Simulator::Now().GetMilliSeconds();
+        packet.last_sent_time = 0;
+        packet.last_sent_dist = 0; 
         packet.nRetries = kDataInterestRetries;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         // const_cast<Interest*>(packet.interest.get())->setMustBeFresh(true);
@@ -589,6 +607,8 @@ void Node::OnSyncAck(const Data &ack) {
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
         packet.nRetries = kDataInterestRetries;
+        packet.last_sent_time = 0;
+        packet.last_sent_dist = 0;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         missing_data.push_back(packet);
       }

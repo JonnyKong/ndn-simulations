@@ -31,6 +31,18 @@ static const Name kSyncNotifyPrefix = Name("/ndn/syncNotify");
 static const Name kSyncDataPrefix = Name("/ndn/vsyncData");
 static const Name kGetNDNTraffic = Name("/ndn/getNDNTraffic");
 
+typedef struct {
+  std::shared_ptr<const Interest> interest;
+  std::shared_ptr<const Data>     data;
+
+  enum PacketType { INTEREST_TYPE, DATA_TYPE }        packet_type;
+  enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  // Used in data interest only
+
+  int64_t last_sent_time;   // Timestamp when this packet was sent last time
+  float last_sent_dist;     // Distance recorded when this packet was last sent 
+  int nRetries;
+} Packet;
+
 }  // namespace vsync
 }  // namespace ndn
 

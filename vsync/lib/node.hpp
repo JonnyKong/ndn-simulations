@@ -16,23 +16,8 @@
 #include "logging.hpp"
 #include "odometer.hpp"
 
-#include "ns3/ndnSIM/NFD/daemon/table/pit.hpp"
-
-using nfd::pit::Pit;
-
 namespace ndn {
 namespace vsync {
-
-typedef struct {
-  std::shared_ptr<const Interest> interest;
-  std::shared_ptr<const Data>     data;
-
-  enum PacketType { INTEREST_TYPE, DATA_TYPE }        packet_type;
-  enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  /* Used in data only */
-
-  int64_t last_sent;
-  int nRetries;
-} Packet;
 
 class Node {
 public:

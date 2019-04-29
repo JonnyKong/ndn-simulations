@@ -271,10 +271,10 @@ def cdf(data):
 
     return (bin_edges, cdf)
 
-# Generate CDF plot
-cdf_file="cdf.txt"
-(bin_edges, cdf_result) = cdf(stateSyncTimestamp)
-cdf_string = json.dumps((bin_edges.tolist(), cdf_result.tolist()))
-with open(cdf_file, "a") as f:
-  f.write(cdf_string)
-  f.write("\n")
+# # Generate CDF plot
+# cdf_file="cdf.txt"
+# (bin_edges, cdf_result) = cdf(stateSyncTimestamp)
+# cdf_string = json.dumps((bin_edges.tolist(), cdf_result.tolist()))
+# with open(cdf_file, "a") as f:
+#   f.write(cdf_string)
+#   f.write("\n")
