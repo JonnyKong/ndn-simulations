@@ -110,8 +110,8 @@ private:
     = std::uniform_int_distribution<>(0, 10000);
   int pMultihopForwardDataInterest = 5000;  // Non-const, different for repo
   // Distribution for data generation
-  // const int data_generation_rate_mean = 40000;
-  const int data_generation_rate_mean = 10000;
+  const int data_generation_rate_mean = 40000;
+  // const int data_generation_rate_mean = 10000;
   std::poisson_distribution<> data_generation_dist
     = std::poisson_distribution<>(data_generation_rate_mean);
   // Threshold for bundled data fetching

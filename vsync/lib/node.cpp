@@ -263,7 +263,7 @@ void Node::AsyncSendPacket() {
                 packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds(); 
                 packet.last_sent_dist = odometer.getDist();
                 // if (packet.nRetries % 3 == 0) {
-                if (0) {
+                if (1) {
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                     pending_data_interest.push_back(packet);
                     num_scheduler_retx--;
@@ -336,9 +336,11 @@ void Node::SendSyncInterest() {
   std::string encoded_vv = EncodeVVToNameWithInterest(version_vector_, is_important_data_, surrounding_producers);
   auto cur_time = ns3::Simulator::Now().GetMicroSeconds();
   auto pending_sync_notify = MakeSyncNotifyName(nid_, encoded_vv, cur_time);
+  auto interest = std::make_shared<Interest>(pending_sync_notify, kSendOutInterestLifetime);
+  interest->setMustBeFresh(true);
   Packet packet;
   packet.packet_type = Packet::INTEREST_TYPE;
-  packet.interest = std::make_shared<Interest>(pending_sync_notify, kSendOutInterestLifetime);
+  packet.interest = interest;
   pending_sync_interest.clear();
   pending_sync_interest.push_back(packet);
 }
@@ -529,6 +531,7 @@ void Node::SendSyncAck(const Name &n) {
   const std::string& content_proto_str = content_proto.SerializeAsString();
   ack->setContent(reinterpret_cast<const uint8_t*>(content_proto_str.data()),
                   content_proto_str.size());
+  ack->setFreshnessPeriod(time::milliseconds(1000));
   key_chain_.sign(*ack, signingWithSha256());
 
   Packet packet;
