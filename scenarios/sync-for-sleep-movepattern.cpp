@@ -9,6 +9,7 @@
 #include "ns3/netanim-module.h"
 
 #include "sync-for-sleep/sync-for-sleep-app.hpp"
+#include "pure-forwarder/pure-forwarder-app.hpp"
 
 #include <random>
 #include <map>
@@ -271,25 +272,35 @@ main (int argc, char *argv[])
     Vector pos = position->GetPosition();
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
 
-    AppHelper syncForSleepAppHelper("SyncForSleepApp");
-    syncForSleepAppHelper.SetAttribute("NodeID", UintegerValue(idx));
-    syncForSleepAppHelper.SetAttribute("Prefix", StringValue("/"));
-    auto app = syncForSleepAppHelper.Install(object);
-    app.Start(Seconds(2));
+    if (idx % 2 == 0) {
+      AppHelper appHelper("SyncForSleepApp");
+      appHelper.SetAttribute("NodeID", UintegerValue(idx));
+      appHelper.SetAttribute("Prefix", StringValue("/"));
+      appHelper.Install(object).Start(Seconds(2));
+      auto app = DynamicCast<ns3::ndn::SyncForSleepApp>(object -> GetApplication(0));
+      app -> container_ = &nodes;
+      app -> wifi_range = range;
+    } else {
+      AppHelper appHelper("PureForwarderApp");
+      appHelper.SetAttribute("NodeID", UintegerValue(idx));
+      appHelper.Install(object).Start(Seconds(2));
+    }
 
     StackHelper::setNodeID(idx, object);
     StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
+    FibHelper::AddRoute(object, "/ndn", std::numeric_limits<int32_t>::max());
     idx++;
   }
 
-  for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
-    Ptr<Node> object = *i;
-    auto app = DynamicCast<ns3::ndn::SyncForSleepApp>(object -> GetApplication(0));
-    app -> container_ = &nodes;
-    app -> wifi_range = range;
-  }
+  // // Hacks for sync nodes
+  // for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
+  //   Ptr<Node> object = *i;
+  //   auto app = DynamicCast<ns3::ndn::SyncForSleepApp>(object -> GetApplication(0));
+  //   app -> container_ = &nodes;
+  //   app -> wifi_range = range;
+  // }
 
   // Trace Collisions
   Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacTxDrop));

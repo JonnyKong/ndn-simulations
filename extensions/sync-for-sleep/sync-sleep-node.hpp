@@ -109,7 +109,7 @@ private:
   Node node_;
 };
 
-}  // two_node_sync
+}  // sync_for_sleep
 }  // namespace vsync
 }  // namespace ndn
 
