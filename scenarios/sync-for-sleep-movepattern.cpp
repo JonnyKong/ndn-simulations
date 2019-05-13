@@ -272,7 +272,8 @@ main (int argc, char *argv[])
     Vector pos = position->GetPosition();
     std::cout << "node " << idx << " position: " << pos.x << " " << pos.y << std::endl;
 
-    if (idx % 2 == 0) {
+    // if (idx % 2 == 0) {
+    if (idx < 20) {
       AppHelper appHelper("SyncForSleepApp");
       appHelper.SetAttribute("NodeID", UintegerValue(idx));
       appHelper.SetAttribute("Prefix", StringValue("/"));
@@ -290,7 +291,6 @@ main (int argc, char *argv[])
     StackHelper::setLossRate(loss_rate, object);
     FibHelper::AddRoute(object, "/ndn/syncNotify", std::numeric_limits<int32_t>::max());
     FibHelper::AddRoute(object, "/ndn/vsyncData", std::numeric_limits<int32_t>::max());
-    FibHelper::AddRoute(object, "/ndn", std::numeric_limits<int32_t>::max());
     idx++;
   }
 

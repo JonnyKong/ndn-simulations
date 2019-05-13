@@ -22,6 +22,8 @@
 #pragma once
 
 #include <iostream>
+#include <boost/random.hpp>
+
 #include <ndn-cxx/data.hpp>
 #include <ndn-cxx/face.hpp>
 #include <ndn-cxx/interest.hpp>
@@ -47,12 +49,14 @@ public:
   void
   Stop();
 
-  // Forward all interests
+  // Forward interests with probability.
   void
   onInterest(const Interest& interest);
 
-  // Forward all data. Depending on whether NFD implements ad-hoc face, may need
-  //  additional hacking on the forwarder to forward data
+  // Forward data with probability.
+  // Data can be forwarded either by NFD directly, or through the application,
+  //  depending on whether a random delay is needed. Corresponding changes have
+  //  to be made for the forwarder.
   void
   onData(const Interest& interest, const Data& data);
 
@@ -61,6 +65,11 @@ private:
   uint64_t m_nid;
   Face m_face;
   Scheduler m_scheduler;
+  const int m_forward_prob;
+  
+  boost::mt19937 m_random_generator;
+  boost::variate_generator<boost::mt19937&, boost::uniform_int<>> m_collision_random;
+  boost::variate_generator<boost::mt19937&, boost::uniform_int<>> m_forward_rand;
 };
 
 } // namespace ndn

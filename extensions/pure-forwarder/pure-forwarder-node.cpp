@@ -26,6 +26,10 @@ namespace ndn {
 PureForwarderNode::PureForwarderNode(uint64_t nid)
   : m_nid(nid)
   , m_scheduler(m_face.getIoService())
+  , m_forward_prob(100)
+  , m_random_generator(nid)
+  , m_collision_random(m_random_generator, boost::uniform_int<>(0, 100000))
+  , m_forward_rand(m_random_generator, boost::uniform_int<>(0, 100))
 {
 }
 
@@ -48,29 +52,40 @@ PureForwarderNode::Stop()
 void
 PureForwarderNode::onInterest(const Interest& interest)
 {
-  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds forwarder(" << m_nid << ") forward interest: "
-            << interest.getName().toUri() << std::endl;
+  if (m_forward_rand() >= m_forward_prob)
+    return;
 
   Interest interest_new(interest.getName(), time::milliseconds(5000));
   interest_new.refreshNonce();
   
-  // TODO: Add random delay
-  m_face.expressInterest(interest_new,
-                         std::bind(&PureForwarderNode::onData, this, _1, _2),
-                         [](const Interest& interest, const lp::Nack& nack){},
-                         [](const Interest& interest){});
+  // Add random delay
+  int delay = m_collision_random();
+  m_scheduler.scheduleEvent(time::microseconds(delay), [this, interest_new] {
+    int64_t now = ns3::Simulator::Now().GetMicroSeconds();\
+    std::cout << now << " microseconds forwarder(" << m_nid << ") forward interest: "
+              << interest_new.getName().toUri() << std::endl;
+    m_face.expressInterest(interest_new,
+                           std::bind(&PureForwarderNode::onData, this, _1, _2),
+                           [](const Interest& interest, const lp::Nack& nack){},
+                           [](const Interest& interest){});
+  });
 }
 
 void
 PureForwarderNode::onData(const Interest& interest, const Data& data)
 {
-  int64_t now = ns3::Simulator::Now().GetMicroSeconds();
-  std::cout << now << " microseconds forwarder(" << m_nid << ") forward data: "
-            << data.getName().toUri() << std::endl;
+  return;
+  if (m_forward_rand() >= m_forward_prob)
+    return;
 
-  // TODO: Add random delay
-  m_face.put(data); 
+  // Add random delay
+  int delay = m_collision_random();
+  m_scheduler.scheduleEvent(time::microseconds(delay), [this, data] {
+    int64_t now = ns3::Simulator::Now().GetMicroSeconds();
+    std::cout << now << " microseconds forwarder(" << m_nid << ") forward data: "
+              << data.getName().toUri() << std::endl;
+    m_face.put(data); 
+  });
 }
 
 

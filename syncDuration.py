@@ -56,7 +56,7 @@ if int(sys.argv[2]) <= 5:
 else:
   # node_num = int(sys.argv[2]) + 24
   node_num = int(sys.argv[2])
-node_num_state_sync = 21    # For partial sync
+node_num_state_sync = 20    # For partial sync
 recvDataReply = 0
 recvForwardedDataReply = 0
 recvSuppressedDataReply = 0
