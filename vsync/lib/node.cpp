@@ -241,7 +241,7 @@ void Node::AsyncSendPacket() {
           /*
           if (odometer.getDist() - packet.last_sent_dist < 50) {
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
-            scheduler_.scheduleEvent(time::seconds(1), [this, packet] {      
+            scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
               pending_data_interest.push_back(packet);
             });
             AsyncSendPacket();
@@ -260,7 +260,7 @@ void Node::AsyncSendPacket() {
               /* Add packet back to queue with longer delay to avoid retransmissions */
               if (--packet.nRetries >= 0) {
                 num_scheduler_retx++;
-                packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds(); 
+                packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds();
                 packet.last_sent_dist = odometer.getDist();
                 // if (packet.nRetries % 3 == 0) {
                 if (1) {
@@ -408,7 +408,7 @@ void Node::OnSyncInterest(const Interest &interest) {
         packet.packet_type = Packet::INTEREST_TYPE;
         packet.packet_origin = Packet::ORIGINAL;
         packet.last_sent_time = 0;
-        packet.last_sent_dist = 0; 
+        packet.last_sent_dist = 0;
         packet.nRetries = kDataInterestRetries;
         packet.interest = std::make_shared<Interest>(n, kSendOutInterestLifetime);
         // const_cast<Interest*>(packet.interest.get())->setMustBeFresh(true);

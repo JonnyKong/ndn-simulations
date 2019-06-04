@@ -39,9 +39,9 @@ EncodeVVToNameWithInterest(const VersionVector &v,
   for (auto entry : v) {
     vv_encode += (to_string(entry.first) + "-" +
                   to_string(entry.second) + "-");
-    if (is_important_data_(entry.first) ||
-        surrounding_producers.find(entry.first) != surrounding_producers.end())
-    // if (is_important_data_(entry.first))
+    // if (is_important_data_(entry.first) ||
+    //     surrounding_producers.find(entry.first) != surrounding_producers.end())
+    if (is_important_data_(entry.first))
       vv_encode += "1_";
     else
       vv_encode += "0_";
@@ -107,17 +107,19 @@ inline void EncodeVV(const VersionVector& v, std::string& out) {
   vv_proto.AppendToString(&out);
 }
 
-inline void EncodeVVWithInterest(const VersionVector& v,
-                                 proto::VV* vv_proto,
-                                 std::function<bool(uint64_t)> is_important_data_,
-                                 std::unordered_map<NodeID, EventId> surrounding_producers) {
+inline void 
+EncodeVVWithInterest(const VersionVector& v,
+                     proto::VV* vv_proto,
+                     std::function<bool(uint64_t)> is_important_data_,
+                     std::unordered_map<NodeID, EventId> surrounding_producers)
+{
   for (auto item : v) {
     auto* entry = vv_proto->add_entry();
     entry->set_nid(item.first);
     entry->set_seq(item.second);
-    if (is_important_data_(item.first) ||
-        surrounding_producers.find(item.first) != surrounding_producers.end())
-    // if (is_important_data_(item.first))
+    // if (is_important_data_(item.first) ||
+    //     surrounding_producers.find(item.first) != surrounding_producers.end())
+    if (is_important_data_(item.first))
       entry->set_interested(true);
     else
       entry->set_interested(false);
@@ -145,7 +147,8 @@ inline VersionVector DecodeVV(const void* buf, size_t buf_size) {
 }
 
 inline std::pair<VersionVector, std::set<NodeID>>
-DecodeVVWithInterest(const proto::VV& vv_proto) {
+DecodeVVWithInterest(const proto::VV& vv_proto)
+{
   VersionVector vv;
   std::set<NodeID> interested_nodes;
   for (int i = 0; i < vv_proto.entry_size(); ++i) {
