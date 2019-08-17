@@ -83,6 +83,7 @@ private:
   std::deque<Packet> pending_sync_interest;
   std::deque<Packet> pending_data_reply;
   std::deque<Packet> pending_data_interest;
+  std::deque<Packet> inf_retx_data_interest;
   Name waiting_data;            /* Name of outstanding data interest from pending_interest queue */
   std::unordered_map<NodeID, EventId> one_hop;              /* Nodes within one-hop distance */
   std::unordered_map<Name, EventId> overheard_sync_interest;/* For sync ack suppression */
@@ -95,7 +96,8 @@ private:
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
   const time::milliseconds kSendOutInterestLifetime = time::milliseconds(500);
-  const time::milliseconds kRetxDataInterestTime = time::milliseconds(5000);    // Delay for re-insert to end of queue
+  const time::milliseconds kRetxDataInterestTime = time::milliseconds(5000);    // Period for re-insert to end of queue
+  const time::milliseconds kInfRetxDataInterestTime = time::milliseconds(5000); // Period for re-insert to end of inf retx queue
   const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
   // const time::milliseconds kInterestWT = time::milliseconds(50);
   // const time::milliseconds kInterestWT = time::milliseconds(200);
@@ -134,7 +136,8 @@ private:
   // Delay for beacon frequency
   std::uniform_int_distribution<> beacon_dist
     = std::uniform_int_distribution<>(2000000, 3000000);
-  const int kDataInterestRetries = 100000;
+  const int kDataInterestRetries = 5;
+  const int kInfRetxNum = 50;   // Limit the number of inf retx data interests
 
   /* Options */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
@@ -165,6 +168,7 @@ private:
   /* Helper functions */
   void StartSimulation();
   void PrintNDNTraffic();
+  void RemoveOldestInfInterest();
 
   /* Packet processing pipeline */
   /* Unified queue for outgoing interest */

@@ -192,6 +192,27 @@ void Node::PrintNDNTraffic() {
                         [](const Interest&) {});
 }
 
+/**
+ * Remove the oldest packet in the inf retx data interest queue
+ */
+void Node::RemoveOldestInfInterest() {
+  int64_t oldest_timestamp_ms = INT64_MAX;
+  std::deque<Packet>::iterator oldest_packet;
+  std::deque<Packet>::iterator it = inf_retx_data_interest.begin();
+
+  while (it != inf_retx_data_interest.end()) {
+    VSYNC_LOG_TRACE(oldest_timestamp_ms);
+    VSYNC_LOG_TRACE(it->inf_retx_start_time);
+    if (it->inf_retx_start_time < oldest_timestamp_ms) {
+      oldest_timestamp_ms = it->inf_retx_start_time;
+      oldest_packet = it;
+    }
+    it++;
+  }
+  inf_retx_data_interest.erase(oldest_packet);
+  VSYNC_LOG_TRACE( "node(" << nid_ << ") Removed an oldest interest from inf retx queue" );
+}
+
 void Node::AsyncSendPacket() {
   // if (is_hibernate)
   //   SendSyncInterest();
@@ -199,11 +220,13 @@ void Node::AsyncSendPacket() {
   if (pending_sync_interest.size() > 0 ||
       pending_data_interest.size() > 0 ||
       pending_ack.size() > 0 ||
-      pending_data_reply.size() > 0) {
+      pending_data_reply.size() > 0 || 
+      inf_retx_data_interest.size() > 0) {
 
     /* Select the highest priority packet */
     Name n;
     Packet packet;
+    bool is_inf_retx = false;
     if (pending_ack.size() > 0) {
       packet = pending_ack.front();
       pending_ack.pop_front();
@@ -214,9 +237,13 @@ void Node::AsyncSendPacket() {
     } else if (pending_sync_interest.size() > 0) {
       packet = pending_sync_interest.front();
       pending_sync_interest.pop_front();
-    } else {
+    } else if (pending_data_interest.size() > 0) {
       packet = pending_data_interest.front();
       pending_data_interest.pop_front();
+    } else {
+      packet = inf_retx_data_interest.front();
+      inf_retx_data_interest.pop_front();
+      is_inf_retx = true;
     }
     switch (packet.packet_type) {
 
@@ -260,27 +287,40 @@ void Node::AsyncSendPacket() {
               VSYNC_LOG_TRACE ("node(" << nid_ << ") Send Data Interest: i.name=" << n.toUri()
                                 << ", should be received by " << num_surrounding );
               /* Add packet back to queue with longer delay to avoid retransmissions */
-              if (--packet.nRetries >= 0) {
+              if (--packet.nRetries >= 0 || is_inf_retx) {
                 num_scheduler_retx++;
                 packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds();
                 packet.last_sent_dist = odometer.getDist();
                 packet.retransmission_counter ++;
-                if (packet.nRetries % 3 == 0) {
+
+                if (is_inf_retx) {
+                  scheduler_.scheduleEvent(kInfRetxDataInterestTime, [this, packet] {
+                    inf_retx_data_interest.push_back(packet);
+                    num_scheduler_retx--;
+                  });
+                }
+                else if (packet.nRetries % 3 == 0) {
                 // if (1) {
                   packet.burst_packet = false;
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                     pending_data_interest.push_back(packet);
                     num_scheduler_retx--;
                   });
-                } else {
+                } 
+                else {
                   packet.burst_packet = true;
                   scheduler_.scheduleEvent(kSendOutInterestLifetime, [this, packet] {
-                  pending_data_interest.push_back(packet);
-                  num_scheduler_retx--;
+                    pending_data_interest.push_back(packet);
+                    num_scheduler_retx--;
                   });
                 }
               } else {
-                VSYNC_LOG_TRACE("DROP INTEREST");
+                // VSYNC_LOG_TRACE("DROP INTEREST");
+                VSYNC_LOG_TRACE("APPEND INTEREST TO INF RETX QUEUE");
+                packet.inf_retx_start_time = ns3::Simulator::Now().GetMicroSeconds();
+                inf_retx_data_interest.push_back(packet);
+                while (inf_retx_data_interest.size() > uint32_t(kInfRetxNum))
+                  RemoveOldestInfInterest();
               }
               break;
             case Packet::FORWARDED:

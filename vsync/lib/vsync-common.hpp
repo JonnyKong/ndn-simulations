@@ -39,6 +39,7 @@ typedef struct {
   enum SourceType { ORIGINAL, FORWARDED, SUPPRESSED } packet_origin;  // Used in data interest only
 
   int64_t last_sent_time;   // Timestamp when this packet was sent last time
+  int64_t inf_retx_start_time;  // Timestamp when this packet entered inf retx queue
   float last_sent_dist;     // Distance recorded when this packet was last sent 
   int nRetries;
   int retransmission_counter;

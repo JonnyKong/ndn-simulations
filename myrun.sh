@@ -2,7 +2,7 @@
 
 set -e  # Exit on error
 
-RUN_TIMES=3
+RUN_TIMES=12
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.05 0.2 0.5)
 
@@ -254,22 +254,22 @@ main() {
     local RESULT_DIR=result/$(date -I)
     rm -rf $RESULT_DIR
 
-    # Run different wifi ranges
-    for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
-        mkdir -p ${RESULT_DIR}/${TIME}/raw
-        local pids=""
-        for i in "${WIFI_RANGE_LIST[@]}"; do
-            run_wifi_range $i ${RESULT_DIR}/${TIME} &
-            pids="$pids $!"
-            sleep 10
-        done
-        wait $pids
-        summarize_wifi_range_result ${RESULT_DIR}/${TIME}
-    done
-    for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
-        mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
-    done
-    python calculate_mean.py WIFI_RANGE ${RUN_TIMES} >> $RESULT_DIR/wifi_range.txt
+    # # Run different wifi ranges
+    # for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+    #     mkdir -p ${RESULT_DIR}/${TIME}/raw
+    #     local pids=""
+    #     for i in "${WIFI_RANGE_LIST[@]}"; do
+    #         run_wifi_range $i ${RESULT_DIR}/${TIME} &
+    #         pids="$pids $!"
+    #         sleep 10
+    #     done
+    #     wait $pids
+    #     summarize_wifi_range_result ${RESULT_DIR}/${TIME}
+    # done
+    # for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+    #     mv ${RESULT_DIR}/${TIME}/wifi_range.txt ${RESULT_DIR}/wifi_range_${TIME}.txt
+    # done
+    # python calculate_mean.py WIFI_RANGE ${RUN_TIMES} >> $RESULT_DIR/wifi_range.txt
 
     # # Run different loss rates
     # for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
@@ -287,6 +287,18 @@ main() {
     #     mv ${RESULT_DIR}/${TIME}/loss_rate.txt ${RESULT_DIR}/loss_rate_${TIME}.txt
     # done
     # python calculate_mean.py LOSS_RATE ${RUN_TIMES} >> $RESULT_DIR/loss_rate.txt
+
+    ./waf
+    for i in "${LOSS_RATE_LIST[@]}"; do
+        local pids=""
+        for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+            mkdir -p ${RESULT_DIR}/${TIME}/raw
+            run_loss_rate $i ${RESULT_DIR}/${TIME} &
+            sleep 0.1
+            pids="$pids $!"
+        done
+        wait $pids
+    done
 }
 
 main
