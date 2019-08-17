@@ -238,8 +238,7 @@ void Node::AsyncSendPacket() {
           // If the node didn't travel far since last time sending this packet, put
           //  this data packet back into the queue, and send the next packet immediately.
           // To prevent iterating the queue too fast, need to add some delay.
-          /*
-          if (odometer.getDist() - packet.last_sent_dist < 50) {
+          if (odometer.getDist() - packet.last_sent_dist < 100) {
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
             scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
               pending_data_interest.push_back(packet);
@@ -247,7 +246,7 @@ void Node::AsyncSendPacket() {
             AsyncSendPacket();
             return;
           }
-          */
+
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
                                 [](const Interest&, const lp::Nack&) {},
@@ -262,7 +261,7 @@ void Node::AsyncSendPacket() {
                 num_scheduler_retx++;
                 packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds();
                 packet.last_sent_dist = odometer.getDist();
-                // if (packet.nRetries % 3 == 0) {
+                // if (packet.nRetries % 3 == 0) {   // Burst retransmission
                 if (1) {
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                     pending_data_interest.push_back(packet);
