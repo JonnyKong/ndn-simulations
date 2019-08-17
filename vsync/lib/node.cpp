@@ -201,8 +201,6 @@ void Node::RemoveOldestInfInterest() {
   std::deque<Packet>::iterator it = inf_retx_data_interest.begin();
 
   while (it != inf_retx_data_interest.end()) {
-    VSYNC_LOG_TRACE(oldest_timestamp_ms);
-    VSYNC_LOG_TRACE(it->inf_retx_start_time);
     if (it->inf_retx_start_time < oldest_timestamp_ms) {
       oldest_timestamp_ms = it->inf_retx_start_time;
       oldest_packet = it;
