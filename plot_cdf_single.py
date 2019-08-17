@@ -27,6 +27,8 @@ class CdfPlotter(object):
         self._x_mesh = np.linspace(0, 2400, num=2400+1)
         self._node_num = 20
         self._ys_mesh = []   # 2D array
+        self.fig = plt.figure()
+
 
     def add_file(self, filename):
         """
@@ -35,7 +37,11 @@ class CdfPlotter(object):
         self._filenames.append(filename)
         self._parse_file(filename, plot_delay=True)
 
-    def plot_cdf(self, save=False):
+    def _calculate_mean(self):
+        y_mean = [float(sum(l)) / len(l) for l in zip(*self._ys_mesh)]
+        return y_mean
+
+    def plot_cdf(self, save=False, label_name='?'):
         """
         Calculate the mean of self._ys_mesh and draw CDF graph, or save the graph
         to "tmp.png".
@@ -43,18 +49,14 @@ class CdfPlotter(object):
             save (bool): Save the output graph to disk, rather than displaying it
                 on the screen (e.g. if you are working on a remote server).
         """
-        y_mean = [float(sum(l)) / len(l) for l in zip(*self._ys_mesh)]
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.plot(self._x_mesh, y_mean)
+        ax = self.fig.add_subplot(111)
+        y_mean = self._calculate_mean() 
+        ax.plot(self._x_mesh, y_mean, label=label_name)
         plt.ylim((0, 1))
+        plt.xlim((0,2000))
         plt.grid(True)
-        if save:
-            fig_name = "tmp.png"
-            print("Plot saved to %s" % fig_name)
-            fig.savefig(fig_name)
-        else:
-            plt.show()
+        self._ys_mesh=[]
+        ax.legend()
 
     def _parse_file(self, filename, plot_delay=True):
         """
@@ -84,9 +86,11 @@ class CdfPlotter(object):
                     x_coord.append((int(time) - generated_time[data]) / 1000000)
                 else:
                     x_coord.append(int(time) / 1000000)
+
+        print(len(x_coord))
+        
         y_mesh = self._interp0d(x_coord)
         y_mesh = [float(l / (len(data_store) * self._node_num)) for l in y_mesh]
-        print(*y_mesh)
         self._ys_mesh.append(y_mesh)
         print("Avail: %f" % y_mesh[-1])
 
@@ -102,10 +106,46 @@ class CdfPlotter(object):
 
         return y_interp0d
 
+    def save_img(self):
+        fig_name = "tmp.png"
+        print("Plot saved to %s" % fig_name)
+        self.fig.savefig(fig_name)
+        plt.show()
 
+# if __name__ == "__main__":
+#     plotter = CdfPlotter()
+#     for arg in sys.argv[1:]:
+#         plotter.add_file(arg)
+#     plotter.plot_cdf(save=True)
 
 if __name__ == "__main__":
     plotter = CdfPlotter()
-    for arg in sys.argv[1:]:
-        plotter.add_file(arg)
-    plotter.plot_cdf(save=True)
+
+    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.0.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.0.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.0.txt')
+
+    plotter.plot_cdf(save=True, label_name='0%')
+
+    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.05.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.05.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.05.txt')
+
+    plotter.plot_cdf(save=True, label_name='0.5%')
+
+    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.2.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.2.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.2.txt')
+
+    plotter.plot_cdf(save=True, label_name='20%')
+
+    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.5.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.5.txt')
+#    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.5.txt')
+
+    plotter.plot_cdf(save=True, label_name='50%')
+
+    plotter.save_img()
+    
+
+
