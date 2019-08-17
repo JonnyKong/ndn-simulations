@@ -41,6 +41,9 @@ typedef struct {
   int64_t last_sent_time;   // Timestamp when this packet was sent last time
   float last_sent_dist;     // Distance recorded when this packet was last sent 
   int nRetries;
+  int retransmission_counter;
+  bool burst_packet;
+
 } Packet;
 
 }  // namespace vsync

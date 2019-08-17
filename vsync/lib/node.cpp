@@ -238,16 +238,18 @@ void Node::AsyncSendPacket() {
           // If the node didn't travel far since last time sending this packet, put
           //  this data packet back into the queue, and send the next packet immediately.
           // To prevent iterating the queue too fast, need to add some delay.
-          /*
-          if (odometer.getDist() - packet.last_sent_dist < 50) {
-            VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
-            scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
-              pending_data_interest.push_back(packet);
-            });
-            AsyncSendPacket();
-            return;
-          }
-          */
+
+          // if ((odometer.getDist() - packet.last_sent_dist < (30 + 3 * packet.retransmission_counter)) && !packet.burst_packet) {
+          // if ((odometer.getDist() - packet.last_sent_dist < 50 ) && !packet.burst_packet) {
+          // //  if (odometer.getDist() - packet.last_sent_dist < 30) {
+          //   VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
+          //   scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
+          //     pending_data_interest.push_back(packet);
+          //   });
+          //   AsyncSendPacket();
+          //   return;
+          // }
+          
           face_.expressInterest(*packet.interest,
                                 std::bind(&Node::OnDataReply, this, _2, packet.packet_origin),
                                 [](const Interest&, const lp::Nack&) {},
@@ -262,15 +264,20 @@ void Node::AsyncSendPacket() {
                 num_scheduler_retx++;
                 packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds();
                 packet.last_sent_dist = odometer.getDist();
-                // if (packet.nRetries % 3 == 0) {
-                if (1) {
+                packet.retransmission_counter ++;
+                if (packet.nRetries % 3 == 0) {
+                // if (1) {
+                  packet.burst_packet = false;
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                     pending_data_interest.push_back(packet);
                     num_scheduler_retx--;
                   });
                 } else {
+                  packet.burst_packet = true;
+                  scheduler_.scheduleEvent(kSendOutInterestLifetime, [this, packet] {
                   pending_data_interest.push_back(packet);
                   num_scheduler_retx--;
+                  });
                 }
               } else {
                 VSYNC_LOG_TRACE("DROP INTEREST");

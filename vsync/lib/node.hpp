@@ -94,7 +94,7 @@ private:
 
   /* Constants */
   const int kInterestTransmissionTime = 1;  /* Times same data interest sent */
-  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(5000);
+  const time::milliseconds kSendOutInterestLifetime = time::milliseconds(500);
   const time::milliseconds kRetxDataInterestTime = time::milliseconds(5000);    // Delay for re-insert to end of queue
   const time::milliseconds kAddToPitInterestLifetime = time::milliseconds(444);
   // const time::milliseconds kInterestWT = time::milliseconds(50);
@@ -134,7 +134,7 @@ private:
   // Delay for beacon frequency
   std::uniform_int_distribution<> beacon_dist
     = std::uniform_int_distribution<>(2000000, 3000000);
-  const int kDataInterestRetries = 1000000;
+  const int kDataInterestRetries = 100000;
 
   /* Options */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
