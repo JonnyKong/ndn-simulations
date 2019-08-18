@@ -169,6 +169,7 @@ private:
   void StartSimulation();
   void PrintNDNTraffic();
   void RemoveOldestInfInterest();
+  std::deque<Packet>& GetQueueByType(const std::string &type);
 
   /* Packet processing pipeline */
   /* Unified queue for outgoing interest */

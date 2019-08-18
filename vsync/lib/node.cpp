@@ -211,9 +211,32 @@ void Node::RemoveOldestInfInterest() {
   VSYNC_LOG_TRACE( "node(" << nid_ << ") Removed an oldest interest from inf retx queue" );
 }
 
+/**
+ * Given the type of packet, return the queue that the packet should be inserted into.
+ */
+std::deque<Packet>& Node::GetQueueByType(const std::string &type) {
+  if (type == "SYNC_INTEREST")
+    return pending_sync_interest;
+    // return pending_data_interest;
+  else if (type == "SYNC_REPLY")
+    return pending_ack;
+    // return pending_data_interest;
+  else if (type == "DATA_INTEREST")
+    return pending_data_interest;
+  else if (type == "DATA_REPLY")
+    return pending_data_reply;
+    // return pending_data_interest;
+  else if (type == "INF_RETX_DATA_INTEREST")
+    return inf_retx_data_interest;
+    // return pending_data_interest;
+  else
+    exit(1);
+    // You shouldn't reach here.
+}
+
 void Node::AsyncSendPacket() {
-  // if (is_hibernate)
-  //   SendSyncInterest();
+  if (is_hibernate)
+    SendSyncInterest();
 
   if (pending_sync_interest.size() > 0 ||
       pending_data_interest.size() > 0 ||
@@ -269,7 +292,8 @@ void Node::AsyncSendPacket() {
           // //  if (odometer.getDist() - packet.last_sent_dist < 30) {
           //   VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
           //   scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
-          //     pending_data_interest.push_back(packet);
+          //     // pending_data_interest.push_back(packet);
+          //     GetQueueByType("DATA_INTEREST").push_back(packet);
           //   });
           //   AsyncSendPacket();
           //   return;
@@ -293,22 +317,25 @@ void Node::AsyncSendPacket() {
 
                 if (is_inf_retx) {
                   scheduler_.scheduleEvent(kInfRetxDataInterestTime, [this, packet] {
-                    inf_retx_data_interest.push_back(packet);
+                    // inf_retx_data_interest.push_back(packet);
+                    GetQueueByType("INF_RETX_DATA_INTEREST").push_back(packet);
                     num_scheduler_retx--;
                   });
                 }
-                else if (packet.nRetries % 3 == 0) {
+                else if (packet.nRetries % 5 == 0) {
                 // if (1) {
                   packet.burst_packet = false;
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
-                    pending_data_interest.push_back(packet);
+                    // pending_data_interest.push_back(packet);
+                    GetQueueByType("DATA_INTEREST").push_back(packet);
                     num_scheduler_retx--;
                   });
                 } 
                 else {
                   packet.burst_packet = true;
                   scheduler_.scheduleEvent(kSendOutInterestLifetime, [this, packet] {
-                    pending_data_interest.push_back(packet);
+                    // pending_data_interest.push_back(packet);
+                    GetQueueByType("DATA_INTEREST").push_back(packet);
                     num_scheduler_retx--;
                   });
                 }
@@ -316,7 +343,8 @@ void Node::AsyncSendPacket() {
                 // VSYNC_LOG_TRACE("DROP INTEREST");
                 VSYNC_LOG_TRACE("APPEND INTEREST TO INF RETX QUEUE");
                 packet.inf_retx_start_time = ns3::Simulator::Now().GetMicroSeconds();
-                inf_retx_data_interest.push_back(packet);
+                // inf_retx_data_interest.push_back(packet);
+                GetQueueByType("INF_RETX_DATA_INTEREST").push_back(packet);
                 while (inf_retx_data_interest.size() > uint32_t(kInfRetxNum))
                   RemoveOldestInfInterest();
               }
@@ -387,7 +415,8 @@ void Node::SendSyncInterest() {
   packet.packet_type = Packet::INTEREST_TYPE;
   packet.interest = interest;
   pending_sync_interest.clear();
-  pending_sync_interest.push_back(packet);
+  // pending_sync_interest.push_back(packet);
+  GetQueueByType("SYNC_INTEREST").push_back(packet);
 }
 
 void Node::OnSyncInterest(const Interest &interest) {
@@ -464,12 +493,7 @@ void Node::OnSyncInterest(const Interest &interest) {
   }
   for (size_t i = 0; i < missing_data.size(); ++i) {
     // pending_data_interest.push_back(missing_data[i]);
-    pending_data_interest.push_back(missing_data[i]);
-    // if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
-    //     != surrounding_producers.end())
-    //   pending_data_interest_high.push_back(missing_data[i]);
-    // else
-    //   pending_data_interest_low.push_back(missing_data[i]);
+    GetQueueByType("DATA_INTEREST").push_back(missing_data[i]);
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
@@ -582,7 +606,8 @@ void Node::SendSyncAck(const Name &n) {
   Packet packet;
   packet.packet_type = Packet::DATA_TYPE;
   packet.data = ack;
-  pending_ack.push_back(packet);
+  // pending_ack.push_back(packet);
+  GetQueueByType("SYNC_REPLY").push_back(packet);
 }
 
 void Node::OnSyncAck(const Data &ack) {
@@ -665,12 +690,7 @@ void Node::OnSyncAck(const Data &ack) {
   }
   for (size_t i = 0; i < missing_data.size(); ++i) {
     // pending_data_interest.push_back(missing_data[i]);
-    pending_data_interest.push_back(missing_data[i]);
-  //   if (surrounding_producers.find(ExtractNodeID((missing_data[i].interest)->getName()))
-  //       != surrounding_producers.end())
-  //     pending_data_interest_high.push_back(missing_data[i]);
-  //   else
-  //     pending_data_interest_low.push_back(missing_data[i]);
+    GetQueueByType("DATA_INTEREST").push_back(missing_data[i]);
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
@@ -705,7 +725,8 @@ void Node::OnDataInterest(const Interest &interest) {
       packet.data = iter -> second;
       VSYNC_LOG_TRACE( "node(" << nid_ << ") Will send type regular data = " << iter->second->getName());
     }
-    pending_data_reply.push_back(packet);
+    // pending_data_reply.push_back(packet);
+    GetQueueByType("DATA_REPLY").push_back(packet);
   } else if (kMultihopData) {
     /* Otherwise add to my PIT, but send probabilistically */
     int p = mhop_dist(rengine_);
@@ -810,7 +831,8 @@ void Node::OnDataReply(const Data &data, Packet::SourceType sourceType) {
     //   packet.data = std::make_shared<Data>(data_with_flag);
     //   VSYNC_LOG_TRACE( "node(" << nid_ << ") Re-broadcasting data reply: " << n.toUri() );
     // }
-    pending_data_reply.push_back(packet);
+    // pending_data_reply.push_back(packet);
+    GetQueueByType("DATA_REPLY").push_back(packet);
   }
 }
 
