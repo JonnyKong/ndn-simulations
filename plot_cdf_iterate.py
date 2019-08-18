@@ -9,6 +9,7 @@
 """
 
 from __future__ import print_function
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -107,7 +108,7 @@ class CdfPlotter(object):
         return y_interp0d
 
     def save_img(self):
-        fig_name = "tmp.png"
+        fig_name = os.path.join('result', 'tmp.png')
         print("Plot saved to %s" % fig_name)
         self.fig.savefig(fig_name)
         plt.show()
@@ -120,32 +121,28 @@ class CdfPlotter(object):
 
 if __name__ == "__main__":
     plotter = CdfPlotter()
+    run_times = 12
 
-    plotter.add_file('result/1/raw/loss_rate_0.0.txt')
-    plotter.add_file('result/2/raw/loss_rate_0.0.txt')
-    plotter.add_file('result/3/raw/loss_rate_0.0.txt')
-
+    for i in range(1, run_times + 1):
+        filename = os.path.join('result', str(i), 'raw', 'loss_rate_0.0.txt')
+        print('Processing {}'.format(filename))
+        plotter.add_file(filename)
     plotter.plot_cdf(save=True, label_name='0%')
 
-    plotter.add_file('result/1/raw/loss_rate_0.05.txt')
-    plotter.add_file('result/2/raw/loss_rate_0.05.txt')
-    plotter.add_file('result/3/raw/loss_rate_0.05.txt')
-
+    for i in range(1, run_times + 1):
+        filename = os.path.join('result', str(i), 'raw', 'loss_rate_0.05.txt')
+        plotter.add_file(filename)
     plotter.plot_cdf(save=True, label_name='5%')
 
-    plotter.add_file('result/1/raw/loss_rate_0.2.txt')
-    plotter.add_file('result/2/raw/loss_rate_0.2.txt')
-    plotter.add_file('result/3/raw/loss_rate_0.2.txt')
-
+    for i in range(1, run_times + 1):
+        filename = os.path.join('result', str(i), 'raw', 'loss_rate_0.2.txt')
+        plotter.add_file(filename)
     plotter.plot_cdf(save=True, label_name='20%')
 
-    plotter.add_file('result/1/raw/loss_rate_0.5.txt')
-    plotter.add_file('result/2/raw/loss_rate_0.5.txt')
-    plotter.add_file('result/3/raw/loss_rate_0.5.txt')
-
+    for i in range(1, run_times + 1):
+        filename = os.path.join('result', str(i), 'raw', 'loss_rate_0.5.txt')
+        plotter.add_file(filename)
     plotter.plot_cdf(save=True, label_name='50%')
 
     plotter.save_img()
-    
-
 

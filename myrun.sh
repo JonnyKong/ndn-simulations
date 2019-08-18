@@ -2,7 +2,7 @@
 
 set -e  # Exit on error
 
-RUN_TIMES=3
+RUN_TIMES=12
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.05 0.2 0.5)
 
