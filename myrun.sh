@@ -2,7 +2,7 @@
 
 set -e  # Exit on error
 
-RUN_TIMES=12
+RUN_TIMES=3
 NODE_NUM=20
 LOSS_RATE_LIST=(0.0 0.05 0.2 0.5)
 
@@ -251,7 +251,8 @@ summarize_loss_rate_result() {
 }
 
 main() {
-    local RESULT_DIR=result/$(date -I)
+    # local RESULT_DIR=result/$(date -I)
+    local RESULT_DIR=result
     rm -rf $RESULT_DIR
 
     # # Run different wifi ranges
@@ -299,6 +300,12 @@ main() {
         done
         wait $pids
     done
+
+    for (( TIME=1; TIME<=$RUN_TIMES; TIME++ )); do
+        summarize_loss_rate_result ${RESULT_DIR}/${TIME}
+        mv ${RESULT_DIR}/${TIME}/loss_rate.txt ${RESULT_DIR}/loss_rate_${TIME}.txt
+    done
+    python calculate_mean.py LOSS_RATE ${RUN_TIMES} >> $RESULT_DIR/loss_rate.txt
 }
 
 main

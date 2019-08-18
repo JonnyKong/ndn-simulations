@@ -136,8 +136,8 @@ private:
   // Delay for beacon frequency
   std::uniform_int_distribution<> beacon_dist
     = std::uniform_int_distribution<>(2000000, 3000000);
-  const int kDataInterestRetries = 5;
-  const int kInfRetxNum = 50;   // Limit the number of inf retx data interests
+  const int kDataInterestRetries = 10;
+  const int kInfRetxNum = 100;   // Limit the number of inf retx data interests
 
   /* Options */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */

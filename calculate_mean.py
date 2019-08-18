@@ -16,7 +16,8 @@ def main(path, filenames):
             print row[0].strip()
 
 if __name__ == "__main__":
-    path = "result/" + str(datetime.date.today())
+    # path = "result/" + str(datetime.date.today())
+    path = "result"
     if sys.argv[1] == "WIFI_RANGE":
         filenames = [path + "/wifi_range_" + str(i + 1) + ".txt" for i in range (int(sys.argv[2]))]
     else:

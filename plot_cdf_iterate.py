@@ -121,27 +121,27 @@ class CdfPlotter(object):
 if __name__ == "__main__":
     plotter = CdfPlotter()
 
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.0.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.0.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.0.txt')
+    plotter.add_file('result/1/raw/loss_rate_0.0.txt')
+    plotter.add_file('result/2/raw/loss_rate_0.0.txt')
+    plotter.add_file('result/3/raw/loss_rate_0.0.txt')
 
     plotter.plot_cdf(save=True, label_name='0%')
 
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.05.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.05.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.05.txt')
+    plotter.add_file('result/1/raw/loss_rate_0.05.txt')
+    plotter.add_file('result/2/raw/loss_rate_0.05.txt')
+    plotter.add_file('result/3/raw/loss_rate_0.05.txt')
 
-    plotter.plot_cdf(save=True, label_name='0.5%')
+    plotter.plot_cdf(save=True, label_name='5%')
 
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.2.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.2.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.2.txt')
+    plotter.add_file('result/1/raw/loss_rate_0.2.txt')
+    plotter.add_file('result/2/raw/loss_rate_0.2.txt')
+    plotter.add_file('result/3/raw/loss_rate_0.2.txt')
 
     plotter.plot_cdf(save=True, label_name='20%')
 
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/1/raw/loss_rate_0.5.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/2/raw/loss_rate_0.5.txt')
-    plotter.add_file('/Users/petli2/projects/ndnSIM/ndn-simulations/result/3/raw/loss_rate_0.5.txt')
+    plotter.add_file('result/1/raw/loss_rate_0.5.txt')
+    plotter.add_file('result/2/raw/loss_rate_0.5.txt')
+    plotter.add_file('result/3/raw/loss_rate_0.5.txt')
 
     plotter.plot_cdf(save=True, label_name='50%')
 
