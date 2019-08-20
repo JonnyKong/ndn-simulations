@@ -64,6 +64,7 @@ Node::Node(Face &face, Scheduler &scheduler, KeyChain &key_chain, const NodeID &
   version_vector_[nid_] = 0;
   version_vector_data_[nid_] = 0;
   num_scheduler_retx = 0;
+  num_scheduler_retx_inf = 0;
   pending_forward = 0;
 
   // if (nid_ >= 20) {
@@ -217,18 +218,14 @@ void Node::RemoveOldestInfInterest() {
 std::deque<Packet>& Node::GetQueueByType(const std::string &type) {
   if (type == "SYNC_INTEREST")
     return pending_sync_interest;
-    // return pending_data_interest;
   else if (type == "SYNC_REPLY")
     return pending_ack;
-    // return pending_data_interest;
   else if (type == "DATA_INTEREST")
     return pending_data_interest;
   else if (type == "DATA_REPLY")
     return pending_data_reply;
-    // return pending_data_interest;
   else if (type == "INF_RETX_DATA_INTEREST")
     return inf_retx_data_interest;
-    // return pending_data_interest;
   else
     exit(1);
     // You shouldn't reach here.
@@ -278,7 +275,10 @@ void Node::AsyncSendPacket() {
             if (packet.packet_origin == Packet::FORWARDED)
               pending_forward--;
             VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                pending_data_interest.size() + num_scheduler_retx - pending_forward );
+                pending_data_interest.size() + inf_retx_data_interest.size() + 
+                num_scheduler_retx - pending_forward );
+            VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length inf: " <<
+                             inf_retx_data_interest.size() + num_scheduler_retx_inf);
             AsyncSendPacket();
             return;
           }
@@ -286,14 +286,15 @@ void Node::AsyncSendPacket() {
           // If the node didn't travel far since last time sending this packet, put
           //  this data packet back into the queue, and send the next packet immediately.
           // To prevent iterating the queue too fast, need to add some delay.
-
-          // if ((odometer.getDist() - packet.last_sent_dist < (30 + 3 * packet.retransmission_counter)) && !packet.burst_packet) {
           // if ((odometer.getDist() - packet.last_sent_dist < 50 ) && !packet.burst_packet) {
-          // //  if (odometer.getDist() - packet.last_sent_dist < 30) {
+          //  if (odometer.getDist() - packet.last_sent_dist < 30) {
+          // if (is_inf_retx && (odometer.getDist() - packet.last_sent_dist < 100)) {
           //   VSYNC_LOG_TRACE ("node(" << nid_ << ") Cancel data interest due to dist");
-          //   scheduler_.scheduleEvent(time::seconds(1), [this, packet] {
-          //     // pending_data_interest.push_back(packet);
-          //     GetQueueByType("DATA_INTEREST").push_back(packet);
+          //   scheduler_.scheduleEvent(time::seconds(1), [this, packet, is_inf_retx] {
+          //     if (is_inf_retx)
+          //       GetQueueByType("INF_RETX_DATA_INTEREST").push_back(packet);
+          //     else
+          //       GetQueueByType("DATA_INTEREST").push_back(packet);
           //   });
           //   AsyncSendPacket();
           //   return;
@@ -310,6 +311,8 @@ void Node::AsyncSendPacket() {
                                 << ", should be received by " << num_surrounding );
               /* Add packet back to queue with longer delay to avoid retransmissions */
               if (--packet.nRetries >= 0 || is_inf_retx) {
+                if (is_inf_retx)
+                  num_scheduler_retx_inf++;
                 num_scheduler_retx++;
                 packet.last_sent_time = ns3::Simulator::Now().GetMicroSeconds();
                 packet.last_sent_dist = odometer.getDist();
@@ -320,10 +323,11 @@ void Node::AsyncSendPacket() {
                     // inf_retx_data_interest.push_back(packet);
                     GetQueueByType("INF_RETX_DATA_INTEREST").push_back(packet);
                     num_scheduler_retx--;
+                    num_scheduler_retx_inf--;
                   });
                 }
-                else if (packet.nRetries % 5 == 0) {
-                // if (1) {
+                // else if (packet.nRetries % 3 == 0) {
+                else if (1) {
                   packet.burst_packet = false;
                   scheduler_.scheduleEvent(kRetxDataInterestTime, [this, packet] {
                     // pending_data_interest.push_back(packet);
@@ -497,8 +501,10 @@ void Node::OnSyncInterest(const Interest &interest) {
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest.size() +
+                   pending_data_interest.size() + inf_retx_data_interest.size() + 
                    num_scheduler_retx - pending_forward );
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length inf: " <<
+                   inf_retx_data_interest.size() + num_scheduler_retx_inf);
 
   /* Do I have newer state? */
   /**
@@ -694,8 +700,10 @@ void Node::OnSyncAck(const Data &ack) {
   }
 
   VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length: " <<
-                   pending_data_interest.size() +
+                   pending_data_interest.size() + inf_retx_data_interest.size() +
                    num_scheduler_retx - pending_forward );
+  VSYNC_LOG_TRACE ("node(" << nid_ << ") Queue length inf: " <<
+                   inf_retx_data_interest.size() + num_scheduler_retx_inf);
 }
 
 

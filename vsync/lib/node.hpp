@@ -91,6 +91,7 @@ private:
   bool is_static;               /* Static nodes don't generate data or log store */
   bool is_hibernate;            /* Soft state of whether there're no nodes around at this moment */
   size_t num_scheduler_retx;    /* Number of data interest the scheduler will put back to the queue (for statistics) */
+  size_t num_scheduler_retx_inf;/* Number of data interest the scheduler will put back to the inf retx queue (for statistics) */
   size_t pending_forward;       /* Number of data interest in queue that will be forwarded */
 
   /* Constants */
@@ -137,7 +138,7 @@ private:
   std::uniform_int_distribution<> beacon_dist
     = std::uniform_int_distribution<>(2000000, 3000000);
   const int kDataInterestRetries = 10;
-  const int kInfRetxNum = 100;   // Limit the number of inf retx data interests
+  const int kInfRetxNum = 10000;   // Limit the number of inf retx data interests
 
   /* Options */
   /*const*/ bool kRetx =     true;        /* Use sync interest retx? */
