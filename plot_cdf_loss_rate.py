@@ -83,20 +83,6 @@ class CdfPlotter(object):
         ]
         styles = ['-', '--', '-.', ':']
 
-        # ###### Nothing happened here
-        # scale = [1 for i in range(500)]
-        # for i in range(0, 500):
-        #     scale[i] = (i**2)/6250000 - i/12500 + 1 
-        # print(scale)
-        # for i in range(0, 3):
-        #     for t in range(0, 500):
-        #         self._ys_mesh[i][t] = self._ys_mesh[i][t] * scale[t] 
-        # for i in range(3, 4):
-        #     for t in range(0, 2000):
-        #         self._ys_mesh[i][t] = self._ys_mesh[i][t] * 0.80
-        # ######
-
-
         for i, ele in enumerate(self._ys_mesh):
             ax.plot(self._x_mesh, ele, 
                     label=labels[i], 
